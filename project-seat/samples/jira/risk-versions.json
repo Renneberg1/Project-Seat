@@ -1,0 +1,143 @@
+[
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11539",
+    "id": "11539",
+    "description": "Drop 2 Release",
+    "name": "HOP Drop 2",
+    "archived": false,
+    "released": true,
+    "releaseDate": "2026-03-06",
+    "userReleaseDate": "06/Mar/26",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11540",
+    "id": "11540",
+    "name": "Drop 452",
+    "archived": false,
+    "released": true,
+    "releaseDate": "2025-12-23",
+    "userReleaseDate": "23/Dec/25",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11541",
+    "id": "11541",
+    "name": "HOP Drop 3",
+    "archived": false,
+    "released": false,
+    "startDate": "2026-02-06",
+    "releaseDate": "2026-05-06",
+    "overdue": false,
+    "userStartDate": "06/Feb/26",
+    "userReleaseDate": "06/May/26",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11542",
+    "id": "11542",
+    "name": "Marketplace 2.5",
+    "archived": false,
+    "released": false,
+    "releaseDate": "2026-01-21",
+    "overdue": true,
+    "userReleaseDate": "21/Jan/26",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11543",
+    "id": "11543",
+    "name": "RAD 2",
+    "archived": false,
+    "released": false,
+    "releaseDate": "2026-12-01",
+    "overdue": false,
+    "userReleaseDate": "01/Dec/26",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11544",
+    "id": "11544",
+    "name": "US CTC ",
+    "archived": false,
+    "released": false,
+    "releaseDate": "2026-06-25",
+    "overdue": false,
+    "userReleaseDate": "25/Jun/26",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11545",
+    "id": "11545",
+    "name": "US thick Slice",
+    "archived": false,
+    "released": false,
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11546",
+    "id": "11546",
+    "name": "US Infarct",
+    "archived": false,
+    "released": false,
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11547",
+    "id": "11547",
+    "name": "Lumina MVP",
+    "archived": false,
+    "released": false,
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11548",
+    "id": "11548",
+    "name": "3.11",
+    "archived": false,
+    "released": true,
+    "releaseDate": "2025-12-23",
+    "userReleaseDate": "23/Dec/25",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11549",
+    "id": "11549",
+    "name": "3.10",
+    "archived": false,
+    "released": true,
+    "releaseDate": "2025-12-23",
+    "userReleaseDate": "23/Dec/25",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11550",
+    "id": "11550",
+    "name": "IMED reporting",
+    "archived": false,
+    "released": true,
+    "releaseDate": "2025-12-23",
+    "userReleaseDate": "23/Dec/25",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11551",
+    "id": "11551",
+    "name": "US CXR 3",
+    "archived": false,
+    "released": true,
+    "releaseDate": "2025-12-23",
+    "userReleaseDate": "23/Dec/25",
+    "projectId": 10466
+  },
+  {
+    "self": "https://harrison-ai.atlassian.net/rest/api/3/version/11552",
+    "id": "11552",
+    "name": "test release",
+    "archived": false,
+    "released": true,
+    "releaseDate": "2025-12-23",
+    "userReleaseDate": "23/Dec/25",
+    "projectId": 10466
+  }
+]

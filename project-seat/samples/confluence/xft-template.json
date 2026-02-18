@@ -1,0 +1,244 @@
+{
+  "id": "3559363934",
+  "type": "page",
+  "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559363934",
+  "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM2MzkzNA==",
+  "status": "current",
+  "title": "Project XFT Template",
+  "version": {
+    "by": {
+      "type": "known",
+      "accountId": "60d40adb00bdd90068acfcbb",
+      "accountType": "atlassian",
+      "email": "scott.englefield@harrison.ai",
+      "publicName": "Scott Englefield",
+      "profilePicture": {
+        "path": "/wiki/aa-avatar/60d40adb00bdd90068acfcbb",
+        "width": 48,
+        "height": 48,
+        "isDefault": false
+      },
+      "displayName": "Scott Englefield",
+      "isExternalCollaborator": false,
+      "isGuest": false,
+      "locale": "en_GB",
+      "accountStatus": "active",
+      "_expandable": {
+        "operations": "",
+        "personalSpace": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/user?accountId=60d40adb00bdd90068acfcbb"
+      }
+    },
+    "when": "2025-07-28T05:34:57.791Z",
+    "friendlyWhen": "Jul 28, 2025",
+    "message": "",
+    "number": 4,
+    "minorEdit": false,
+    "ncsStepVersion": "301",
+    "ncsStepVersionSource": "ncs-ack",
+    "confRev": "confluence$content$3559363934.29",
+    "contentTypeModified": false,
+    "_expandable": {
+      "collaborators": "",
+      "content": "/rest/api/content/3559363934"
+    },
+    "_links": {
+      "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363934/version/4"
+    }
+  },
+  "ancestors": [
+    {
+      "id": "3559358466",
+      "type": "page",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559358466",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM1ODQ2Ng==",
+      "status": "current",
+      "title": "PMO Portfolio Home",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 797
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559358466/restriction/byOperation",
+        "history": "/rest/api/content/3559358466/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559358466/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559358466/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559358466",
+        "tinyui": "/x/AoAn1",
+        "editui": "/pages/resumedraft.action?draftId=3559358466",
+        "webui": "/spaces/HPP/overview",
+        "edituiv2": "/spaces/HPP/pages/edit-v2/3559358466"
+      }
+    },
+    {
+      "id": "3559363883",
+      "type": "page",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559363883",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM2Mzg4Mw==",
+      "status": "current",
+      "title": "PMO Playbooks",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 3134
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559363883/restriction/byOperation",
+        "history": "/rest/api/content/3559363883/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559363883/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559363883/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363883",
+        "tinyui": "/x/K5Un1",
+        "editui": "/pages/resumedraft.action?draftId=3559363883",
+        "webui": "/spaces/HPP/pages/3559363883/PMO+Playbooks",
+        "edituiv2": "/spaces/HPP/pages/edit-v2/3559363883"
+      }
+    },
+    {
+      "id": "3559363986",
+      "type": "page",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559363986",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM2Mzk4Ng==",
+      "status": "current",
+      "title": "Program Management Process",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 659
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559363986/restriction/byOperation",
+        "history": "/rest/api/content/3559363986/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559363986/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559363986/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363986",
+        "tinyui": "/x/kpUn1",
+        "editui": "/pages/resumedraft.action?draftId=3559363986",
+        "webui": "/spaces/HPP/pages/3559363986/Program+Management+Process",
+        "edituiv2": "/spaces/HPP/pages/edit-v2/3559363986"
+      }
+    },
+    {
+      "id": "3559397913",
+      "type": "folder",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:folder/activation/a0d6efe6-7e7d-4e41-b6c3-f5e131d36311/3559397913",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmZvbGRlci9hY3RpdmF0aW9uL2EwZDZlZmU2LTdlN2QtNGU0MS1iNmMzLWY1ZTEzMWQzNjMxMS8zNTU5Mzk3OTEz",
+      "status": "current",
+      "title": "Project Templates",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 2650
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559397913/restriction/byOperation",
+        "history": "/rest/api/content/3559397913/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559397913/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559397913/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559397913",
+        "editui": "/spaces/HPP/folder/3559397913",
+        "webui": "/spaces/HPP/folder/3559397913",
+        "edituiv2": "/spaces/HPP/folder/3559397913"
+      }
+    }
+  ],
+  "macroRenderedOutput": {},
+  "body": {
+    "storage": {
+      "value": "<ac:layout><ac:layout-section ac:type=\"fixed-width\" ac:breakout-mode=\"default\"><ac:layout-cell><table data-table-width=\"760\" data-layout=\"default\" ac:local-id=\"672070c4-7b3e-45c7-8cf2-7de1ae69b965\"><tbody><tr><td data-highlight-colour=\"#deebff\"><p>Project Manager</p></td><td><p>@</p></td></tr><tr><td data-highlight-colour=\"#deebff\"><p>Project Phase</p></td><td><p><ac:structured-macro ac:name=\"status\" ac:schema-version=\"1\" ac:macro-id=\"c59a5e50-9cdf-4d51-9c7d-62245630f93d\"><ac:parameter ac:name=\"title\">status</ac:parameter><ac:parameter ac:name=\"colour\">Blue</ac:parameter></ac:structured-macro> </p></td></tr><tr><td data-highlight-colour=\"#deebff\"><p>Project Planning</p></td><td><p><a href=\"https://annalise-ai.atlassian.net/wiki/spaces/HPP/pages/3559364467/Project+Planning+Template?atlOrigin=eyJpIjoiZThlMzYwODZkOTBiNDZlODhkNjBjMjA5YmQzYjc3MmUiLCJwIjoiYyJ9\" data-card-appearance=\"inline\">https://annalise-ai.atlassian.net/wiki/spaces/HPP/pages/3559364467/Project+Planning+Template?atlOrigin=eyJpIjoiZThlMzYwODZkOTBiNDZlODhkNjBjMjA5YmQzYjc3MmUiLCJwIjoiYyJ9</a> </p></td></tr><tr><td data-highlight-colour=\"#deebff\"><p>Project Closure Report</p></td><td><p>link to template</p></td></tr></tbody></table><p><ac:image ac:original-height=\"64\" ac:original-width=\"64\" ac:inline=\"true\" ac:alt=\"image-20240222-024333.png\"><ri:attachment ri:filename=\"image-20240222-024333.png\" ri:version-at-save=\"1\" /></ac:image> XFT</p></ac:layout-cell></ac:layout-section><ac:layout-section ac:type=\"two_equal\" ac:breakout-mode=\"default\"><ac:layout-cell><p>Clinical: </p><p>Regulatory: </p><p>Project: </p></ac:layout-cell><ac:layout-cell><p>Clinical AI: </p><p>Systems: </p><p>Product: </p></ac:layout-cell></ac:layout-section><ac:layout-section ac:type=\"fixed-width\" ac:breakout-mode=\"default\"><ac:layout-cell><h4><ac:emoticon ac:name=\"blue-star\" ac:emoji-shortname=\":speaking_head:\" ac:emoji-id=\"1f5e3\" ac:emoji-fallback=\"\\uD83D\\uDDE3\" />&nbsp;Communication Channels</h4><p /><h4><ac:emoticon ac:name=\"blue-star\" ac:emoji-shortname=\":goal:\" ac:emoji-id=\"1f945\" ac:emoji-fallback=\"🥅\" /> <strong>Project Goals</strong></h4><p><strong>Strategic Alignment:</strong> </p><p><strong>Outcomes:</strong> </p><h4>Driver:   </h4><p /><h3> <ac:emoticon ac:name=\"blue-star\" ac:emoji-shortname=\":triangular_flag_on_post:\" ac:emoji-id=\"1f6a9\" ac:emoji-fallback=\"🚩\" /> Roadmap &amp; Milestone</h3><a href=\"https://annalise-ai.atlassian.net/jira/plans/65/scenarios/77/timeline?vid=449&amp;atlOrigin=eyJpIjoiNGI3MDNhMGVkZjg4NDg5YWI0MmRmOGNlNzg2MzE3NzEiLCJwIjoiaiJ9\" data-layout=\"wide\" data-width=\"100.00\" data-card-appearance=\"embed\">https://annalise-ai.atlassian.net/jira/plans/65/scenarios/77/timeline?vid=449&amp;atlOrigin=eyJpIjoiNGI3MDNhMGVkZjg4NDg5YWI0MmRmOGNlNzg2MzE3NzEiLCJwIjoiaiJ9</a><h3><ac:emoticon ac:name=\"blue-star\" ac:emoji-shortname=\":vertical_traffic_light:\" ac:emoji-id=\"1f6a6\" ac:emoji-fallback=\"🚦\" /> Risks</h3><p>Filter for risks associated with this project</p><a href=\"https://annalise-ai.atlassian.net/issues/?jql=project%20%3D%20RISK%20AND%20component%20%3D%20%22US%20CXR3%22%20AND%20status%20IN%20(Controlled%2C%20Open)%20ORDER%20BY%20status%20ASC%2C%20priority%20DESC\" data-layout=\"full-width\" data-card-appearance=\"block\" data-datasource=\"{&quot;id&quot;:&quot;d8b75300-dfda-4519-b6cd-e49abbd50401&quot;,&quot;parameters&quot;:{&quot;cloudId&quot;:&quot;8c0baf43-1a59-48ad-91f0-073e3cf50313&quot;,&quot;jql&quot;:&quot;project = RISK AND component = \\&quot;US CXR3\\&quot; AND status IN (Controlled, Open) ORDER BY status ASC, priority DESC&quot;},&quot;views&quot;:[{&quot;type&quot;:&quot;table&quot;,&quot;properties&quot;:{&quot;columns&quot;:[{&quot;key&quot;:&quot;issuetype&quot;},{&quot;key&quot;:&quot;key&quot;},{&quot;key&quot;:&quot;priority&quot;},{&quot;key&quot;:&quot;status&quot;},{&quot;key&quot;:&quot;summary&quot;,&quot;width&quot;:208},{&quot;key&quot;:&quot;description&quot;,&quot;isWrapped&quot;:true},{&quot;key&quot;:&quot;customfield_11166&quot;},{&quot;key&quot;:&quot;customfield_11342&quot;},{&quot;key&quot;:&quot;assignee&quot;}]}}]}\">https://annalise-ai.atlassian.net/issues/?jql=project%20%3D%20RISK%20AND%20component%20%3D%20%22US%20CXR3%22%20AND%20status%20IN%20(Controlled%2C%20Open)%20ORDER%20BY%20status%20ASC%2C%20priority%20DESC</a><h3><ac:emoticon ac:name=\"blue-star\" ac:emoji-shortname=\":pencil:\" ac:emoji-id=\"1f4dd\" ac:emoji-fallback=\"📝\" />  Agenda</h3><table data-table-width=\"1338\" data-layout=\"center\" ac:local-id=\"7b485d8d-568f-4e78-8fb1-43dbbd77b20a\"><colgroup><col style=\"width: 382.0px;\" /><col style=\"width: 169.0px;\" /><col style=\"width: 564.0px;\" /><col style=\"width: 222.0px;\" /></colgroup><tbody><tr><th><p><strong>Topic</strong></p></th><th><p><strong>Owner</strong></p></th><th><p><strong>Status</strong></p></th><th><p style=\"text-align: center;\"><strong>Est. Completion</strong></p></th></tr><tr><td><p /></td><td><p /></td><td><p /></td><td><p /></td></tr><tr><td><p /></td><td><p /></td><td><p /></td><td><p /></td></tr><tr><td><p /></td><td><p /></td><td><p /></td><td><p /></td></tr></tbody></table><p /><h3><ac:image ac:original-height=\"64\" ac:original-width=\"64\" ac:inline=\"true\" ac:alt=\"image-20240222-024448.png\"><ri:attachment ri:filename=\"image-20240222-024448.png\" ri:version-at-save=\"1\" /></ac:image> Decisions</h3><table data-table-width=\"1614\" data-layout=\"full-width\" ac:local-id=\"9465e23e-cd57-499f-a9c3-a990514ee830\"><colgroup><col /><col style=\"width: 360.0px;\" /><col style=\"width: 540.0px;\" /><col style=\"width: 130.0px;\" /><col style=\"width: 577.0px;\" /></colgroup><tbody><tr><th class=\"numberingColumn\" /><th><p style=\"text-align: center;\"><strong>Open Question</strong></p></th><th><p /></th><th><p><strong>Date</strong></p></th><th><p style=\"text-align: center;\"><strong>Answer/Outcome</strong></p></th></tr><tr><td class=\"numberingColumn\">1</td><td><p /></td><td><p /></td><td><p /></td><td><p /></td></tr><tr><td class=\"numberingColumn\">2</td><td><p /></td><td><p /></td><td><p /></td><td><p /></td></tr></tbody></table><p /><p /><p /></ac:layout-cell></ac:layout-section></ac:layout>",
+      "representation": "storage",
+      "embeddedContent": [],
+      "_expandable": {
+        "content": "/rest/api/content/3559363934"
+      }
+    },
+    "_expandable": {
+      "editor": "",
+      "atlas_doc_format": "",
+      "view": "",
+      "export_view": "",
+      "styled_view": "",
+      "dynamic": "",
+      "editor2": "",
+      "anonymous_export_view": ""
+    }
+  },
+  "extensions": {
+    "position": 1032
+  },
+  "_expandable": {
+    "childTypes": "",
+    "container": "/rest/api/space/HPP",
+    "schedulePublishInfo": "",
+    "metadata": "",
+    "operations": "",
+    "schedulePublishDate": "",
+    "children": "/rest/api/content/3559363934/child",
+    "restrictions": "/rest/api/content/3559363934/restriction/byOperation",
+    "history": "/rest/api/content/3559363934/history",
+    "draftVersion": "",
+    "descendants": "/rest/api/content/3559363934/descendant",
+    "space": "/rest/api/space/HPP"
+  },
+  "_links": {
+    "editui": "/pages/resumedraft.action?draftId=3559363934",
+    "webui": "/spaces/HPP/pages/3559363934/Project+XFT+Template",
+    "edituiv2": "/spaces/HPP/pages/edit-v2/3559363934",
+    "context": "/wiki",
+    "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363934",
+    "tinyui": "/x/XpUn1",
+    "collection": "/rest/api/content",
+    "base": "https://harrison-ai.atlassian.net/wiki"
+  }
+}

@@ -1,0 +1,47 @@
+{
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 4,
+  "issueTypes": [
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10309",
+      "id": "10309",
+      "description": "An initiative",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10313?size=medium",
+      "name": "Initiative",
+      "untranslatedName": "Initiative",
+      "subtask": false,
+      "hierarchyLevel": 2
+    },
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10423",
+      "id": "10423",
+      "description": "",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10314?size=medium",
+      "name": "Goal",
+      "untranslatedName": "Goal",
+      "subtask": false,
+      "hierarchyLevel": 3
+    },
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10832",
+      "id": "10832",
+      "description": "Risk",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10308?size=medium",
+      "name": "Risk",
+      "untranslatedName": "Risk",
+      "subtask": false,
+      "hierarchyLevel": 2
+    },
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/12499",
+      "id": "12499",
+      "description": "Eventuated risk or new project issue. Has occured and had impact",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10304?size=medium",
+      "name": "Project Issue",
+      "untranslatedName": "Project Issue",
+      "subtask": false,
+      "hierarchyLevel": 2
+    }
+  ]
+}

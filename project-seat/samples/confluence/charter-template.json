@@ -1,0 +1,244 @@
+{
+  "id": "3559363918",
+  "type": "page",
+  "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559363918",
+  "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM2MzkxOA==",
+  "status": "current",
+  "title": "Project Charter Template",
+  "version": {
+    "by": {
+      "type": "known",
+      "accountId": "60d40adb00bdd90068acfcbb",
+      "accountType": "atlassian",
+      "email": "scott.englefield@harrison.ai",
+      "publicName": "Scott Englefield",
+      "profilePicture": {
+        "path": "/wiki/aa-avatar/60d40adb00bdd90068acfcbb",
+        "width": 48,
+        "height": 48,
+        "isDefault": false
+      },
+      "displayName": "Scott Englefield",
+      "isExternalCollaborator": false,
+      "isGuest": false,
+      "locale": "en_GB",
+      "accountStatus": "active",
+      "_expandable": {
+        "operations": "",
+        "personalSpace": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/user?accountId=60d40adb00bdd90068acfcbb"
+      }
+    },
+    "when": "2025-12-08T04:29:08.020Z",
+    "friendlyWhen": "Dec 08, 2025",
+    "message": "",
+    "number": 9,
+    "minorEdit": false,
+    "ncsStepVersion": "1",
+    "ncsStepVersionSource": "ncs-ack",
+    "confRev": "confluence$content$3559363918.48",
+    "contentTypeModified": false,
+    "_expandable": {
+      "collaborators": "",
+      "content": "/rest/api/content/3559363918"
+    },
+    "_links": {
+      "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363918/version/9"
+    }
+  },
+  "ancestors": [
+    {
+      "id": "3559358466",
+      "type": "page",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559358466",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM1ODQ2Ng==",
+      "status": "current",
+      "title": "PMO Portfolio Home",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 797
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559358466/restriction/byOperation",
+        "history": "/rest/api/content/3559358466/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559358466/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559358466/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559358466",
+        "tinyui": "/x/AoAn1",
+        "editui": "/pages/resumedraft.action?draftId=3559358466",
+        "webui": "/spaces/HPP/overview",
+        "edituiv2": "/spaces/HPP/pages/edit-v2/3559358466"
+      }
+    },
+    {
+      "id": "3559363883",
+      "type": "page",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559363883",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM2Mzg4Mw==",
+      "status": "current",
+      "title": "PMO Playbooks",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 3134
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559363883/restriction/byOperation",
+        "history": "/rest/api/content/3559363883/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559363883/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559363883/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363883",
+        "tinyui": "/x/K5Un1",
+        "editui": "/pages/resumedraft.action?draftId=3559363883",
+        "webui": "/spaces/HPP/pages/3559363883/PMO+Playbooks",
+        "edituiv2": "/spaces/HPP/pages/edit-v2/3559363883"
+      }
+    },
+    {
+      "id": "3559363986",
+      "type": "page",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:page/3559363986",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmNvbnRlbnQvMzU1OTM2Mzk4Ng==",
+      "status": "current",
+      "title": "Program Management Process",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 659
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559363986/restriction/byOperation",
+        "history": "/rest/api/content/3559363986/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559363986/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559363986/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363986",
+        "tinyui": "/x/kpUn1",
+        "editui": "/pages/resumedraft.action?draftId=3559363986",
+        "webui": "/spaces/HPP/pages/3559363986/Program+Management+Process",
+        "edituiv2": "/spaces/HPP/pages/edit-v2/3559363986"
+      }
+    },
+    {
+      "id": "3559397913",
+      "type": "folder",
+      "ari": "ari:cloud:confluence:8c0baf43-1a59-48ad-91f0-073e3cf50313:folder/activation/a0d6efe6-7e7d-4e41-b6c3-f5e131d36311/3559397913",
+      "base64EncodedAri": "YXJpOmNsb3VkOmNvbmZsdWVuY2U6OGMwYmFmNDMtMWE1OS00OGFkLTkxZjAtMDczZTNjZjUwMzEzOmZvbGRlci9hY3RpdmF0aW9uL2EwZDZlZmU2LTdlN2QtNGU0MS1iNmMzLWY1ZTEzMWQzNjMxMS8zNTU5Mzk3OTEz",
+      "status": "current",
+      "title": "Project Templates",
+      "macroRenderedOutput": {},
+      "extensions": {
+        "position": 2650
+      },
+      "_expandable": {
+        "container": "/rest/api/space/HPP",
+        "metadata": "",
+        "restrictions": "/rest/api/content/3559397913/restriction/byOperation",
+        "history": "/rest/api/content/3559397913/history",
+        "body": "",
+        "version": "",
+        "descendants": "/rest/api/content/3559397913/descendant",
+        "space": "/rest/api/space/HPP",
+        "childTypes": "",
+        "schedulePublishInfo": "",
+        "operations": "",
+        "schedulePublishDate": "",
+        "children": "/rest/api/content/3559397913/child",
+        "ancestors": "",
+        "draftVersion": ""
+      },
+      "_links": {
+        "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559397913",
+        "editui": "/spaces/HPP/folder/3559397913",
+        "webui": "/spaces/HPP/folder/3559397913",
+        "edituiv2": "/spaces/HPP/folder/3559397913"
+      }
+    }
+  ],
+  "macroRenderedOutput": {},
+  "body": {
+    "storage": {
+      "value": "<ac:structured-macro ac:name=\"details\" ac:schema-version=\"1\" data-layout=\"default\" ac:local-id=\"668af95d-7068-410d-b342-942d0527f777\" ac:macro-id=\"56ea02de-fcdc-4f0e-b8e2-3c13e014eef5\"><ac:rich-text-body><table data-table-width=\"760\" data-layout=\"default\" ac:local-id=\"ffac0fba-27a4-413c-b144-bbe51c25f52e\"><tbody><tr ac:local-id=\"b093cc29-e1dc-46dc-aa9d-dd4ba80f5416\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"a4507c98-2648-445a-810f-d2f051fd543e\"><p local-id=\"86e66fc6-4e20-4398-8088-db3e0d2cad63\"><strong>Project Name/Release:</strong></p></th><td ac:local-id=\"f2a5511a-4751-402d-a0a7-fc0330aea982\"><p local-id=\"89e218a8-cea7-48c6-bd68-07c6e8e0a286\">[Insert project name &amp; release]</p></td></tr><tr ac:local-id=\"ae243cdf-142e-4591-9887-1b90ff27b0a6\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"7f918aea-2fff-479c-bed5-c87780acf5fe\"><p local-id=\"dfc17a52-cccd-443c-b7d6-7075ca880dee\"><strong>Date:</strong></p></th><td ac:local-id=\"87d278ab-7e0f-4ca7-b715-31a2ed23e023\"><p local-id=\"422ca340-ff26-4711-a6ec-2d58955ec641\">[Insert Date]</p></td></tr><tr ac:local-id=\"5349b1e5-6129-412b-befa-ecf990e7eb55\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"cdce6885-d97d-4686-bfd7-cd583ff49847\"><p local-id=\"4a60bd8a-4ff8-42b5-9b23-a570ca017039\"><strong>Project Manager:</strong></p></th><td ac:local-id=\"9d6d0e3c-f7bb-4c4b-8351-03339a8a0860\"><p local-id=\"0c02fb27-bea7-4ca3-995f-5b8e2839f2cf\">[Name of Project Manager]</p></td></tr><tr ac:local-id=\"aee798e2-0bc0-40a3-8e08-d27ea7d321e7\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"afd58f33-2ddc-4aa3-8146-ebb5cfaddc1e\"><p local-id=\"346b4bc1-0287-4492-ba80-9564acf2ca4a\"><strong>Executive Sponsor:</strong></p></th><td ac:local-id=\"bdeb6051-4166-475e-a29e-77a5bf2dc925\"><p local-id=\"5d6a5c40-82bf-4e5f-9646-ea95de6440ed\">[Name of Executive Sponsor]</p></td></tr><tr ac:local-id=\"aee798e2-0bc0-40a3-8e08-d27ea7d321e7\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"5da41388-0e43-422d-ad17-0ed62a3acadc\"><p local-id=\"9e5c9028-7c10-4d5e-b7ca-f7c8f4a66aa1\"><strong><ac:inline-comment-marker ac:ref=\"b7985a94-c0bb-4c67-a6c0-03cee9fab173\">Status</ac:inline-comment-marker></strong></p></th><td ac:local-id=\"d98eeef3-9fc9-47e1-8de3-f762dbd80d68\"><p local-id=\"4484d651-7915-4108-911b-4056fdc7ffa9\"><ac:structured-macro ac:name=\"status\" ac:schema-version=\"1\" ac:macro-id=\"5692d116-c72e-4a45-a0a9-380d99357e7b\"><ac:parameter ac:name=\"title\">Initiation</ac:parameter><ac:parameter ac:name=\"colour\">Red</ac:parameter></ac:structured-macro>  <ac:structured-macro ac:name=\"status\" ac:schema-version=\"1\" ac:macro-id=\"b5d6031d-0b56-4387-bb66-13c48b751f6b\"><ac:parameter ac:name=\"title\">planning</ac:parameter><ac:parameter ac:name=\"colour\">Yellow</ac:parameter></ac:structured-macro> <ac:structured-macro ac:name=\"status\" ac:schema-version=\"1\" ac:macro-id=\"a7a076e6-9931-4ad4-b774-95964e4004c7\"><ac:parameter ac:name=\"title\">Execution</ac:parameter><ac:parameter ac:name=\"colour\">Green</ac:parameter></ac:structured-macro>  <ac:structured-macro ac:name=\"status\" ac:schema-version=\"1\" ac:macro-id=\"bf73d494-0f0b-440e-b426-40fdb9f4b0d8\"><ac:parameter ac:name=\"title\">Monitoring</ac:parameter><ac:parameter ac:name=\"colour\">Blue</ac:parameter></ac:structured-macro>  <ac:structured-macro ac:name=\"status\" ac:schema-version=\"1\" ac:macro-id=\"a1f61251-8a24-45ad-8f1d-9c09236a214b\"><ac:parameter ac:name=\"title\">Closed</ac:parameter><ac:parameter ac:name=\"colour\">Purple</ac:parameter></ac:structured-macro> </p></td></tr><tr ac:local-id=\"c0c74bb3-a66b-4413-b120-a32c53c51fa8\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"690e758e-ec30-47f9-b5cb-7c03abc7597f\"><p local-id=\"ff89d677-10aa-4e64-8ace-708e3593404b\"><strong>OKR alignment:</strong></p></th><td ac:local-id=\"0bce86a3-8751-4070-b8e2-6777e3a1d33c\"><p local-id=\"157049fb-9703-451d-8e19-550aee08c766\">[Link to project charter section]</p></td></tr><tr ac:local-id=\"98670eba-12f5-4e99-a5fd-0b2793550044\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"fbb386f3-0c65-4959-9603-b006677cb0da\"><p local-id=\"ee4ab36e-df23-4543-bf9a-41c3349df296\"><strong>Commercial Objective:</strong></p></th><td ac:local-id=\"7aada0f0-b599-42d8-a809-f8e55504c715\"><p local-id=\"1ce905e9-4550-46a8-8cad-898065e1ab1e\">[Description of the project &amp; commercial objective]</p></td></tr><tr ac:local-id=\"cb1e290e-6ff1-45f2-96d2-05fea61fcd63\"><th data-highlight-colour=\"#b3bac5\" rowspan=\"2\" ac:local-id=\"f80b355f-bda1-4b05-a64f-f465ed30fc6d\"><p local-id=\"4fa71263-074e-4c93-a293-fbed837a52ad\"><strong>Project Scope:</strong></p></th><td ac:local-id=\"03447ede-e96b-4c30-a701-0a926f5d79fc\"><p local-id=\"e54dda01-477e-4e7e-9dd9-44dd411873bd\">In Scope<br />[Link to Product Initiatives PIs, Identify out of scope where applicable]</p></td></tr><tr ac:local-id=\"cb1e290e-6ff1-45f2-96d2-05fea61fcd63\"><td ac:local-id=\"03447ede-e96b-4c30-a701-0a926f5d79fc\"><p local-id=\"2a268d19-d3e4-4480-af30-327135bf455e\">Out of Scope:</p></td></tr><tr ac:local-id=\"cb1e290e-6ff1-45f2-96d2-05fea61fcd63\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"f80b355f-bda1-4b05-a64f-f465ed30fc6d\"><p local-id=\"1c254eb7-7b42-4a32-8cfb-c84146519b21\"><strong>Commercial Driver:</strong></p></th><td ac:local-id=\"03447ede-e96b-4c30-a701-0a926f5d79fc\"><p local-id=\"d3e0746c-35a4-4494-a9ff-100cbeed8538\">[Link to any commercial needs, contracts, tenders]</p></td></tr><tr ac:local-id=\"ac128e09-7a4f-4a7e-9928-d71102025c03\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"2a289db4-cb2d-498d-907d-d3d2cddd4980\"><p local-id=\"34bc562b-5d7f-42cd-bccf-ea41fb6a8c6c\"><strong>Success Criteria:</strong></p></th><td ac:local-id=\"34273ad2-7a0a-48e1-ac41-9732933a9ce9\"><p local-id=\"91a59652-92ce-4904-ab9f-54cf77c6323a\">[Product definition of the success criteria to be measured at closure]</p></td></tr><tr ac:local-id=\"405019d3-0a6b-4882-a953-dd2878bcf17f\"><th data-highlight-colour=\"#b3bac5\" ac:local-id=\"63985be3-9e1f-423e-8dc1-e774f0ba12d8\"><p local-id=\"cff6684a-59cb-4d6b-9e71-367d5a22b771\"><strong>Stakeholders:</strong></p></th><td ac:local-id=\"0af80ed2-fecf-4afb-b026-c5922588d8a2\"><p local-id=\"8fd86c5d-f4c7-4796-8bc8-f5b5c8c67837\">Identify all key individuals or groups involved, clarify their roles, and secure their buy-in to support project objectives and collaboration</p><ul local-id=\"e4d63cb1-ad3c-4517-aa18-9d9df7e16ad1\"><li local-id=\"41da4d46-6ace-4611-86c2-3c1fb9092e64\"><p local-id=\"dade9cb8-c736-4ed7-8f38-1616ee200539\">Engineering:</p></li><li local-id=\"600c1434-4450-4072-9ffd-0ea8f4bc1e19\"><p local-id=\"f229e2ed-afe2-48cc-90e4-99529293a352\">Product:</p></li><li local-id=\"45ad1520-5eec-4b2a-a046-27a6ea0ef394\"><p local-id=\"fb849fd3-1675-4516-8204-1e1171c188ed\">Program Delivery:</p></li><li local-id=\"a010c8be-9ed1-45e5-a361-880be8f5cf6a\"><p local-id=\"c045aff0-1cbf-4fc6-a483-3287b103dc42\">Commercial:</p></li><li local-id=\"8a213d25-7121-4340-9a09-996a27f6529a\"><p local-id=\"7ef3dda6-cab7-4de2-b568-6a1791104566\">Med Afairs:</p></li><li local-id=\"7255356d-90fd-4d98-9db5-b530e99bc87b\"><p local-id=\"3727190d-f7c0-493b-b7f4-13733873a445\">Any other stakeholders</p></li></ul></td></tr></tbody></table></ac:rich-text-body></ac:structured-macro><hr local-id=\"c75a3eb9-4171-4d0e-9911-f536e540ebd4\" />",
+      "representation": "storage",
+      "embeddedContent": [],
+      "_expandable": {
+        "content": "/rest/api/content/3559363918"
+      }
+    },
+    "_expandable": {
+      "editor": "",
+      "atlas_doc_format": "",
+      "view": "",
+      "export_view": "",
+      "styled_view": "",
+      "dynamic": "",
+      "editor2": "",
+      "anonymous_export_view": ""
+    }
+  },
+  "extensions": {
+    "position": 206
+  },
+  "_expandable": {
+    "childTypes": "",
+    "container": "/rest/api/space/HPP",
+    "schedulePublishInfo": "",
+    "metadata": "",
+    "operations": "",
+    "schedulePublishDate": "",
+    "children": "/rest/api/content/3559363918/child",
+    "restrictions": "/rest/api/content/3559363918/restriction/byOperation",
+    "history": "/rest/api/content/3559363918/history",
+    "draftVersion": "",
+    "descendants": "/rest/api/content/3559363918/descendant",
+    "space": "/rest/api/space/HPP"
+  },
+  "_links": {
+    "editui": "/pages/resumedraft.action?draftId=3559363918",
+    "webui": "/spaces/HPP/pages/3559363918/Project+Charter+Template",
+    "edituiv2": "/spaces/HPP/pages/edit-v2/3559363918",
+    "context": "/wiki",
+    "self": "https://harrison-ai.atlassian.net/wiki/rest/api/content/3559363918",
+    "tinyui": "/x/TpUn1",
+    "collection": "/rest/api/content",
+    "base": "https://harrison-ai.atlassian.net/wiki"
+  }
+}

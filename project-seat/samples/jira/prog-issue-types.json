@@ -1,0 +1,57 @@
+{
+  "startAt": 0,
+  "maxResults": 50,
+  "total": 5,
+  "issueTypes": [
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10000",
+      "id": "10000",
+      "description": "A collection of related bugs, stories, and tasks.",
+      "iconUrl": "https://harrison-ai.atlassian.net/images/icons/issuetypes/epic.svg",
+      "name": "Epic",
+      "untranslatedName": "Epic",
+      "subtask": false,
+      "hierarchyLevel": 1
+    },
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10020",
+      "id": "10020",
+      "description": "A small, distinct piece of work.",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10318?size=medium",
+      "name": "Task",
+      "untranslatedName": "Task",
+      "subtask": false,
+      "hierarchyLevel": 0
+    },
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10021",
+      "id": "10021",
+      "description": "A small piece of work that's part of a larger task.",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10316?size=medium",
+      "name": "Sub-task",
+      "untranslatedName": "Sub-task",
+      "subtask": true,
+      "hierarchyLevel": -1
+    },
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10309",
+      "id": "10309",
+      "description": "An initiative",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10313?size=medium",
+      "name": "Initiative",
+      "untranslatedName": "Initiative",
+      "subtask": false,
+      "hierarchyLevel": 2
+    },
+    {
+      "self": "https://harrison-ai.atlassian.net/rest/api/3/issuetype/10423",
+      "id": "10423",
+      "description": "",
+      "iconUrl": "https://harrison-ai.atlassian.net/rest/api/2/universal_avatar/view/type/issuetype/avatar/10314?size=medium",
+      "name": "Goal",
+      "untranslatedName": "Goal",
+      "subtask": false,
+      "hierarchyLevel": 3
+    }
+  ]
+}
