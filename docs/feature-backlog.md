@@ -105,6 +105,7 @@ Redesign the project dashboard to be more graphical and information-dense:
 - Collapsed vs expanded project cards with quick-glance metrics
 
 ### Transcript UI Improvements
+- Loading spinner on "Analyze with LLM" button — LLM calls take 3-8+ seconds; the button currently gives no feedback. Add an HTMX indicator (spinner + "Analyzing..." text) and disable the button during the request.
 - Re-analyze button (re-run LLM on same transcript with updated project context)
 - Diff preview for Confluence update suggestions (show what will be appended)
 - Confidence threshold filter (hide low-confidence suggestions)
