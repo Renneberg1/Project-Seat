@@ -1,0 +1,30 @@
+<div class="suggestions-panel" id="suggestions-panel">
+    {% if meeting_summary %}
+    <div class="meeting-summary">
+        <h3>Meeting Summary</h3>
+        <p>{{ meeting_summary }}</p>
+    </div>
+    {% endif %}
+
+    {% if suggestions %}
+    <div class="suggestions-header">
+        <h3>Suggestions ({{ suggestions|length }})</h3>
+        <button class="btn btn-approve btn-sm"
+                hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/accept-all"
+                hx-target="#suggestions-panel"
+                hx-confirm="Accept all {{ suggestions|selectattr('status.value', 'equalto', 'pending')|list|length }} pending suggestions?">
+            Accept All Pending
+        </button>
+    </div>
+
+    <div class="suggestions-list">
+        {% for sug in suggestions %}
+        {% include "partials/suggestion_row.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No suggestions generated. The transcript may not contain actionable items.</p>
+    </div>
+    {% endif %}
+</div>

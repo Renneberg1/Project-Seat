@@ -1,0 +1,36 @@
+<div class="transcript-preview">
+    <h2>Parsed: {{ parsed.filename }}</h2>
+    <div class="transcript-meta">
+        <span><strong>Segments:</strong> {{ parsed.segments|length }}</span>
+        <span><strong>Speakers:</strong> {{ parsed.speaker_list|join(", ") }}</span>
+        {% if parsed.duration_hint %}
+        <span><strong>Duration:</strong> {{ parsed.duration_hint }}</span>
+        {% endif %}
+    </div>
+
+    <div class="transcript-segments">
+        {% for seg in parsed.segments[:50] %}
+        <div class="transcript-segment">
+            <span class="segment-speaker">{{ seg.speaker }}</span>
+            {% if seg.timestamp_start %}
+            <span class="segment-time">{{ seg.timestamp_start }}</span>
+            {% endif %}
+            <span class="segment-text">{{ seg.text }}</span>
+        </div>
+        {% endfor %}
+        {% if parsed.segments|length > 50 %}
+        <p class="transcript-truncated">... and {{ parsed.segments|length - 50 }} more segments</p>
+        {% endif %}
+    </div>
+
+    <div class="transcript-actions">
+        <button class="btn btn-approve"
+                hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/analyze"
+                hx-target="#analysis-result"
+                hx-indicator="#analyze-spinner">
+            Analyze with LLM
+        </button>
+        <span id="analyze-spinner" class="htmx-indicator"> Analyzing (this may take a moment)...</span>
+    </div>
+    <div id="analysis-result"></div>
+</div>

@@ -40,9 +40,10 @@ class AtlassianSettings:
 
 @dataclass(frozen=True)
 class LLMSettings:
-    provider: str = os.getenv("LLM_PROVIDER", "claude")
+    provider: str = os.getenv("LLM_PROVIDER", "gemini")
     api_key: str = os.getenv("LLM_API_KEY", "")
-    model: str = os.getenv("LLM_MODEL", "claude-sonnet-4-20250514")
+    model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
+    base_url: str = os.getenv("LLM_BASE_URL", "http://localhost:11434")
 
 
 @dataclass(frozen=True)

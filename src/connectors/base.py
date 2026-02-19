@@ -140,6 +140,8 @@ class BaseConnector:
 
     async def put(self, path: str, *, json_body: dict[str, Any] | None = None) -> dict[str, Any]:
         resp = await self._request("PUT", path, json_body=json_body)
+        if resp.status_code == 204 or not resp.content:
+            return {}
         return resp.json()
 
     async def delete(self, path: str) -> None:

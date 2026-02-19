@@ -19,6 +19,7 @@
             <th>Preview</th>
             <th>Status</th>
             <th>Resolved</th>
+            <th></th>
         </tr>
     </thead>
     <tbody>
@@ -29,6 +30,12 @@
             <td>{{ item.preview }}</td>
             <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
             <td>{{ item.resolved_at or '' }}</td>
+            <td>
+                {% if item.status.value == "failed" %}
+                <button hx-post="/project/{{ project.id }}/approvals/{{ item.id }}/retry"
+                        class="btn btn-sm">Retry</button>
+                {% endif %}
+            </td>
         </tr>
         {% endfor %}
     </tbody>

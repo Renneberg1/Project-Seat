@@ -88,6 +88,21 @@ class ApprovalEngine:
             conn.commit()
         return self.get(item_id)
 
+    def retry(self, item_id: int) -> ApprovalItem | None:
+        """Reset a failed item back to pending so it can be re-approved."""
+        item = self.get(item_id)
+        if item is None:
+            return None
+        if item.status != ApprovalStatus.FAILED:
+            raise ValueError(f"Item {item_id} is {item.status.value}, not failed")
+        with get_db(self._db_path) as conn:
+            conn.execute(
+                "UPDATE approval_queue SET status = ?, result = NULL, resolved_at = NULL WHERE id = ?",
+                (ApprovalStatus.PENDING.value, item_id),
+            )
+            conn.commit()
+        return self.get(item_id)
+
     # ------------------------------------------------------------------
     # Execution (async — makes HTTP calls)
     # ------------------------------------------------------------------
@@ -201,16 +216,28 @@ class ApprovalEngine:
         elif action_type == ApprovalAction.UPDATE_CONFLUENCE_PAGE:
             confluence = ConfluenceConnector()
             try:
-                # Confluence update requires the current version number
-                page = await confluence.get_page(payload["page_id"], expand=["version"])
+                page = await confluence.get_page(
+                    payload["page_id"], expand=["version", "body.storage"]
+                )
                 current_version = page["version"]["number"]
+                title = payload.get("title") or page.get("title", "Untitled")
+
+                if payload.get("append_mode"):
+                    # Append mode: fetch current body and append new content
+                    current_body = (
+                        page.get("body", {}).get("storage", {}).get("value", "")
+                    )
+                    new_body = current_body + payload["append_content"]
+                else:
+                    new_body = payload["body_storage"]
+
                 update_body = {
                     "version": {"number": current_version + 1},
-                    "title": payload["title"],
+                    "title": title,
                     "type": "page",
                     "body": {
                         "storage": {
-                            "value": payload["body_storage"],
+                            "value": new_body,
                             "representation": "storage",
                         }
                     },

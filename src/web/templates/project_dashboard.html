@@ -124,6 +124,19 @@
         {% endif %}
     </div>
 
+    <div class="overview-card">
+        <h3>Transcripts</h3>
+        {% if transcript_summary and transcript_summary.transcript_count > 0 %}
+        <p class="overview-metric">{{ transcript_summary.transcript_count }} uploaded</p>
+        {% if transcript_summary.pending_count > 0 %}
+        <p><span class="badge badge-pending">{{ transcript_summary.pending_count }} pending suggestions</span></p>
+        {% endif %}
+        {% else %}
+        <p>No transcripts yet.</p>
+        {% endif %}
+        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/transcript/" class="btn btn-sm">Manage</a></p>
+    </div>
+
     {% if project.confluence_charter_id or project.confluence_xft_id %}
     <div class="overview-card">
         <h3>Project Documentation</h3>

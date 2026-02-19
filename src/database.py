@@ -102,6 +102,33 @@ def init_db(db_path: str | Path = "seat.db") -> None:
             conn.execute("ALTER TABLE projects ADD COLUMN pi_version TEXT")
         except sqlite3.OperationalError:
             pass  # column already exists
+        # Migration: add meeting_summary to transcript_cache
+        try:
+            conn.execute("ALTER TABLE transcript_cache ADD COLUMN meeting_summary TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
+        # Migration: transcript_suggestions table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS transcript_suggestions (
+                id              INTEGER PRIMARY KEY AUTOINCREMENT,
+                transcript_id   INTEGER NOT NULL,
+                project_id      INTEGER NOT NULL,
+                suggestion_type TEXT    NOT NULL,
+                title           TEXT    NOT NULL,
+                detail          TEXT    NOT NULL DEFAULT '',
+                evidence        TEXT    NOT NULL DEFAULT '',
+                proposed_payload TEXT   NOT NULL DEFAULT '{}',
+                proposed_action TEXT    NOT NULL DEFAULT '',
+                proposed_preview TEXT   NOT NULL DEFAULT '',
+                confidence      REAL   NOT NULL DEFAULT 0.0,
+                status          TEXT    NOT NULL DEFAULT 'pending',
+                approval_item_id INTEGER,
+                created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (transcript_id) REFERENCES transcript_cache(id),
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (approval_item_id) REFERENCES approval_queue(id)
+            )
+        """)
         conn.commit()
     finally:
         conn.close()

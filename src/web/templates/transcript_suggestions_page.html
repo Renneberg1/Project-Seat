@@ -1,0 +1,29 @@
+{% extends "base.html" %}
+{% block title %}Suggestions — {{ transcript.filename }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>{{ transcript.filename }}</h1>
+    <a href="/project/{{ project.id }}/transcript/" class="btn btn-sm">Back to Transcripts</a>
+</div>
+
+<p>Uploaded {{ transcript.created_at }}</p>
+
+{% include "partials/transcript_suggestions.html" %}
+
+<details class="transcript-raw-toggle">
+    <summary>View raw transcript</summary>
+    <pre class="transcript-raw">{{ transcript.raw_text[:5000] }}{% if transcript.raw_text|length > 5000 %}
+... (truncated){% endif %}</pre>
+</details>
+
+<div class="transcript-actions" style="margin-top: 1rem;">
+    <button class="btn btn-approve"
+            hx-post="/project/{{ project.id }}/transcript/{{ transcript.id }}/analyze"
+            hx-target="#suggestions-panel"
+            hx-indicator="#reanalyze-spinner">
+        Re-analyze
+    </button>
+    <span id="reanalyze-spinner" class="htmx-indicator"> Analyzing...</span>
+</div>
+{% endblock %}

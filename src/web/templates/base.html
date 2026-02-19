@@ -4,7 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Project Seat{% endblock %}</title>
-    <link rel="stylesheet" href="/static/style.css?v=4">
+    <link rel="stylesheet" href="/static/style.css?v=5">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
@@ -36,6 +36,8 @@
                class="nav-link {% if '/documents' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Documents</a>
             <a href="/project/{{ selected_project_id }}/approvals"
                class="nav-link {% if request.url.path == '/project/' ~ selected_project_id|string ~ '/approvals' %}active{% endif %}">Approvals</a>
+            <a href="/project/{{ selected_project_id }}/transcript/"
+               class="nav-link {% if '/transcript' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Transcripts</a>
             <button class="nav-link refresh-btn"
                     hx-post="/project/{{ selected_project_id }}/refresh"
                     title="Refresh cached data">&#x21bb;</button>

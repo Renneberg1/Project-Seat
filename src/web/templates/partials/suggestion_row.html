@@ -1,0 +1,40 @@
+<div class="suggestion-row suggestion-{{ sug.status.value }}" id="suggestion-{{ sug.id }}">
+    <div class="suggestion-header">
+        <span class="badge badge-sug-{{ sug.suggestion_type.value }}">{{ sug.suggestion_type.value | replace("_", " ") | title }}</span>
+        <span class="suggestion-title">{{ sug.title }}</span>
+        <span class="suggestion-confidence" title="LLM confidence">{{ "%.0f"|format(sug.confidence * 100) }}%</span>
+        <span class="badge badge-{{ sug.status.value }}">{{ sug.status.value }}</span>
+    </div>
+
+    <details class="suggestion-detail">
+        <summary>Details & Evidence</summary>
+        <div class="suggestion-body">
+            {% if sug.detail %}
+            <p><strong>Background:</strong> {{ sug.detail }}</p>
+            {% endif %}
+            {% if sug.evidence %}
+            <p><strong>Evidence:</strong> <em>"{{ sug.evidence }}"</em></p>
+            {% endif %}
+            {% if sug.proposed_preview %}
+            <pre class="suggestion-preview">{{ sug.proposed_preview }}</pre>
+            {% endif %}
+        </div>
+    </details>
+
+    {% if sug.status.value == "pending" %}
+    <div class="suggestion-actions">
+        <button class="btn btn-approve btn-sm"
+                hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ sug.id }}/accept"
+                hx-target="#suggestion-{{ sug.id }}"
+                hx-swap="outerHTML">Accept</button>
+        <button class="btn btn-reject btn-sm"
+                hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ sug.id }}/reject"
+                hx-target="#suggestion-{{ sug.id }}"
+                hx-swap="outerHTML">Reject</button>
+    </div>
+    {% elif sug.status.value == "queued" and sug.approval_item_id %}
+    <div class="suggestion-actions">
+        <a href="/project/{{ project.id }}/approvals" class="btn btn-sm">View in Approval Queue</a>
+    </div>
+    {% endif %}
+</div>

@@ -21,6 +21,7 @@ from src.services.dashboard import DashboardService
 from src.services.dhf import DHFService
 from src.services.release import ReleaseService
 from src.services.spinup import SpinUpService
+from src.services.transcript import TranscriptService
 from src.web.deps import get_nav_context, templates
 
 router = APIRouter(prefix="/project", tags=["project"])
@@ -125,6 +126,9 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
             )
             release_published = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
 
+    transcript_service = TranscriptService()
+    transcript_summary = transcript_service.get_transcript_summary(id)
+
     return _render(request, "project_dashboard.html", {
         "project": project,
         "summary": summary,
@@ -136,6 +140,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         "active_locked_release": active_locked,
         "release_published": release_published,
         "release_total": release_total,
+        "transcript_summary": transcript_summary,
     }, id)
 
 
@@ -440,7 +445,23 @@ async def reject_item(request: Request, id: int, item_id: int) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "partials/approval_row.html",
-        {"item": item},
+        {"item": item, "approval_base_url": f"/project/{id}/approvals"},
+    )
+
+
+@router.post("/{id}/approvals/{item_id}/retry", response_class=HTMLResponse)
+async def retry_item(request: Request, id: int, item_id: int) -> HTMLResponse:
+    """Reset a failed item to pending so it can be re-approved."""
+    engine = ApprovalEngine()
+    try:
+        engine.retry(item_id)
+    except ValueError:
+        return HTMLResponse("Item is not in failed state", status_code=400)
+    # Redirect to refresh the full approvals page
+    return HTMLResponse(
+        headers={"HX-Redirect": f"/project/{id}/approvals"},
+        content="",
+        status_code=200,
     )
 
 
