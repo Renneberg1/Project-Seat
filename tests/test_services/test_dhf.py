@@ -153,31 +153,3 @@ async def test_get_dhf_summary_connector_error_returns_error(make_project):
     assert result.error is not None
 
 
-# ---------------------------------------------------------------------------
-# _resolve_human_author: Incoming query (async) — assert return value
-# ---------------------------------------------------------------------------
-
-
-async def test_resolve_human_author_returns_human_name():
-    connector = AsyncMock()
-    connector.get_user_display_name = AsyncMock(return_value="Jane Doe")
-
-    result = await DHFService._resolve_human_author(
-        connector, "page1", {"authorId": "user-123"}, {}
-    )
-
-    assert result == "Jane Doe"
-
-
-async def test_resolve_human_author_skips_softcomply_falls_back_to_history():
-    connector = AsyncMock()
-    connector.get_user_display_name = AsyncMock(side_effect=["SoftComply Bot", "Jane Doe"])
-    connector.get_page_versions = AsyncMock(return_value=[
-        {"authorId": "user-human"},
-    ])
-
-    result = await DHFService._resolve_human_author(
-        connector, "page1", {"authorId": "user-bot"}, {}
-    )
-
-    assert result == "Jane Doe"

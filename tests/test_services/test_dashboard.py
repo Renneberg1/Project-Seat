@@ -6,6 +6,7 @@ from unittest.mock import AsyncMock, MagicMock, patch
 
 import pytest
 
+from src.cache import cache
 from src.connectors.base import ConnectorError
 from src.database import get_db
 from src.services.dashboard import DashboardService
@@ -100,6 +101,7 @@ def test_update_phase_invalid_phase_raises_value_error(tmp_db):
 
 
 async def test_get_project_summary_returns_correct_counts(tmp_db, test_settings, make_jira_issue_response):
+    cache.clear()
     _insert_project(tmp_db)
     service = DashboardService(db_path=tmp_db, settings=test_settings)
     project = service.list_projects()[0]
@@ -125,6 +127,7 @@ async def test_get_project_summary_returns_correct_counts(tmp_db, test_settings,
 
 
 async def test_get_project_summary_jira_error_returns_error_string(tmp_db, test_settings):
+    cache.clear()
     _insert_project(tmp_db)
     service = DashboardService(db_path=tmp_db, settings=test_settings)
     project = service.list_projects()[0]
@@ -148,6 +151,7 @@ async def test_get_project_summary_jira_error_returns_error_string(tmp_db, test_
 
 
 async def test_get_all_summaries_returns_summary_per_project(tmp_db, test_settings, make_jira_issue_response):
+    cache.clear()
     _insert_project(tmp_db, "Alpha", "PROG-1")
     _insert_project(tmp_db, "Beta", "PROG-2")
     service = DashboardService(db_path=tmp_db, settings=test_settings)
@@ -179,6 +183,9 @@ async def test_get_initiatives_returns_summaries_with_counts(tmp_db, test_settin
     _insert_project(tmp_db, "Alpha", "PROG-1")
     service = DashboardService(db_path=tmp_db, settings=test_settings)
     project = service.list_projects()[0]
+    cache.clear()
+
+    # Batched pattern: 3 search calls (initiatives, all epics, all tasks)
     initiative_data = [{
         "id": "20000", "key": "AIM-100",
         "fields": {
@@ -189,19 +196,17 @@ async def test_get_initiatives_returns_summaries_with_counts(tmp_db, test_settin
         },
     }]
     epic_data = [
-        {"key": "AIM-200", "fields": {"status": {"name": "Done"}}},
-        {"key": "AIM-201", "fields": {"status": {"name": "In Progress"}}},
+        {"key": "AIM-200", "fields": {"status": {"name": "Done"}, "parent": {"key": "AIM-100"}}},
+        {"key": "AIM-201", "fields": {"status": {"name": "In Progress"}, "parent": {"key": "AIM-100"}}},
     ]
-    task_data_200 = [
-        {"fields": {"status": {"name": "Done"}}},
-        {"fields": {"status": {"name": "Done"}}},
-    ]
-    task_data_201 = [
-        {"fields": {"status": {"name": "Open"}}},
+    task_data = [
+        {"fields": {"status": {"name": "Done"}, "parent": {"key": "AIM-200"}}},
+        {"fields": {"status": {"name": "Done"}, "parent": {"key": "AIM-200"}}},
+        {"fields": {"status": {"name": "Open"}, "parent": {"key": "AIM-201"}}},
     ]
     mock_jira = MagicMock()
     mock_jira.search = AsyncMock(side_effect=[
-        initiative_data, epic_data, task_data_200, task_data_201,
+        initiative_data, epic_data, task_data,
     ])
     mock_jira.close = AsyncMock()
 
@@ -217,6 +222,7 @@ async def test_get_initiatives_returns_summaries_with_counts(tmp_db, test_settin
 
 
 async def test_get_initiatives_connector_error_returns_empty(tmp_db, test_settings):
+    cache.clear()
     _insert_project(tmp_db, "Alpha", "PROG-1")
     service = DashboardService(db_path=tmp_db, settings=test_settings)
     project = service.list_projects()[0]
@@ -255,12 +261,13 @@ async def test_get_initiative_detail_returns_full_hierarchy(tmp_db, test_setting
             "description": None,
         },
     }]
+    # Batched: all tasks in one query, with parent field for grouping
     task_data = [{
         "id": "20002", "key": "AIM-300",
         "fields": {
             "summary": "Task 1", "status": {"name": "To Do"},
             "issuetype": {"name": "Task"}, "project": {"key": "AIM"},
-            "labels": [], "fixVersions": [], "duedate": None, "parent": None,
+            "labels": [], "fixVersions": [], "duedate": None, "parent": {"key": "AIM-200"},
             "description": None,
         },
     }]
@@ -281,6 +288,7 @@ async def test_get_initiative_detail_returns_full_hierarchy(tmp_db, test_setting
 
 
 async def test_get_initiative_detail_connector_error_returns_none(tmp_db, test_settings):
+    cache.clear()
     service = DashboardService(db_path=tmp_db, settings=test_settings)
     mock_jira = MagicMock()
     mock_jira.get_issue = AsyncMock(side_effect=ConnectorError(404, "Not Found"))

@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from unittest.mock import AsyncMock, patch
 
+from src.cache import cache
 from src.database import get_db
 from src.models.dashboard import EpicWithTasks, InitiativeDetail, InitiativeSummary, ProductIdeaSummary, ProjectSummary
 from src.models.dhf import DHFDocument, DHFSummary, DocumentStatus
@@ -67,6 +68,7 @@ def test_project_dashboard_returns_200(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
+    cache.clear()
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
@@ -76,7 +78,7 @@ def test_project_dashboard_returns_200(client, tmp_db):
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
-            MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=_make_dhf_summary())
+            MockDHF.return_value.get_dhf_table = AsyncMock(return_value=([], []))
             with patch("src.web.routes.project.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
 
@@ -99,6 +101,7 @@ def test_project_dashboard_sets_cookie(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
+    cache.clear()
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
@@ -108,7 +111,7 @@ def test_project_dashboard_sets_cookie(client, tmp_db):
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
-            MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=_make_dhf_summary())
+            MockDHF.return_value.get_dhf_table = AsyncMock(return_value=([], []))
             with patch("src.web.routes.project.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
 
@@ -121,8 +124,18 @@ def test_project_dashboard_sets_cookie(client, tmp_db):
 def test_project_dashboard_shows_dhf_counts(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
-    dhf = DHFSummary(total_count=5, released_count=2, draft_update_count=2, in_draft_count=1)
+    project.dhf_draft_root_id = "100"
+    project.dhf_released_root_id = "200"
+    # Provide actual DHFDocument objects so the route can compute summary locally
+    dhf_docs = [
+        DHFDocument("Doc A", "Risk", "1", None, DocumentStatus.RELEASED, "", "", ""),
+        DHFDocument("Doc B", "Risk", "1", None, DocumentStatus.RELEASED, "", "", ""),
+        DHFDocument("Doc C", "Design", "1", "2", DocumentStatus.DRAFT_UPDATE, "", "", ""),
+        DHFDocument("Doc D", "Design", "1", "2", DocumentStatus.DRAFT_UPDATE, "", "", ""),
+        DHFDocument("Doc E", "Test", None, "1", DocumentStatus.IN_DRAFT, "", "", ""),
+    ]
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
+    cache.clear()
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
@@ -132,7 +145,7 @@ def test_project_dashboard_shows_dhf_counts(client, tmp_db):
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
-            MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=dhf)
+            MockDHF.return_value.get_dhf_table = AsyncMock(return_value=(dhf_docs, ["Design", "Risk", "Test"]))
             with patch("src.web.routes.project.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
 
@@ -180,8 +193,8 @@ def test_delete_project_danger_zone_exists_on_dashboard(client, tmp_db):
         risk_count=0, open_risk_count=0, decision_count=0, initiative_count=0,
         error=None,
     )
-    dhf = DHFSummary(total_count=0, released_count=0, draft_update_count=0, in_draft_count=0)
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
+    cache.clear()
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
@@ -191,7 +204,7 @@ def test_delete_project_danger_zone_exists_on_dashboard(client, tmp_db):
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
-            MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=dhf)
+            MockDHF.return_value.get_dhf_table = AsyncMock(return_value=([], []))
             with patch("src.web.routes.project.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
 

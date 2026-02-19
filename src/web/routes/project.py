@@ -2,17 +2,20 @@
 
 from __future__ import annotations
 
+import asyncio
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from src.cache import cache
 from src.config import settings as app_settings
 from src.connectors.base import ConnectorError
 from src.database import get_db
 from src.engine.approval import ApprovalEngine
 from src.services.import_project import ImportService
 from src.models.approval import ApprovalStatus
+from src.models.dhf import DocumentStatus
 from src.models.release import ReleaseStatus
 from src.services.dashboard import DashboardService
 from src.services.dhf import DHFService
@@ -55,12 +58,38 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
-    summary = await service.get_project_summary(project)
-
+    # Run independent data fetches concurrently
     dhf_service = DHFService()
-    dhf_summary = await dhf_service.get_dhf_summary(project)
 
-    pi_ideas = await service.get_product_ideas(project)
+    async def _fetch_dhf():
+        if not project.dhf_draft_root_id or not project.dhf_released_root_id:
+            return [], []
+        try:
+            return await dhf_service.get_dhf_table(project)
+        except ConnectorError:
+            return [], []
+
+    summary, (dhf_docs, _dhf_areas), pi_ideas = await asyncio.gather(
+        service.get_project_summary(project),
+        _fetch_dhf(),
+        service.get_product_ideas(project),
+    )
+
+    # Compute DHF summary locally from the already-fetched docs
+    from src.models.dhf import DHFSummary
+    if dhf_docs:
+        released = sum(1 for d in dhf_docs if d.status == DocumentStatus.RELEASED)
+        draft_update = sum(1 for d in dhf_docs if d.status == DocumentStatus.DRAFT_UPDATE)
+        in_draft = sum(1 for d in dhf_docs if d.status == DocumentStatus.IN_DRAFT)
+        dhf_summary = DHFSummary(
+            total_count=len(dhf_docs), released_count=released,
+            draft_update_count=draft_update, in_draft_count=in_draft,
+        )
+    else:
+        dhf_summary = DHFSummary(
+            total_count=0, released_count=0, draft_update_count=0, in_draft_count=0,
+        )
+
     pi_summary = service.summarise_product_ideas(pi_ideas)
 
     engine = ApprovalEngine()
@@ -88,18 +117,13 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     if active_locked:
         locked_selected = release_service.get_selected_documents(active_locked.id)
         release_total = len(locked_selected)
-        if release_total > 0 and dhf_summary and dhf_summary.total_count > 0:
-            dhf_service2 = DHFService()
-            try:
-                docs, _ = await dhf_service2.get_dhf_table(project)
-                current_versions = {d.title: d.released_version for d in docs}
-                snapshot = active_locked.version_snapshot or {}
-                statuses = release_service.compute_release_status(
-                    snapshot, current_versions, locked_selected,
-                )
-                release_published = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
-            except ConnectorError:
-                pass
+        if release_total > 0 and dhf_docs:
+            current_versions = {d.title: d.released_version for d in dhf_docs}
+            snapshot = active_locked.version_snapshot or {}
+            statuses = release_service.compute_release_status(
+                snapshot, current_versions, locked_selected,
+            )
+            release_published = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
 
     return _render(request, "project_dashboard.html", {
         "project": project,
@@ -124,6 +148,27 @@ async def delete_project(request: Request, id: int) -> HTMLResponse:
 
 
 # ------------------------------------------------------------------
+# Cache refresh
+# ------------------------------------------------------------------
+
+@router.post("/{id}/refresh", response_class=HTMLResponse)
+async def refresh_project(request: Request, id: int) -> HTMLResponse:
+    """Clear cached data for a project so the next load fetches fresh data."""
+    service = DashboardService()
+    project = service.get_project_by_id(id)
+    if project is not None:
+        cache.invalidate(f"summary:{project.jira_goal_key}")
+        cache.invalidate(f"initiatives:{project.jira_goal_key}")
+        if project.pi_version:
+            cache.invalidate(f"pi:{project.pi_version}")
+        if project.dhf_draft_root_id and project.dhf_released_root_id:
+            cache.invalidate(f"dhf:{project.dhf_draft_root_id}:{project.dhf_released_root_id}")
+    # Redirect back to the referring page (or dashboard)
+    referer = request.headers.get("HX-Current-URL", f"/project/{id}/dashboard")
+    return HTMLResponse(headers={"HX-Redirect": referer}, content="", status_code=200)
+
+
+# ------------------------------------------------------------------
 # Features (Initiatives)
 # ------------------------------------------------------------------
 
@@ -135,10 +180,12 @@ async def project_features(request: Request, id: int) -> HTMLResponse:
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
-    initiatives = await service.get_initiatives(project)
+    initiatives, pi_ideas = await asyncio.gather(
+        service.get_initiatives(project),
+        service.get_product_ideas(project),
+    )
 
     _PI_PRIORITY_ORDER = {"Must Have": 0, "Should Have": 1, "Could Have": 2}
-    pi_ideas = await service.get_product_ideas(project)
     pi_ideas.sort(key=lambda i: _PI_PRIORITY_ORDER.get(i.release_priority or "", 9))
 
     return _render(request, "project_features.html", {

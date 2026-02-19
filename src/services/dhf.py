@@ -2,9 +2,11 @@
 
 from __future__ import annotations
 
+import asyncio
 import logging
 import re
 
+from src.cache import cache
 from src.config import Settings, settings as default_settings
 from src.connectors.base import ConnectorError
 from src.connectors.confluence import ConfluenceConnector
@@ -14,6 +16,10 @@ from src.models.project import Project
 logger = logging.getLogger(__name__)
 
 _VERSION_RE = re.compile(r"\[V(\d+)\]")
+
+# Limit concurrent Confluence API calls to avoid rate-limiting.
+# Atlassian Cloud allows ~100 req/s; 20 concurrent keeps us well within limits.
+_CONFLUENCE_SEM = asyncio.Semaphore(20)
 
 
 def _parse_version(title: str) -> str | None:
@@ -70,21 +76,27 @@ class DHFService:
     ) -> tuple[list[DHFDocument], list[str]]:
         """Full DHF status table and list of unique areas.
 
+        Results are cached for 120 seconds.
         Raises ``ConnectorError`` on API failure (caller should handle).
         """
+        cache_key = f"dhf:{project.dhf_draft_root_id}:{project.dhf_released_root_id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            return cached
+
         connector = ConfluenceConnector(settings=self._settings)
         try:
             user_cache: dict[str, str] = {}
-            draft_docs = await self._collect_documents(
-                connector, project.dhf_draft_root_id, user_cache
-            )
-            released_docs = await self._collect_documents(
-                connector, project.dhf_released_root_id, user_cache
+            draft_docs, released_docs = await asyncio.gather(
+                self._collect_documents(connector, project.dhf_draft_root_id, user_cache),
+                self._collect_documents(connector, project.dhf_released_root_id, user_cache),
             )
             rows = self._match_documents(draft_docs, released_docs)
             rows.sort(key=lambda d: (d.area, d.title))
             areas = sorted({d.area for d in rows})
-            return rows, areas
+            result = (rows, areas)
+            cache.set(cache_key, result, ttl=120)
+            return result
         finally:
             await connector.close()
 
@@ -98,47 +110,132 @@ class DHFService:
         root_page_id: str,
         user_cache: dict[str, str],
     ) -> list[dict]:
-        """Walk 2-level hierarchy (areas -> documents) under a DHF root page."""
-        docs: list[dict] = []
+        """Walk 2-level hierarchy (areas -> documents) under a DHF root page.
+
+        Uses a phased approach to minimise API calls:
+        1. Fetch area children (parallel)
+        2. Fetch doc metadata + page data for all docs (parallel, semaphore-limited)
+        3. Batch-resolve unique author display names (parallel, deduplicated)
+        4. For SoftComply-authored docs only, fetch version history (parallel)
+        5. Assemble results
+        """
         areas = await connector.get_child_pages_v2(root_page_id)
 
-        for area in areas:
+        # Phase 1: Fetch all area children in parallel
+        area_children_lists = await asyncio.gather(
+            *(connector.get_child_pages_v2(area.get("id", "")) for area in areas)
+        )
+
+        # Build flat list of (area_title, child_id, child_title)
+        all_items: list[tuple[str, str, str]] = []
+        for area, children in zip(areas, area_children_lists):
             area_title = area.get("title", "")
-            area_id = area.get("id", "")
-            children = await connector.get_child_pages_v2(area_id)
-
             for child in children:
-                child_id = child.get("id", "")
-                child_title = child.get("title", "")
+                all_items.append((area_title, child.get("id", ""), child.get("title", "")))
 
-                # SoftComply document ID for matching draft<->released
-                doc_id = await self._get_document_id(connector, child_id)
+        if not all_items:
+            return []
 
-                version = _parse_version(child_title)
-
-                # Fetch v2 page for link and version metadata
-                full_page = await connector.get_page_v2(child_id)
-                ver = full_page.get("version", {})
-                last_modified = ver.get("createdAt", "")
-
-                author_name = await self._resolve_human_author(
-                    connector, child_id, ver, user_cache
+        # Phase 2: Fetch doc_id + page_v2 for every doc (semaphore-limited)
+        async def _fetch_page_data(child_id: str) -> tuple[str | None, dict]:
+            async with _CONFLUENCE_SEM:
+                return await asyncio.gather(
+                    self._get_document_id(connector, child_id),
+                    connector.get_page_v2(child_id),
                 )
 
-                base_url = f"https://{connector._domain}.atlassian.net/wiki"
-                webui = full_page.get("_links", {}).get("webui", "")
-                page_url = f"{base_url}{webui}" if webui else ""
+        page_results = await asyncio.gather(
+            *(_fetch_page_data(cid) for _, cid, _ in all_items)
+        )
 
-                docs.append({
-                    "page_id": child_id,
-                    "title": _strip_version(child_title),
-                    "area": area_title,
-                    "version": version,
-                    "document_id": doc_id,
-                    "last_modified": last_modified,
-                    "author": author_name,
-                    "page_url": page_url,
-                })
+        # Phase 3: Collect unique author IDs and batch-resolve display names
+        author_ids: set[str] = set()
+        page_data_list: list[tuple[str | None, dict]] = []
+        for doc_id_page in page_results:
+            doc_id, full_page = doc_id_page
+            page_data_list.append((doc_id, full_page))
+            aid = full_page.get("version", {}).get("authorId", "")
+            if aid:
+                author_ids.add(aid)
+
+        # Resolve only IDs not already in cache
+        new_ids = [aid for aid in author_ids if aid not in user_cache]
+
+        async def _resolve_name(aid: str) -> tuple[str, str]:
+            async with _CONFLUENCE_SEM:
+                name = await connector.get_user_display_name(aid)
+            return aid, name
+
+        if new_ids:
+            resolved = await asyncio.gather(*(_resolve_name(aid) for aid in new_ids))
+            for aid, name in resolved:
+                user_cache[aid] = name
+
+        # Phase 4: For SoftComply-authored docs, batch-fetch version histories
+        softcomply_indices: list[int] = []
+        for i, (_, (_, full_page)) in enumerate(zip(all_items, page_data_list)):
+            aid = full_page.get("version", {}).get("authorId", "")
+            if aid and "softcomply" in user_cache.get(aid, "").lower():
+                softcomply_indices.append(i)
+
+        if softcomply_indices:
+            async def _fetch_versions(child_id: str) -> list[dict]:
+                async with _CONFLUENCE_SEM:
+                    return await connector.get_page_versions(child_id)
+
+            version_results = await asyncio.gather(
+                *(_fetch_versions(all_items[i][1]) for i in softcomply_indices)
+            )
+
+            # Collect any new author IDs from version histories
+            extra_ids: set[str] = set()
+            for versions in version_results:
+                for v in versions:
+                    vid = v.get("authorId", "")
+                    if vid and vid not in user_cache:
+                        extra_ids.add(vid)
+
+            if extra_ids:
+                extra_resolved = await asyncio.gather(
+                    *(_resolve_name(aid) for aid in extra_ids)
+                )
+                for aid, name in extra_resolved:
+                    user_cache[aid] = name
+
+            # Pick the first human author from each version history
+            sc_author_map: dict[int, str] = {}
+            for idx, versions in zip(softcomply_indices, version_results):
+                for v in versions:
+                    vid = v.get("authorId", "")
+                    if vid and "softcomply" not in user_cache.get(vid, "").lower():
+                        sc_author_map[idx] = user_cache[vid]
+                        break
+
+        # Phase 5: Assemble results
+        base_url = f"https://{connector._domain}.atlassian.net/wiki"
+        docs: list[dict] = []
+        for i, (area_title, child_id, child_title) in enumerate(all_items):
+            doc_id, full_page = page_data_list[i]
+            ver = full_page.get("version", {})
+            aid = ver.get("authorId", "")
+
+            # Determine author name
+            if i in softcomply_indices:
+                author_name = sc_author_map.get(i, user_cache.get(aid, aid))
+            else:
+                author_name = user_cache.get(aid, aid)
+
+            webui = full_page.get("_links", {}).get("webui", "")
+            docs.append({
+                "page_id": child_id,
+                "title": _strip_version(child_title),
+                "area": area_title,
+                "version": _parse_version(child_title),
+                "document_id": doc_id,
+                "last_modified": ver.get("createdAt", ""),
+                "author": author_name,
+                "page_url": f"{base_url}{webui}" if webui else "",
+            })
 
         return docs
 
@@ -155,34 +252,6 @@ class DHFService:
             if isinstance(value, dict):
                 return value.get("documentId")
         return None
-
-    @staticmethod
-    async def _resolve_human_author(
-        connector: ConfluenceConnector,
-        page_id: str,
-        current_version: dict,
-        user_cache: dict[str, str],
-    ) -> str:
-        """Walk version history to find the most recent non-SoftComply author."""
-        author_id = current_version.get("authorId", "")
-        if author_id and author_id not in user_cache:
-            user_cache[author_id] = await connector.get_user_display_name(author_id)
-
-        # If current author is not SoftComply, return it
-        if author_id and "softcomply" not in user_cache.get(author_id, "").lower():
-            return user_cache.get(author_id, author_id)
-
-        # Walk version history to find a human author
-        versions = await connector.get_page_versions(page_id)
-        for v in versions:
-            vid = v.get("authorId", "")
-            if vid and vid not in user_cache:
-                user_cache[vid] = await connector.get_user_display_name(vid)
-            if vid and "softcomply" not in user_cache.get(vid, "").lower():
-                return user_cache.get(vid, vid)
-
-        # All versions are SoftComply — return the latest display name
-        return user_cache.get(author_id, author_id)
 
     @staticmethod
     def _match_documents(
