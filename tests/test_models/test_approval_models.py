@@ -8,53 +8,70 @@ from src.database import get_db
 from src.models.approval import ApprovalAction, ApprovalItem, ApprovalStatus
 
 
-class TestApprovalAction:
-    def test_all_six_values(self) -> None:
-        expected = {
-            "create_jira_issue",
-            "create_jira_version",
-            "update_jira_issue",
-            "add_issue_link",
-            "create_confluence_page",
-            "update_confluence_page",
-        }
-        actual = {a.value for a in ApprovalAction}
-        assert actual == expected
-
-    def test_invalid_raises_value_error(self) -> None:
-        with pytest.raises(ValueError):
-            ApprovalAction("nonexistent_action")
+# ---------------------------------------------------------------------------
+# ApprovalAction enum: Contract tests
+# ---------------------------------------------------------------------------
 
 
-class TestApprovalStatus:
-    def test_all_five_values(self) -> None:
-        expected = {"pending", "approved", "rejected", "executed", "failed"}
-        actual = {s.value for s in ApprovalStatus}
-        assert actual == expected
+def test_approval_action_has_six_values():
+    result = {a.value for a in ApprovalAction}
 
-    def test_invalid_raises_value_error(self) -> None:
-        with pytest.raises(ValueError):
-            ApprovalStatus("bogus")
+    expected = {
+        "create_jira_issue",
+        "create_jira_version",
+        "update_jira_issue",
+        "add_issue_link",
+        "create_confluence_page",
+        "update_confluence_page",
+    }
+    assert result == expected
 
 
-class TestApprovalItem:
-    def test_from_row_round_trip(self, tmp_db: str) -> None:
-        with get_db(tmp_db) as conn:
-            conn.execute(
-                """INSERT INTO approval_queue
-                   (project_id, action_type, payload, preview, context, status)
-                   VALUES (?, ?, ?, ?, ?, ?)""",
-                (1, "create_jira_issue", '{"key": "PROG"}', "Create goal", "spin-up", "pending"),
-            )
-            conn.commit()
-            row = conn.execute("SELECT * FROM approval_queue ORDER BY id DESC LIMIT 1").fetchone()
+def test_approval_action_invalid_value_raises_value_error():
+    with pytest.raises(ValueError):
+        ApprovalAction("nonexistent_action")
 
-        item = ApprovalItem.from_row(row)
-        assert item.action_type == ApprovalAction.CREATE_JIRA_ISSUE
-        assert item.status == ApprovalStatus.PENDING
-        assert item.payload == '{"key": "PROG"}'
-        assert item.preview == "Create goal"
-        assert item.context == "spin-up"
-        assert item.project_id == 1
-        assert item.result is None
-        assert item.resolved_at is None
+
+# ---------------------------------------------------------------------------
+# ApprovalStatus enum: Contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_approval_status_has_five_values():
+    result = {s.value for s in ApprovalStatus}
+
+    expected = {"pending", "approved", "rejected", "executed", "failed"}
+    assert result == expected
+
+
+def test_approval_status_invalid_value_raises_value_error():
+    with pytest.raises(ValueError):
+        ApprovalStatus("bogus")
+
+
+# ---------------------------------------------------------------------------
+# ApprovalItem.from_row: Contract test
+# ---------------------------------------------------------------------------
+
+
+def test_approval_item_from_row_round_trip(tmp_db):
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            """INSERT INTO approval_queue
+               (project_id, action_type, payload, preview, context, status)
+               VALUES (?, ?, ?, ?, ?, ?)""",
+            (1, "create_jira_issue", '{"key": "PROG"}', "Create goal", "spin-up", "pending"),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM approval_queue ORDER BY id DESC LIMIT 1").fetchone()
+
+    result = ApprovalItem.from_row(row)
+
+    assert result.action_type == ApprovalAction.CREATE_JIRA_ISSUE
+    assert result.status == ApprovalStatus.PENDING
+    assert result.payload == '{"key": "PROG"}'
+    assert result.preview == "Create goal"
+    assert result.context == "spin-up"
+    assert result.project_id == 1
+    assert result.result is None
+    assert result.resolved_at is None

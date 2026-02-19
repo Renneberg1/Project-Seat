@@ -1,94 +1,127 @@
-"""Tests for Jira data models."""
+"""Tests for Jira data models — from_api deserialization contracts."""
 
 from __future__ import annotations
 
 from typing import Any
 
+import pytest
+
 from src.models.jira import JiraIssue, JiraIssueType, JiraVersion
 
 
-class TestJiraIssueType:
-    def test_from_api_goal(self, sample_prog_issue_types: dict[str, Any]) -> None:
-        goal_data = next(
-            it for it in sample_prog_issue_types["issueTypes"] if it["name"] == "Goal"
-        )
-        result = JiraIssueType.from_api(goal_data)
-        assert result.id == "10423"
-        assert result.name == "Goal"
-        assert result.hierarchy_level == 3
-
-    def test_from_api_epic(self, sample_prog_issue_types: dict[str, Any]) -> None:
-        epic_data = next(
-            it for it in sample_prog_issue_types["issueTypes"] if it["name"] == "Epic"
-        )
-        result = JiraIssueType.from_api(epic_data)
-        assert result.id == "10000"
-        assert result.name == "Epic"
-        assert result.hierarchy_level == 1
-
-    def test_fallback_missing_hierarchy_level(self) -> None:
-        data = {"id": "999", "name": "Custom"}
-        result = JiraIssueType.from_api(data)
-        assert result.hierarchy_level == 0
-
-    def test_fallback_underscore_key(self) -> None:
-        data = {"id": "999", "name": "Custom", "hierarchy_level": 5}
-        result = JiraIssueType.from_api(data)
-        assert result.hierarchy_level == 5
+# ---------------------------------------------------------------------------
+# JiraIssueType.from_api: Contract tests
+# ---------------------------------------------------------------------------
 
 
-class TestJiraVersion:
-    def test_from_api_released(self, sample_risk_versions: list[dict[str, Any]]) -> None:
-        released = next(v for v in sample_risk_versions if v["name"] == "HOP Drop 2")
-        result = JiraVersion.from_api(released)
-        assert result.id == "11539"
-        assert result.name == "HOP Drop 2"
-        assert result.released is True
-        assert result.release_date == "2026-03-06"
+def test_jira_issue_type_from_api_goal(sample_prog_issue_types):
+    goal_data = next(
+        it for it in sample_prog_issue_types["issueTypes"] if it["name"] == "Goal"
+    )
 
-    def test_from_api_unreleased(self, sample_risk_versions: list[dict[str, Any]]) -> None:
-        unreleased = next(v for v in sample_risk_versions if v["name"] == "HOP Drop 3")
-        result = JiraVersion.from_api(unreleased)
-        assert result.released is False
-        assert result.release_date == "2026-05-06"
+    result = JiraIssueType.from_api(goal_data)
 
-    def test_missing_release_date(self) -> None:
-        data = {"id": "1", "name": "v1", "projectId": "100", "archived": False, "released": False}
-        result = JiraVersion.from_api(data)
-        assert result.release_date is None
+    assert result.id == "10423"
+    assert result.name == "Goal"
+    assert result.hierarchy_level == 3
 
 
-class TestJiraIssue:
-    def test_from_api_goal(self, sample_jira_goal: dict[str, Any]) -> None:
-        issue = JiraIssue.from_api(sample_jira_goal)
-        assert issue.key == "PROG-256"
-        assert issue.summary == "HOP Drop 2"
-        assert issue.status == "In Progress"
-        assert issue.issue_type == "Goal"
-        assert issue.project_key == "PROG"
-        assert issue.labels == ["CTC", "HOP"]
-        assert issue.due_date == "2026-03-06"
-        assert issue.fix_versions == []
-        assert issue.parent_key is None
-        assert isinstance(issue.description_adf, dict)
+def test_jira_issue_type_from_api_epic(sample_prog_issue_types):
+    epic_data = next(
+        it for it in sample_prog_issue_types["issueTypes"] if it["name"] == "Epic"
+    )
 
-    def test_from_api_initiative_with_parent(self, sample_jira_initiative: dict[str, Any]) -> None:
-        issue = JiraIssue.from_api(sample_jira_initiative)
-        assert issue.key == "AIM-3295"
-        assert issue.summary == "CTC Model - Drop 2"
-        assert issue.parent_key == "PROG-256"
-        assert issue.project_key == "AIM"
-        assert issue.labels == ["AI", "CTC", "FPL"]
+    result = JiraIssueType.from_api(epic_data)
 
-    def test_minimal_dict_safe_defaults(self) -> None:
-        data = {"id": "1", "key": "TEST-1", "fields": {}}
-        issue = JiraIssue.from_api(data)
-        assert issue.key == "TEST-1"
-        assert issue.summary == ""
-        assert issue.status == ""
-        assert issue.issue_type == ""
-        assert issue.labels == []
-        assert issue.parent_key is None
-        assert issue.fix_versions == []
-        assert issue.due_date is None
-        assert issue.description_adf is None
+    assert result.id == "10000"
+    assert result.name == "Epic"
+    assert result.hierarchy_level == 1
+
+
+@pytest.mark.parametrize("data,expected_level", [
+    pytest.param({"id": "999", "name": "Custom"}, 0, id="missing-hierarchy-defaults-to-zero"),
+    pytest.param({"id": "999", "name": "Custom", "hierarchy_level": 5}, 5, id="underscore-key-fallback"),
+])
+def test_jira_issue_type_from_api_hierarchy_level_fallback(data, expected_level):
+    result = JiraIssueType.from_api(data)
+
+    assert result.hierarchy_level == expected_level
+
+
+# ---------------------------------------------------------------------------
+# JiraVersion.from_api: Contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_jira_version_from_api_released(sample_risk_versions):
+    released = next(v for v in sample_risk_versions if v["name"] == "HOP Drop 2")
+
+    result = JiraVersion.from_api(released)
+
+    assert result.id == "11539"
+    assert result.name == "HOP Drop 2"
+    assert result.released is True
+    assert result.release_date == "2026-03-06"
+
+
+def test_jira_version_from_api_unreleased(sample_risk_versions):
+    unreleased = next(v for v in sample_risk_versions if v["name"] == "HOP Drop 3")
+
+    result = JiraVersion.from_api(unreleased)
+
+    assert result.released is False
+    assert result.release_date == "2026-05-06"
+
+
+def test_jira_version_from_api_missing_release_date_returns_none():
+    data = {"id": "1", "name": "v1", "projectId": "100", "archived": False, "released": False}
+
+    result = JiraVersion.from_api(data)
+
+    assert result.release_date is None
+
+
+# ---------------------------------------------------------------------------
+# JiraIssue.from_api: Contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_jira_issue_from_api_goal(sample_jira_goal):
+    result = JiraIssue.from_api(sample_jira_goal)
+
+    assert result.key == "PROG-256"
+    assert result.summary == "HOP Drop 2"
+    assert result.status == "In Progress"
+    assert result.issue_type == "Goal"
+    assert result.project_key == "PROG"
+    assert result.labels == ["CTC", "HOP"]
+    assert result.due_date == "2026-03-06"
+    assert result.fix_versions == []
+    assert result.parent_key is None
+    assert isinstance(result.description_adf, dict)
+
+
+def test_jira_issue_from_api_initiative_with_parent(sample_jira_initiative):
+    result = JiraIssue.from_api(sample_jira_initiative)
+
+    assert result.key == "AIM-3295"
+    assert result.summary == "CTC Model - Drop 2"
+    assert result.parent_key == "PROG-256"
+    assert result.project_key == "AIM"
+    assert result.labels == ["AI", "CTC", "FPL"]
+
+
+def test_jira_issue_from_api_minimal_dict_uses_safe_defaults():
+    data = {"id": "1", "key": "TEST-1", "fields": {}}
+
+    result = JiraIssue.from_api(data)
+
+    assert result.key == "TEST-1"
+    assert result.summary == ""
+    assert result.status == ""
+    assert result.issue_type == ""
+    assert result.labels == []
+    assert result.parent_key is None
+    assert result.fix_versions == []
+    assert result.due_date is None
+    assert result.description_adf is None

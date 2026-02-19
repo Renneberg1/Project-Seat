@@ -1,4 +1,4 @@
-"""Tests for import project service — ADF parsing, save, duplicate detection, delete."""
+"""Tests for import project service — ADF parsing, charter/XFT guessing, save, delete."""
 
 from __future__ import annotations
 
@@ -26,239 +26,259 @@ def _load_json(relpath: str) -> Any:
         return json.load(f)
 
 
-# ---------------------------------------------------------------------------
-# ADF parsing tests
-# ---------------------------------------------------------------------------
-
-class TestExtractConfluencePageIds:
-    def test_extracts_from_real_prog256(self) -> None:
-        """Validate against real sample data (prog-256.json)."""
-        issue = _load_json("jira/prog-256.json")
-        adf = issue["fields"]["description"]
-        pages = extract_confluence_page_ids(adf)
-
-        page_ids = [p.page_id for p in pages]
-        assert "3559365026" in page_ids
-        assert "3559365007" in page_ids
-
-    def test_extracts_slugs(self) -> None:
-        issue = _load_json("jira/prog-256.json")
-        adf = issue["fields"]["description"]
-        pages = extract_confluence_page_ids(adf)
-
-        by_id = {p.page_id: p for p in pages}
-        assert "FPL" in by_id["3559365026"].slug
-        assert "Scope" in by_id["3559365007"].slug
-
-    def test_empty_adf_returns_empty(self) -> None:
-        assert extract_confluence_page_ids(None) == []
-        assert extract_confluence_page_ids({}) == []
-
-    def test_no_inline_cards(self) -> None:
-        adf = {
-            "type": "doc",
-            "version": 1,
-            "content": [
-                {"type": "paragraph", "content": [{"type": "text", "text": "No links here"}]},
-            ],
-        }
-        assert extract_confluence_page_ids(adf) == []
-
-    def test_non_confluence_urls_ignored(self) -> None:
-        adf = {
-            "type": "doc",
-            "version": 1,
-            "content": [
-                {
-                    "type": "paragraph",
-                    "content": [
-                        {
-                            "type": "inlineCard",
-                            "attrs": {"url": "https://example.com/not-confluence"},
-                        },
-                    ],
-                },
-            ],
-        }
-        assert extract_confluence_page_ids(adf) == []
-
-
-# ---------------------------------------------------------------------------
-# Charter/XFT guessing tests
-# ---------------------------------------------------------------------------
-
-class TestGuessCharterXft:
-    def test_fpl_and_scope_slugs(self) -> None:
-        pages = [
-            DetectedPage(page_id="100", url="https://x/pages/100/Charter", slug="Charter"),
-            DetectedPage(page_id="200", url="https://x/pages/200/Scope", slug="Scope"),
-        ]
-        charter, xft = guess_charter_xft(pages)
-        assert charter == "100"
-        assert xft == "200"
-
-    def test_fpl_slug(self) -> None:
-        pages = [
-            DetectedPage(page_id="100", url="https://x/pages/100/V2-FPL", slug="V2 FPL"),
-            DetectedPage(page_id="200", url="https://x/pages/200/V2-XFT", slug="V2 XFT"),
-        ]
-        charter, xft = guess_charter_xft(pages)
-        assert charter == "100"
-        assert xft == "200"
-
-    def test_real_prog256_pages(self) -> None:
-        """Test with real page data from prog-256."""
-        pages = [
-            DetectedPage(page_id="3559365026", url="https://x/pages/3559365026/V2+Drop+2+-+FPL", slug="V2 Drop 2 - FPL"),
-            DetectedPage(page_id="3559365007", url="https://x/pages/3559365007/V2+Drop+2+Scope", slug="V2 Drop 2 Scope"),
-        ]
-        charter, xft = guess_charter_xft(pages)
-        assert charter == "3559365026"
-        assert xft == "3559365007"
-
-    def test_fallback_two_pages(self) -> None:
-        pages = [
-            DetectedPage(page_id="100", url="https://x/pages/100/Page-A", slug="Page A"),
-            DetectedPage(page_id="200", url="https://x/pages/200/Page-B", slug="Page B"),
-        ]
-        charter, xft = guess_charter_xft(pages)
-        assert charter == "100"
-        assert xft == "200"
-
-    def test_no_pages_returns_none(self) -> None:
-        charter, xft = guess_charter_xft([])
-        assert charter is None
-        assert xft is None
-
-    def test_single_page_no_match(self) -> None:
-        pages = [
-            DetectedPage(page_id="100", url="https://x/pages/100/Random", slug="Random"),
-        ]
-        charter, xft = guess_charter_xft(pages)
-        assert charter is None
-        assert xft is None
-
-
-# ---------------------------------------------------------------------------
-# ImportService tests
-# ---------------------------------------------------------------------------
-
+# Need a local tmp_db fixture because this module defines its own
 @pytest.fixture()
-def tmp_db(tmp_path: Path) -> str:
+def tmp_db(tmp_path):
     db_path = str(tmp_path / "test.db")
     init_db(db_path)
     return db_path
 
 
-class TestSaveProject:
-    def test_saves_and_returns_id(self, tmp_db: str) -> None:
-        service = ImportService(db_path=tmp_db)
-        pid = service.save_project("PROG-256", "HOP Drop 2", "100", "200")
-        assert pid > 0
-
-        with get_db(tmp_db) as conn:
-            row = conn.execute("SELECT * FROM projects WHERE id = ?", (pid,)).fetchone()
-        assert row["jira_goal_key"] == "PROG-256"
-        assert row["name"] == "HOP Drop 2"
-        assert row["confluence_charter_id"] == "100"
-        assert row["confluence_xft_id"] == "200"
-        assert row["status"] == "active"
-
-    def test_saves_without_page_ids(self, tmp_db: str) -> None:
-        service = ImportService(db_path=tmp_db)
-        pid = service.save_project("PROG-300", "Minimal Project")
-        assert pid > 0
-
-        with get_db(tmp_db) as conn:
-            row = conn.execute("SELECT * FROM projects WHERE id = ?", (pid,)).fetchone()
-        assert row["confluence_charter_id"] is None
-        assert row["confluence_xft_id"] is None
-
-    def test_duplicate_detection(self, tmp_db: str) -> None:
-        service = ImportService(db_path=tmp_db)
-        service.save_project("PROG-256", "HOP Drop 2")
-
-        with pytest.raises(ValueError, match="already exists"):
-            service.save_project("PROG-256", "HOP Drop 2 Again")
+# ---------------------------------------------------------------------------
+# extract_confluence_page_ids: Incoming query — assert return value
+# ---------------------------------------------------------------------------
 
 
-class TestDeleteProject:
-    def test_deletes_project_and_related_data(self, tmp_db: str) -> None:
-        service = ImportService(db_path=tmp_db)
-        pid = service.save_project("PROG-500", "To Delete")
+def test_extract_confluence_page_ids_from_real_sample():
+    issue = _load_json("jira/prog-256.json")
+    adf = issue["fields"]["description"]
 
-        # Insert related rows
-        with get_db(tmp_db) as conn:
-            conn.execute(
-                "INSERT INTO approval_queue (project_id, action_type, payload) VALUES (?, ?, ?)",
-                (pid, "test", "{}"),
-            )
-            conn.execute(
-                "INSERT INTO approval_log (project_id, action_type, payload) VALUES (?, ?, ?)",
-                (pid, "test", "{}"),
-            )
-            conn.execute(
-                "INSERT INTO transcript_cache (project_id, filename, raw_text) VALUES (?, ?, ?)",
-                (pid, "test.txt", "content"),
-            )
-            conn.commit()
+    result = extract_confluence_page_ids(adf)
 
-        service.delete_project(pid)
-
-        with get_db(tmp_db) as conn:
-            assert conn.execute("SELECT COUNT(*) FROM projects WHERE id = ?", (pid,)).fetchone()[0] == 0
-            assert conn.execute("SELECT COUNT(*) FROM approval_queue WHERE project_id = ?", (pid,)).fetchone()[0] == 0
-            assert conn.execute("SELECT COUNT(*) FROM approval_log WHERE project_id = ?", (pid,)).fetchone()[0] == 0
-            assert conn.execute("SELECT COUNT(*) FROM transcript_cache WHERE project_id = ?", (pid,)).fetchone()[0] == 0
-
-    def test_delete_nonexistent_is_safe(self, tmp_db: str) -> None:
-        """Deleting a non-existent project should not raise."""
-        service = ImportService(db_path=tmp_db)
-        service.delete_project(99999)  # Should not raise
+    page_ids = [p.page_id for p in result]
+    assert "3559365026" in page_ids
+    assert "3559365007" in page_ids
 
 
-class TestFetchPreview:
-    @pytest.mark.asyncio
-    async def test_fetch_preview_returns_preview(self, tmp_db: str) -> None:
-        mock_issue = {
-            "fields": {
-                "summary": "HOP Drop 2",
-                "description": {
-                    "type": "doc",
-                    "version": 1,
+def test_extract_confluence_page_ids_extracts_slugs():
+    issue = _load_json("jira/prog-256.json")
+    adf = issue["fields"]["description"]
+
+    result = extract_confluence_page_ids(adf)
+
+    by_id = {p.page_id: p for p in result}
+    assert "FPL" in by_id["3559365026"].slug
+    assert "Scope" in by_id["3559365007"].slug
+
+
+@pytest.mark.parametrize("adf", [
+    pytest.param(None, id="none-adf"),
+    pytest.param({}, id="empty-dict"),
+])
+def test_extract_confluence_page_ids_empty_adf_returns_empty(adf):
+    result = extract_confluence_page_ids(adf)
+
+    assert result == []
+
+
+def test_extract_confluence_page_ids_no_inline_cards_returns_empty():
+    adf = {
+        "type": "doc",
+        "version": 1,
+        "content": [
+            {"type": "paragraph", "content": [{"type": "text", "text": "No links here"}]},
+        ],
+    }
+
+    result = extract_confluence_page_ids(adf)
+
+    assert result == []
+
+
+def test_extract_confluence_page_ids_non_confluence_urls_ignored():
+    adf = {
+        "type": "doc",
+        "version": 1,
+        "content": [{
+            "type": "paragraph",
+            "content": [{
+                "type": "inlineCard",
+                "attrs": {"url": "https://example.com/not-confluence"},
+            }],
+        }],
+    }
+
+    result = extract_confluence_page_ids(adf)
+
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
+# guess_charter_xft: Incoming query — assert return value
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.parametrize("slug1,slug2,expected_charter,expected_xft", [
+    pytest.param("Charter", "Scope", "100", "200", id="charter-scope-slugs"),
+    pytest.param("V2 FPL", "V2 XFT", "100", "200", id="fpl-xft-slugs"),
+])
+def test_guess_charter_xft_by_slug_keywords(slug1, slug2, expected_charter, expected_xft):
+    pages = [
+        DetectedPage(page_id="100", url="https://x/pages/100/A", slug=slug1),
+        DetectedPage(page_id="200", url="https://x/pages/200/B", slug=slug2),
+    ]
+
+    result = guess_charter_xft(pages)
+
+    assert result == (expected_charter, expected_xft)
+
+
+def test_guess_charter_xft_real_prog256_pages():
+    pages = [
+        DetectedPage(page_id="3559365026", url="https://x/pages/3559365026/V2+Drop+2+-+FPL", slug="V2 Drop 2 - FPL"),
+        DetectedPage(page_id="3559365007", url="https://x/pages/3559365007/V2+Drop+2+Scope", slug="V2 Drop 2 Scope"),
+    ]
+
+    result = guess_charter_xft(pages)
+
+    assert result == ("3559365026", "3559365007")
+
+
+def test_guess_charter_xft_fallback_two_unknown_pages():
+    pages = [
+        DetectedPage(page_id="100", url="https://x/pages/100/Page-A", slug="Page A"),
+        DetectedPage(page_id="200", url="https://x/pages/200/Page-B", slug="Page B"),
+    ]
+
+    result = guess_charter_xft(pages)
+
+    assert result == ("100", "200")
+
+
+def test_guess_charter_xft_no_pages_returns_none():
+    result = guess_charter_xft([])
+
+    assert result == (None, None)
+
+
+def test_guess_charter_xft_single_unmatched_page_returns_none():
+    pages = [
+        DetectedPage(page_id="100", url="https://x/pages/100/Random", slug="Random"),
+    ]
+
+    result = guess_charter_xft(pages)
+
+    assert result == (None, None)
+
+
+# ---------------------------------------------------------------------------
+# ImportService.save_project: Incoming command — assert side effect
+# ---------------------------------------------------------------------------
+
+
+def test_save_project_inserts_and_returns_id(tmp_db):
+    service = ImportService(db_path=tmp_db)
+
+    result = service.save_project("PROG-256", "HOP Drop 2", "100", "200")
+
+    assert result > 0
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT * FROM projects WHERE id = ?", (result,)).fetchone()
+    assert row["jira_goal_key"] == "PROG-256"
+    assert row["name"] == "HOP Drop 2"
+    assert row["confluence_charter_id"] == "100"
+    assert row["confluence_xft_id"] == "200"
+    assert row["status"] == "active"
+
+
+def test_save_project_without_page_ids(tmp_db):
+    service = ImportService(db_path=tmp_db)
+
+    result = service.save_project("PROG-300", "Minimal Project")
+
+    assert result > 0
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT * FROM projects WHERE id = ?", (result,)).fetchone()
+    assert row["confluence_charter_id"] is None
+    assert row["confluence_xft_id"] is None
+
+
+def test_save_project_duplicate_raises_value_error(tmp_db):
+    service = ImportService(db_path=tmp_db)
+    service.save_project("PROG-256", "HOP Drop 2")
+
+    with pytest.raises(ValueError, match="already exists"):
+        service.save_project("PROG-256", "HOP Drop 2 Again")
+
+
+# ---------------------------------------------------------------------------
+# ImportService.delete_project: Incoming command — assert side effect
+# ---------------------------------------------------------------------------
+
+
+def test_delete_project_cascades_to_related_tables(tmp_db):
+    service = ImportService(db_path=tmp_db)
+    pid = service.save_project("PROG-500", "To Delete")
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO approval_queue (project_id, action_type, payload) VALUES (?, ?, ?)",
+            (pid, "test", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO approval_log (project_id, action_type, payload) VALUES (?, ?, ?)",
+            (pid, "test", "{}"),
+        )
+        conn.execute(
+            "INSERT INTO transcript_cache (project_id, filename, raw_text) VALUES (?, ?, ?)",
+            (pid, "test.txt", "content"),
+        )
+        conn.commit()
+
+    service.delete_project(pid)
+
+    with get_db(tmp_db) as conn:
+        assert conn.execute("SELECT COUNT(*) FROM projects WHERE id = ?", (pid,)).fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM approval_queue WHERE project_id = ?", (pid,)).fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM approval_log WHERE project_id = ?", (pid,)).fetchone()[0] == 0
+        assert conn.execute("SELECT COUNT(*) FROM transcript_cache WHERE project_id = ?", (pid,)).fetchone()[0] == 0
+
+
+def test_delete_project_nonexistent_does_not_raise(tmp_db):
+    service = ImportService(db_path=tmp_db)
+
+    result = service.delete_project(99999)  # Should not raise
+
+    assert result is None
+
+
+# ---------------------------------------------------------------------------
+# ImportService.fetch_preview: Incoming query (async) — assert return value
+# ---------------------------------------------------------------------------
+
+
+async def test_fetch_preview_returns_preview_with_detected_pages(tmp_db):
+    mock_issue = {
+        "fields": {
+            "summary": "HOP Drop 2",
+            "description": {
+                "type": "doc",
+                "version": 1,
+                "content": [{
+                    "type": "paragraph",
                     "content": [
                         {
-                            "type": "paragraph",
-                            "content": [
-                                {
-                                    "type": "inlineCard",
-                                    "attrs": {
-                                        "url": "https://harrison-ai.atlassian.net/wiki/spaces/HPP/pages/123/Charter"
-                                    },
-                                },
-                                {
-                                    "type": "inlineCard",
-                                    "attrs": {
-                                        "url": "https://harrison-ai.atlassian.net/wiki/spaces/HPP/pages/456/Scope"
-                                    },
-                                },
-                            ],
+                            "type": "inlineCard",
+                            "attrs": {"url": "https://harrison-ai.atlassian.net/wiki/spaces/HPP/pages/123/Charter"},
+                        },
+                        {
+                            "type": "inlineCard",
+                            "attrs": {"url": "https://harrison-ai.atlassian.net/wiki/spaces/HPP/pages/456/Scope"},
                         },
                     ],
-                },
+                }],
             },
-        }
+        },
+    }
+    service = ImportService(db_path=tmp_db)
 
-        service = ImportService(db_path=tmp_db)
-        with patch("src.services.import_project.JiraConnector") as MockJira:
-            instance = MockJira.return_value
-            instance.get_issue = AsyncMock(return_value=mock_issue)
-            instance.close = AsyncMock()
+    with patch("src.services.import_project.JiraConnector") as MockJira:
+        instance = MockJira.return_value
+        instance.get_issue = AsyncMock(return_value=mock_issue)
+        instance.close = AsyncMock()
+        result = await service.fetch_preview("PROG-256")
 
-            preview = await service.fetch_preview("PROG-256")
-
-        assert preview.goal_key == "PROG-256"
-        assert preview.goal_summary == "HOP Drop 2"
-        assert len(preview.detected_pages) == 2
-        assert preview.charter_id == "123"
-        assert preview.xft_id == "456"
+    assert result.goal_key == "PROG-256"
+    assert result.goal_summary == "HOP Drop 2"
+    assert len(result.detected_pages) == 2
+    assert result.charter_id == "123"
+    assert result.xft_id == "456"
