@@ -139,6 +139,7 @@ class ImportService:
         name: str,
         charter_id: str | None = None,
         xft_id: str | None = None,
+        pi_version: str | None = None,
     ) -> int:
         """Insert the imported project into the local DB. Returns the project ID.
 
@@ -153,9 +154,9 @@ class ImportService:
                 raise ValueError(f"Project with goal key '{goal_key}' already exists (id={existing['id']})")
 
             cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase) "
-                "VALUES (?, ?, ?, ?, ?, ?)",
-                (goal_key, name, charter_id or None, xft_id or None, "active", "planning"),
+                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?)",
+                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version),
             )
             conn.commit()
             return cursor.lastrowid

@@ -5,6 +5,37 @@
 {% block content %}
 <h1>Features — {{ project.name }}</h1>
 
+{% if pi_ideas %}
+<h2>Scope — Product Ideas</h2>
+<div style="margin-bottom: 0.5rem;">
+    <label>
+        <input type="checkbox" id="pi-must-have-filter" checked
+               onchange="document.querySelectorAll('.pi-row').forEach(r => {
+                   if (this.checked) { r.style.display = r.dataset.priority === 'Must Have' ? '' : 'none'; }
+                   else { r.style.display = ''; }
+               })">
+        Show only "Must Have"
+    </label>
+</div>
+<table>
+    <thead><tr><th>Key</th><th>Type</th><th>Summary</th><th>Priority</th><th>State</th><th>Status</th></tr></thead>
+    <tbody>
+    {% for pi in pi_ideas %}
+    <tr class="pi-row" data-priority="{{ pi.release_priority or '' }}"
+        {% if pi.release_priority != 'Must Have' %}style="display: none;"{% endif %}>
+        <td>{{ pi.key }}</td>
+        <td>{{ pi.issue_type }}</td>
+        <td>{{ pi.summary }}</td>
+        <td><span class="badge badge-pi-priority-{{ pi.release_priority | default('none', true) | lower | replace(' ', '-') }}">{{ pi.release_priority or '' }}</span></td>
+        <td><span class="badge badge-pi-state-{{ pi.pi_state | default('none', true) | lower | replace(' ', '-') }}">{{ pi.pi_state or '' }}</span></td>
+        <td><span class="badge badge-goal-status">{{ pi.status }}</span></td>
+    </tr>
+    {% endfor %}
+    </tbody>
+</table>
+{% endif %}
+
+<h2>Initiatives</h2>
 {% if initiatives %}
 <table class="initiative-table">
     <thead>

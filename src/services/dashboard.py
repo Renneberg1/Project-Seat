@@ -14,6 +14,7 @@ from src.models.dashboard import (
     EpicWithTasks,
     InitiativeDetail,
     InitiativeSummary,
+    ProductIdeaSummary,
     ProjectSummary,
 )
 from src.models.jira import JiraIssue
@@ -133,6 +134,57 @@ class DashboardService:
             *(self.get_project_summary(p) for p in projects)
         )
         return list(summaries)
+
+    # ------------------------------------------------------------------
+    # Product Ideas (PI board)
+    # ------------------------------------------------------------------
+
+    async def get_product_ideas(self, project: Project) -> list[JiraIssue]:
+        """Fetch Product Ideas linked to this project via the PI version field.
+
+        Excludes "Market Access" issue type.
+        """
+        if not project.pi_version:
+            return []
+        jira = JiraConnector(settings=self._settings)
+        try:
+            results = await jira.search(
+                f'project = PI AND "versions[checkboxes]" = "{project.pi_version}"'
+                f' AND issuetype != "Market Access"'
+                f' AND statusCategory != Done'
+                f' AND resolution = Unresolved',
+                fields=["summary", "status", "issuetype", "project", "labels",
+                        "fixVersions", "duedate", "parent", "description",
+                        "customfield_12812", "customfield_11054", "customfield_13530"],
+            )
+            return [JiraIssue.from_api(r) for r in results]
+        except ConnectorError:
+            return []
+        finally:
+            await jira.close()
+
+    def summarise_product_ideas(self, ideas: list[JiraIssue]) -> ProductIdeaSummary:
+        """Compute summary counts from a list of Product Ideas."""
+        done_statuses = {"Done", "Closed"}
+        type_counts = {"Feature": 0, "Minor Feature": 0, "Idea": 0, "Defect": 0}
+        done_count = 0
+        must_have_count = 0
+        for idea in ideas:
+            type_counts[idea.issue_type] = type_counts.get(idea.issue_type, 0) + 1
+            if idea.status in done_statuses:
+                done_count += 1
+            if idea.release_priority == "Must Have":
+                must_have_count += 1
+        return ProductIdeaSummary(
+            total_count=len(ideas),
+            open_count=len(ideas) - done_count,
+            done_count=done_count,
+            feature_count=type_counts.get("Feature", 0),
+            minor_feature_count=type_counts.get("Minor Feature", 0),
+            idea_count=type_counts.get("Idea", 0),
+            defect_count=type_counts.get("Defect", 0),
+            must_have_count=must_have_count,
+        )
 
     # ------------------------------------------------------------------
     # Initiative / Feature drill-down

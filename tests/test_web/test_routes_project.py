@@ -5,7 +5,7 @@ from __future__ import annotations
 from unittest.mock import AsyncMock, patch
 
 from src.database import get_db
-from src.models.dashboard import EpicWithTasks, InitiativeDetail, InitiativeSummary, ProjectSummary
+from src.models.dashboard import EpicWithTasks, InitiativeDetail, InitiativeSummary, ProductIdeaSummary, ProjectSummary
 from src.models.dhf import DHFDocument, DHFSummary, DocumentStatus
 from src.models.jira import JiraIssue
 from src.models.project import Project
@@ -66,11 +66,14 @@ def _patch_dashboard(project):
 def test_project_dashboard_returns_200(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
+    empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=_make_summary(project))
+        instance.get_product_ideas = AsyncMock(return_value=[])
+        instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=_make_dhf_summary())
@@ -95,11 +98,14 @@ def test_project_dashboard_not_found_returns_404(client):
 def test_project_dashboard_sets_cookie(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
+    empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=_make_summary(project))
+        instance.get_product_ideas = AsyncMock(return_value=[])
+        instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=_make_dhf_summary())
@@ -116,11 +122,14 @@ def test_project_dashboard_shows_dhf_counts(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
     dhf = DHFSummary(total_count=5, released_count=2, draft_update_count=2, in_draft_count=1)
+    empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=_make_summary(project))
+        instance.get_product_ideas = AsyncMock(return_value=[])
+        instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=dhf)
@@ -172,11 +181,14 @@ def test_delete_project_danger_zone_exists_on_dashboard(client, tmp_db):
         error=None,
     )
     dhf = DHFSummary(total_count=0, released_count=0, draft_update_count=0, in_draft_count=0)
+    empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
 
     with patch("src.web.routes.project.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=summary)
+        instance.get_product_ideas = AsyncMock(return_value=[])
+        instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
         with patch("src.web.routes.project.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_summary = AsyncMock(return_value=dhf)
@@ -208,6 +220,7 @@ def test_project_features_returns_200_with_initiatives(client, tmp_db):
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_initiatives = AsyncMock(return_value=[init_summary])
+        instance.get_product_ideas = AsyncMock(return_value=[])
         instance.list_projects = lambda: [project]
 
         result = client.get(f"/project/{pid}/features")
@@ -225,6 +238,7 @@ def test_project_features_empty_shows_message(client, tmp_db):
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_initiatives = AsyncMock(return_value=[])
+        instance.get_product_ideas = AsyncMock(return_value=[])
         instance.list_projects = lambda: [project]
 
         result = client.get(f"/project/{pid}/features")

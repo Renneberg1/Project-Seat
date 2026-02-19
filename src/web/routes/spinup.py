@@ -31,6 +31,7 @@ async def spinup_submit(
     target_date: str = Form(""),
     labels: str = Form(""),
     goal_summary: str = Form(""),
+    pi_version: str = Form(""),
 ) -> HTMLResponse:
     """Parse the form, queue spin-up actions, and show result page."""
     # Parse comma-separated values
@@ -44,6 +45,7 @@ async def spinup_submit(
         target_date=target_date,
         labels=label_list,
         goal_summary=goal_summary,
+        pi_version=pi_version.strip(),
     )
 
     service = SpinUpService()

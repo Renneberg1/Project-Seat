@@ -55,6 +55,9 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     dhf_service = DHFService()
     dhf_summary = await dhf_service.get_dhf_summary(project)
 
+    pi_ideas = await service.get_product_ideas(project)
+    pi_summary = service.summarise_product_ideas(pi_ideas)
+
     engine = ApprovalEngine()
     recent_approvals = engine.list_all(project_id=id)
     # Show last 10
@@ -64,6 +67,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         "project": project,
         "summary": summary,
         "dhf_summary": dhf_summary,
+        "pi_summary": pi_summary,
         "recent_approvals": recent_approvals,
     }, id)
 
@@ -90,9 +94,14 @@ async def project_features(request: Request, id: int) -> HTMLResponse:
 
     initiatives = await service.get_initiatives(project)
 
+    _PI_PRIORITY_ORDER = {"Must Have": 0, "Should Have": 1, "Could Have": 2}
+    pi_ideas = await service.get_product_ideas(project)
+    pi_ideas.sort(key=lambda i: _PI_PRIORITY_ORDER.get(i.release_priority or "", 9))
+
     return _render(request, "project_features.html", {
         "project": project,
         "initiatives": initiatives,
+        "pi_ideas": pi_ideas,
     }, id)
 
 
@@ -146,6 +155,23 @@ async def project_documents(request: Request, id: int, area: str | None = None) 
         "selected_area": area,
         "error": error,
     }, id)
+
+
+@router.post("/{id}/pi/config")
+async def save_pi_config(
+    request: Request,
+    id: int,
+    pi_version: str = Form(""),
+) -> RedirectResponse:
+    """Save PI version for a project."""
+    import src.config
+    with get_db(src.config.settings.db_path) as conn:
+        conn.execute(
+            "UPDATE projects SET pi_version = ? WHERE id = ?",
+            (pi_version.strip() or None, id),
+        )
+        conn.commit()
+    return RedirectResponse(f"/project/{id}/dashboard", status_code=303)
 
 
 @router.post("/{id}/documents/config", response_class=HTMLResponse)

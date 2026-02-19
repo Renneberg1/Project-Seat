@@ -50,3 +50,15 @@ class EpicWithTasks:
 class InitiativeDetail:
     issue: JiraIssue
     epics: list[EpicWithTasks]
+
+
+@dataclass
+class ProductIdeaSummary:
+    total_count: int
+    open_count: int
+    done_count: int
+    feature_count: int
+    minor_feature_count: int
+    idea_count: int
+    defect_count: int
+    must_have_count: int = 0

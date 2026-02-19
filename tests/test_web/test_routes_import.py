@@ -147,4 +147,5 @@ def test_import_save_empty_page_ids_saved_as_none(client, tmp_db):
         name="Minimal",
         charter_id=None,
         xft_id=None,
+        pi_version=None,
     )

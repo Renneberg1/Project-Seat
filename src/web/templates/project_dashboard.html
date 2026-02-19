@@ -39,6 +39,27 @@
     </div>
 
     <div class="overview-card">
+        <h3>Scope (Product Ideas)</h3>
+        {% if pi_summary and pi_summary.total_count > 0 %}
+        <p class="overview-metric">{{ pi_summary.must_have_count }} must-have / {{ pi_summary.total_count }} total</p>
+        <p>{{ pi_summary.open_count }} open, {{ pi_summary.done_count }} done</p>
+        <p>{{ pi_summary.feature_count }} Feature, {{ pi_summary.minor_feature_count }} Minor,
+           {{ pi_summary.idea_count }} Idea, {{ pi_summary.defect_count }} Defect</p>
+        <p style="margin-top: 0.25rem; font-size: 0.85em; color: #666;">Version: {{ project.pi_version }}</p>
+        {% else %}
+        <p>No PI version configured.</p>
+        {% endif %}
+        <details style="margin-top: 0.5rem;">
+            <summary style="font-size: 0.85em; cursor: pointer;">{{ "Change" if project.pi_version else "Configure" }} PI Version</summary>
+            <form method="post" action="/project/{{ project.id }}/pi/config" style="margin-top: 0.5rem;">
+                <input type="text" name="pi_version" value="{{ project.pi_version or '' }}"
+                       placeholder="e.g. D3: CTC comparison with prior" style="width: 100%; margin-bottom: 0.5rem;">
+                <button type="submit" class="btn btn-sm">Save</button>
+            </form>
+        </details>
+    </div>
+
+    <div class="overview-card">
         <h3>Documents</h3>
         {% if dhf_summary and dhf_summary.total_count > 0 %}
         <div class="dhf-counts">

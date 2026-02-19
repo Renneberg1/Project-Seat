@@ -52,6 +52,7 @@ async def import_save(
     name: str = Form(...),
     charter_id: str = Form(""),
     xft_id: str = Form(""),
+    pi_version: str = Form(""),
 ) -> RedirectResponse:
     """Save the imported project to the local DB and redirect to its dashboard."""
     service = ImportService()
@@ -61,6 +62,7 @@ async def import_save(
             name=name.strip(),
             charter_id=charter_id.strip() or None,
             xft_id=xft_id.strip() or None,
+            pi_version=pi_version.strip() or None,
         )
     except ValueError as exc:
         return templates.TemplateResponse(

@@ -24,6 +24,12 @@
                    placeholder="Confluence page ID">
         </div>
 
+        <div class="form-group">
+            <label for="pi_version">PI Version (Product Ideas board)</label>
+            <input type="text" id="pi_version" name="pi_version" value=""
+                   placeholder="e.g. HOP 2.5">
+        </div>
+
         {% if preview.detected_pages %}
         <details open>
             <summary>Detected Confluence Pages ({{ preview.detected_pages | length }})</summary>

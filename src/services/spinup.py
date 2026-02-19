@@ -255,8 +255,8 @@ class SpinUpService:
         """Insert a placeholder project row. Returns the project ID."""
         with get_db(self._db_path) as conn:
             cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, status) VALUES (?, ?, ?)",
-                ("pending", req.project_name, "spinning_up"),
+                "INSERT INTO projects (jira_goal_key, name, status, pi_version) VALUES (?, ?, ?, ?)",
+                ("pending", req.project_name, "spinning_up", req.pi_version or None),
             )
             conn.commit()
             return cursor.lastrowid

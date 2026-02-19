@@ -77,6 +77,11 @@ def init_db(db_path: str | Path = "seat.db") -> None:
                 conn.execute(f"ALTER TABLE projects ADD COLUMN {col} TEXT")
             except sqlite3.OperationalError:
                 pass  # column already exists
+        # Migration: add PI version column
+        try:
+            conn.execute("ALTER TABLE projects ADD COLUMN pi_version TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
     finally:
         conn.close()

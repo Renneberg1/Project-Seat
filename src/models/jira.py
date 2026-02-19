@@ -55,6 +55,8 @@ class JiraIssue:
     fix_versions: list[str]
     due_date: str | None
     description_adf: dict[str, Any] | None
+    release_priority: str | None = None
+    pi_state: str | None = None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> JiraIssue:
@@ -64,6 +66,14 @@ class JiraIssue:
         project_obj = fields.get("project", {})
         parent_obj = fields.get("parent")
         versions = fields.get("fixVersions", [])
+
+        # Release priority — try both known custom field IDs
+        rp_raw = fields.get("customfield_12812") or fields.get("customfield_11054")
+        release_priority = rp_raw.get("value") if isinstance(rp_raw, dict) else None
+
+        # PI State (customfield_13530)
+        state_raw = fields.get("customfield_13530")
+        pi_state = state_raw.get("value") if isinstance(state_raw, dict) else None
 
         return cls(
             id=str(data["id"]),
@@ -77,4 +87,6 @@ class JiraIssue:
             fix_versions=[v.get("name", "") for v in versions],
             due_date=fields.get("duedate"),
             description_adf=fields.get("description"),
+            release_priority=release_priority,
+            pi_state=pi_state,
         )

@@ -449,3 +449,15 @@ th {
     margin-top: 0.75rem;
     max-width: 500px;
 }
+
+/* PI Release Priority badges */
+.badge.badge-pi-priority-must-have   { background: #e74c3c; color: #fff; }
+.badge.badge-pi-priority-should-have { background: #f57c00; color: #fff; }
+.badge.badge-pi-priority-could-have  { background: #f5a623; color: #fff; opacity: 0.75; }
+.badge.badge-pi-priority-none        { background: #ddd; color: #666; }
+
+/* PI State badges */
+.badge.badge-pi-state-on-track   { background: #2e7d32; color: #fff; }
+.badge.badge-pi-state-pending    { background: #9e9e9e; color: #fff; }
+.badge.badge-pi-state-off-track  { background: #c62828; color: #fff; }
+.badge.badge-pi-state-none       { background: transparent; color: transparent; padding: 0; }
