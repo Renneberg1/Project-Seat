@@ -16,6 +16,8 @@ class Project:
     status: str
     phase: str
     created_at: str
+    dhf_draft_root_id: str | None = None
+    dhf_released_root_id: str | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> Project:
@@ -28,6 +30,8 @@ class Project:
             status=row["status"],
             phase=row["phase"],
             created_at=row["created_at"],
+            dhf_draft_root_id=row["dhf_draft_root_id"] if "dhf_draft_root_id" in row.keys() else None,
+            dhf_released_root_id=row["dhf_released_root_id"] if "dhf_released_root_id" in row.keys() else None,
         )
 
 

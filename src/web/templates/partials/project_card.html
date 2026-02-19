@@ -5,13 +5,9 @@
 
     <div class="card-header">
         <strong>
-            {% if summary.goal %}
-            <a href="https://{{ summary.project.jira_goal_key }}" class="card-link">
+            <a href="/project/{{ summary.project.id }}/dashboard" class="card-link">
                 {{ summary.project.name }}
             </a>
-            {% else %}
-            {{ summary.project.name }}
-            {% endif %}
         </strong>
         {% if summary.goal %}
         <span class="badge badge-goal-status">{{ summary.goal.status }}</span>
@@ -45,7 +41,7 @@
     {% endif %}
 
     <form class="phase-form"
-          hx-post="/dashboard/{{ summary.project.id }}/phase"
+          hx-post="/phases/{{ summary.project.id }}/phase"
           hx-target="#project-card-{{ summary.project.id }}"
           hx-swap="outerHTML">
         <select name="phase" class="phase-select" onchange="this.form.requestSubmit()">

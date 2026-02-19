@@ -52,6 +52,33 @@ class TestProject:
         project = Project.from_row(row)
         assert project.phase == "planning"
 
+    def test_dhf_columns_default_to_none(self, tmp_db: str) -> None:
+        with get_db(tmp_db) as conn:
+            conn.execute(
+                "INSERT INTO projects (jira_goal_key, name, status) VALUES (?, ?, ?)",
+                ("PROG-400", "No DHF", "active"),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-400'").fetchone()
+
+        project = Project.from_row(row)
+        assert project.dhf_draft_root_id is None
+        assert project.dhf_released_root_id is None
+
+    def test_dhf_columns_round_trip(self, tmp_db: str) -> None:
+        with get_db(tmp_db) as conn:
+            conn.execute(
+                "INSERT INTO projects (jira_goal_key, name, status, dhf_draft_root_id, dhf_released_root_id) "
+                "VALUES (?, ?, ?, ?, ?)",
+                ("PROG-500", "With DHF", "active", "111", "222"),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-500'").fetchone()
+
+        project = Project.from_row(row)
+        assert project.dhf_draft_root_id == "111"
+        assert project.dhf_released_root_id == "222"
+
 
 class TestSpinUpRequest:
     def test_default_space_key(self) -> None:

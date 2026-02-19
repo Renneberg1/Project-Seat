@@ -1,0 +1,113 @@
+{% extends "base.html" %}
+
+{% block title %}Documents — {{ project.name }} — Project Seat{% endblock %}
+
+{% block content %}
+<h1>{{ project.name }} — Documents</h1>
+
+{% if error %}
+<div class="error-banner">Confluence unavailable: {{ error }}</div>
+{% endif %}
+
+{% if project.dhf_draft_root_id and project.dhf_released_root_id %}
+
+{# Summary bar #}
+{% if documents %}
+<div class="dhf-summary-bar">
+    <div class="dhf-counts">
+        {% set released = documents | selectattr("status", "equalto", "released") | list | length %}
+        {% set draft_update = documents | selectattr("status", "equalto", "draft_update") | list | length %}
+        {% set in_draft = documents | selectattr("status", "equalto", "in_draft") | list | length %}
+        <span class="badge badge-dhf-released">{{ released }} Released</span>
+        <span class="badge badge-dhf-draft_update">{{ draft_update }} Draft Update</span>
+        <span class="badge badge-dhf-in_draft">{{ in_draft }} In Draft</span>
+        <span style="margin-left: 0.5rem; color: #666;">{{ documents | length }} total{% if selected_area %} in {{ selected_area }}{% endif %}</span>
+    </div>
+
+    {# Area filter #}
+    {% if areas | length > 1 %}
+    <div class="dhf-filters">
+        <select onchange="if(this.value==='') window.location.href='/project/{{ project.id }}/documents'; else window.location.href='/project/{{ project.id }}/documents?area='+encodeURIComponent(this.value);">
+            <option value="">All areas</option>
+            {% for a in areas %}
+            <option value="{{ a }}" {% if selected_area == a %}selected{% endif %}>{{ a }}</option>
+            {% endfor %}
+        </select>
+    </div>
+    {% endif %}
+</div>
+{% endif %}
+
+{# Status table #}
+{% if documents %}
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Area</th>
+            <th>Status</th>
+            <th>Released Ver.</th>
+            <th>Draft Ver.</th>
+            <th>Last Modified</th>
+            <th>Author</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for doc in documents %}
+        <tr class="dhf-status-{{ doc.status.value }}">
+            <td>{% if doc.page_url %}<a href="{{ doc.page_url }}" target="_blank">{{ doc.title }}</a>{% else %}{{ doc.title }}{% endif %}</td>
+            <td>{{ doc.area }}</td>
+            <td><span class="badge badge-dhf-{{ doc.status.value }}">{{ doc.status.value | replace('_', ' ') | title }}</span></td>
+            <td>{{ doc.released_version or '—' }}</td>
+            <td>{{ doc.draft_version or '—' }}</td>
+            <td>{{ doc.last_modified[:10] if doc.last_modified else '—' }}</td>
+            <td>{{ doc.author or '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% elif not error %}
+<p>No DHF documents found.</p>
+{% endif %}
+
+{# Config (collapsible) #}
+<details class="dhf-config-section">
+    <summary>DHF Configuration</summary>
+    <form method="post" action="/project/{{ project.id }}/documents/config" class="dhf-config-form">
+        <div class="form-group">
+            <label for="dhf_draft_root_id">Draft Root Page ID</label>
+            <input type="text" id="dhf_draft_root_id" name="dhf_draft_root_id"
+                   value="{{ project.dhf_draft_root_id or '' }}" placeholder="e.g. 123456789">
+        </div>
+        <div class="form-group">
+            <label for="dhf_released_root_id">Released Root Page ID</label>
+            <input type="text" id="dhf_released_root_id" name="dhf_released_root_id"
+                   value="{{ project.dhf_released_root_id or '' }}" placeholder="e.g. 987654321">
+        </div>
+        <button type="submit">Save</button>
+    </form>
+</details>
+
+{% else %}
+
+{# No DHF configured — show config form prominently #}
+<div class="dhf-config-banner">
+    <h3>Configure DHF Tracking</h3>
+    <p>Enter the Confluence page IDs for the Draft and Released DHF root pages to enable document tracking.</p>
+    <form method="post" action="/project/{{ project.id }}/documents/config">
+        <div class="form-group">
+            <label for="dhf_draft_root_id">Draft Root Page ID</label>
+            <input type="text" id="dhf_draft_root_id" name="dhf_draft_root_id"
+                   value="" placeholder="e.g. 123456789">
+        </div>
+        <div class="form-group">
+            <label for="dhf_released_root_id">Released Root Page ID</label>
+            <input type="text" id="dhf_released_root_id" name="dhf_released_root_id"
+                   value="" placeholder="e.g. 987654321">
+        </div>
+        <button type="submit">Save</button>
+    </form>
+</div>
+
+{% endif %}
+{% endblock %}

@@ -2,7 +2,14 @@
 
 from __future__ import annotations
 
-from src.models.dashboard import PIPELINE_PHASES, VALID_PHASES, ProjectSummary
+from src.models.dashboard import (
+    PIPELINE_PHASES,
+    VALID_PHASES,
+    EpicWithTasks,
+    InitiativeDetail,
+    InitiativeSummary,
+    ProjectSummary,
+)
 from src.models.jira import JiraIssue
 from src.models.project import Project
 
@@ -74,6 +81,73 @@ class TestProjectSummary:
         assert summary.goal is None
         assert summary.error == "HTTP 503: Service Unavailable"
         assert summary.risk_count == 0
+
+
+class TestInitiativeSummary:
+    def test_creation(self) -> None:
+        issue = _make_goal()
+        summary = InitiativeSummary(
+            issue=issue,
+            epic_count=5,
+            task_count=20,
+            done_epic_count=2,
+            done_task_count=10,
+        )
+        assert summary.issue.key == "PROG-100"
+        assert summary.epic_count == 5
+        assert summary.task_count == 20
+        assert summary.done_epic_count == 2
+        assert summary.done_task_count == 10
+
+
+class TestEpicWithTasks:
+    def test_creation(self) -> None:
+        epic = _make_goal()
+        task = JiraIssue(
+            id="10001", key="AIM-200", summary="Task 1",
+            status="To Do", issue_type="Task", project_key="AIM",
+            labels=[], parent_key="AIM-100", fix_versions=[],
+            due_date=None, description_adf=None,
+        )
+        ewt = EpicWithTasks(issue=epic, tasks=[task])
+        assert ewt.issue.key == "PROG-100"
+        assert len(ewt.tasks) == 1
+        assert ewt.tasks[0].key == "AIM-200"
+
+    def test_empty_tasks(self) -> None:
+        epic = _make_goal()
+        ewt = EpicWithTasks(issue=epic, tasks=[])
+        assert len(ewt.tasks) == 0
+
+
+class TestInitiativeDetail:
+    def test_creation(self) -> None:
+        initiative = _make_goal()
+        epic = JiraIssue(
+            id="10001", key="AIM-100", summary="Epic 1",
+            status="In Progress", issue_type="Epic", project_key="AIM",
+            labels=[], parent_key=None, fix_versions=[],
+            due_date=None, description_adf=None,
+        )
+        task = JiraIssue(
+            id="10002", key="AIM-200", summary="Task 1",
+            status="To Do", issue_type="Task", project_key="AIM",
+            labels=[], parent_key="AIM-100", fix_versions=[],
+            due_date=None, description_adf=None,
+        )
+        detail = InitiativeDetail(
+            issue=initiative,
+            epics=[EpicWithTasks(issue=epic, tasks=[task])],
+        )
+        assert detail.issue.key == "PROG-100"
+        assert len(detail.epics) == 1
+        assert detail.epics[0].issue.key == "AIM-100"
+        assert len(detail.epics[0].tasks) == 1
+
+    def test_empty_epics(self) -> None:
+        initiative = _make_goal()
+        detail = InitiativeDetail(issue=initiative, epics=[])
+        assert len(detail.epics) == 0
 
 
 class TestPipelinePhases:

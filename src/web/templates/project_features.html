@@ -1,0 +1,41 @@
+{% extends "base.html" %}
+
+{% block title %}Features — {{ project.name }} — Project Seat{% endblock %}
+
+{% block content %}
+<h1>Features — {{ project.name }}</h1>
+
+{% if initiatives %}
+<table class="initiative-table">
+    <thead>
+        <tr>
+            <th>Key</th>
+            <th>Summary</th>
+            <th>Status</th>
+            <th>Epics</th>
+            <th>Tasks</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for init in initiatives %}
+        <tr>
+            <td>
+                <a href="/project/{{ project.id }}/features/{{ init.issue.key }}">
+                    {{ init.issue.key }}
+                </a>
+            </td>
+            <td>{{ init.issue.summary }}</td>
+            <td><span class="badge badge-goal-status">{{ init.issue.status }}</span></td>
+            <td>{{ init.done_epic_count }}/{{ init.epic_count }}</td>
+            <td>{{ init.done_task_count }}/{{ init.task_count }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<div class="empty-state">
+    <h2>No initiatives found</h2>
+    <p>No Initiative tickets are linked to this project's fix version.</p>
+</div>
+{% endif %}
+{% endblock %}

@@ -29,3 +29,24 @@ class ProjectSummary:
     decision_count: int
     initiative_count: int
     error: str | None
+
+
+@dataclass
+class InitiativeSummary:
+    issue: JiraIssue
+    epic_count: int
+    task_count: int
+    done_epic_count: int
+    done_task_count: int
+
+
+@dataclass
+class EpicWithTasks:
+    issue: JiraIssue
+    tasks: list[JiraIssue]
+
+
+@dataclass
+class InitiativeDetail:
+    issue: JiraIssue
+    epics: list[EpicWithTasks]

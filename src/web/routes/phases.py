@@ -1,4 +1,4 @@
-"""Dashboard routes — pipeline view and phase updates."""
+"""Phase Gates routes — pipeline view and phase updates."""
 
 from __future__ import annotations
 
@@ -7,14 +7,14 @@ from fastapi.responses import HTMLResponse
 
 from src.models.dashboard import PIPELINE_PHASES
 from src.services.dashboard import DashboardService
-from src.web.deps import templates
+from src.web.deps import get_nav_context, templates
 
-router = APIRouter(tags=["dashboard"])
+router = APIRouter(tags=["phases"])
 
 
-@router.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request) -> HTMLResponse:
-    """Render the full dashboard with live Jira data."""
+@router.get("/phases/", response_class=HTMLResponse)
+async def phases(request: Request) -> HTMLResponse:
+    """Render the pipeline view with live Jira data."""
     service = DashboardService()
     summaries = await service.get_all_summaries()
 
@@ -30,16 +30,17 @@ async def dashboard(request: Request) -> HTMLResponse:
 
     return templates.TemplateResponse(
         request,
-        "dashboard.html",
+        "phases.html",
         {
             "phases": phases_with_projects,
             "total_projects": len(summaries),
             "pipeline_phases": PIPELINE_PHASES,
+            **get_nav_context(request),
         },
     )
 
 
-@router.post("/dashboard/{project_id}/phase", response_class=HTMLResponse)
+@router.post("/phases/{project_id}/phase", response_class=HTMLResponse)
 async def update_phase(
     request: Request,
     project_id: int,
@@ -49,9 +50,7 @@ async def update_phase(
     service = DashboardService()
     service.update_phase(project_id, phase)
 
-    # Re-fetch the summary for the updated project
-    projects = service.list_projects()
-    project = next((p for p in projects if p.id == project_id), None)
+    project = service.get_project_by_id(project_id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 

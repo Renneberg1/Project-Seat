@@ -8,10 +8,35 @@
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
 </head>
 <body>
-    <nav>
-        <a href="/">Dashboard</a>
-        <a href="/spinup/">Spin Up</a>
-        <a href="/approval/">Approvals</a>
+    <nav class="nav-bar">
+        <div class="nav-global">
+            <a href="/phases/" class="nav-link {% if request.url.path.startswith('/phases') %}active{% endif %}">Phase Gates</a>
+            <a href="/spinup/" class="nav-link {% if request.url.path.startswith('/spinup') %}active{% endif %}">Spin Up</a>
+        </div>
+        <div class="nav-project-selector">
+            {% if nav_projects is defined and nav_projects %}
+            <select id="project-select" onchange="if(this.value) window.location.href='/project/'+this.value+'/dashboard'">
+                <option value="">Select project...</option>
+                {% for p in nav_projects %}
+                <option value="{{ p.id }}" {% if selected_project_id is defined and selected_project_id == p.id %}selected{% endif %}>
+                    {{ p.name }}
+                </option>
+                {% endfor %}
+            </select>
+            {% endif %}
+        </div>
+        <div class="nav-project-tabs">
+            {% if selected_project_id is defined and selected_project_id %}
+            <a href="/project/{{ selected_project_id }}/dashboard"
+               class="nav-link {% if request.url.path == '/project/' ~ selected_project_id|string ~ '/dashboard' %}active{% endif %}">Dashboard</a>
+            <a href="/project/{{ selected_project_id }}/features"
+               class="nav-link {% if '/features' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Features</a>
+            <a href="/project/{{ selected_project_id }}/documents"
+               class="nav-link {% if '/documents' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Documents</a>
+            <a href="/project/{{ selected_project_id }}/approvals"
+               class="nav-link {% if request.url.path == '/project/' ~ selected_project_id|string ~ '/approvals' %}active{% endif %}">Approvals</a>
+            {% endif %}
+        </div>
     </nav>
     <main>
         {% block content %}{% endblock %}

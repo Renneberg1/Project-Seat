@@ -71,6 +71,12 @@ def init_db(db_path: str | Path = "seat.db") -> None:
             conn.execute("ALTER TABLE projects ADD COLUMN phase TEXT NOT NULL DEFAULT 'planning'")
         except sqlite3.OperationalError:
             pass  # column already exists
+        # Migration: add DHF root page ID columns
+        for col in ("dhf_draft_root_id", "dhf_released_root_id"):
+            try:
+                conn.execute(f"ALTER TABLE projects ADD COLUMN {col} TEXT")
+            except sqlite3.OperationalError:
+                pass  # column already exists
         conn.commit()
     finally:
         conn.close()

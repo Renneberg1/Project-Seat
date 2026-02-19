@@ -1,4 +1,4 @@
-"""Approval queue routes."""
+"""Approval queue routes (global view)."""
 
 from __future__ import annotations
 
@@ -8,7 +8,7 @@ from fastapi.responses import HTMLResponse
 from src.engine.approval import ApprovalEngine
 from src.models.approval import ApprovalStatus
 from src.services.spinup import SpinUpService
-from src.web.deps import templates
+from src.web.deps import get_nav_context, templates
 
 router = APIRouter(prefix="/approval", tags=["approval"])
 
@@ -24,7 +24,12 @@ async def approval_queue(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "approval.html",
-        {"pending": pending, "history": history},
+        {
+            "pending": pending,
+            "history": history,
+            "approval_base_url": "/approval",
+            **get_nav_context(request),
+        },
     )
 
 
@@ -73,5 +78,9 @@ async def approve_all(request: Request) -> HTMLResponse:
     return templates.TemplateResponse(
         request,
         "partials/approval_pending.html",
-        {"pending": pending, "history": history},
+        {
+            "pending": pending,
+            "history": history,
+            "approval_base_url": "/approval",
+        },
     )

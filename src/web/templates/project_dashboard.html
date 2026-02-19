@@ -1,0 +1,102 @@
+{% extends "base.html" %}
+
+{% block title %}{{ project.name }} — Project Seat{% endblock %}
+
+{% block content %}
+<h1>{{ project.name }}</h1>
+
+{% if summary.error %}
+<div class="error-banner">Jira unavailable: {{ summary.error }}</div>
+{% endif %}
+
+<div class="project-overview">
+    <div class="overview-card">
+        <h3>Goal</h3>
+        {% if summary.goal %}
+        <p><strong>{{ summary.goal.key }}</strong> — {{ summary.goal.summary }}</p>
+        <p>Status: <span class="badge badge-goal-status">{{ summary.goal.status }}</span></p>
+        {% if summary.goal.due_date %}
+        <p>Due: {{ summary.goal.due_date }}</p>
+        {% endif %}
+        {% else %}
+        <p>No goal data available.</p>
+        {% endif %}
+    </div>
+
+    <div class="overview-card">
+        <h3>Risks</h3>
+        <p class="overview-metric">{{ summary.open_risk_count }} open / {{ summary.risk_count }} total</p>
+    </div>
+
+    <div class="overview-card">
+        <h3>Decisions</h3>
+        <p class="overview-metric">{{ summary.decision_count }}</p>
+    </div>
+
+    <div class="overview-card">
+        <h3>Initiatives</h3>
+        <p class="overview-metric">{{ summary.initiative_count }}</p>
+    </div>
+
+    <div class="overview-card">
+        <h3>Documents</h3>
+        {% if dhf_summary and dhf_summary.total_count > 0 %}
+        <div class="dhf-counts">
+            <span class="badge badge-dhf-released">{{ dhf_summary.released_count }} Released</span>
+            <span class="badge badge-dhf-draft_update">{{ dhf_summary.draft_update_count }} Draft Update</span>
+            <span class="badge badge-dhf-in_draft">{{ dhf_summary.in_draft_count }} In Draft</span>
+        </div>
+        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/documents" class="btn btn-sm">View All</a></p>
+        {% elif dhf_summary and dhf_summary.error %}
+        <div class="error-banner">{{ dhf_summary.error }}</div>
+        {% elif project.dhf_draft_root_id and project.dhf_released_root_id %}
+        <p>No DHF documents found.</p>
+        <a href="/project/{{ project.id }}/documents" class="btn btn-sm">View</a>
+        {% else %}
+        <p>No DHF configured.</p>
+        <a href="/project/{{ project.id }}/documents" class="btn btn-sm">Configure</a>
+        {% endif %}
+        <div class="card-links" style="margin-top: 0.5rem;">
+            {% if project.confluence_charter_id %}
+            <a href="#" class="btn btn-sm">Charter</a>
+            {% endif %}
+            {% if project.confluence_xft_id %}
+            <a href="#" class="btn btn-sm">XFT</a>
+            {% endif %}
+        </div>
+    </div>
+
+    <div class="overview-card">
+        <h3>Phase</h3>
+        <p><span class="badge badge-goal-status">{{ project.phase | replace('_', ' ') | title }}</span></p>
+    </div>
+</div>
+
+<h2>Recent Approvals</h2>
+{% if recent_approvals %}
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Action</th>
+            <th>Preview</th>
+            <th>Status</th>
+            <th>Resolved</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in recent_approvals %}
+        <tr class="status-{{ item.status.value }}">
+            <td>{{ item.id }}</td>
+            <td>{{ item.action_type.value }}</td>
+            <td>{{ item.preview }}</td>
+            <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
+            <td>{{ item.resolved_at or '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No approval activity for this project.</p>
+{% endif %}
+{% endblock %}

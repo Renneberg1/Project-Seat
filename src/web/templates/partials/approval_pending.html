@@ -1,8 +1,10 @@
 <h2>Pending Approval ({{ pending|length }})</h2>
 
+{% set base_url = approval_base_url | default("/approval") %}
+
 {% if pending %}
 <div style="margin-bottom: 1rem;">
-    <button hx-post="/approval/approve-all"
+    <button hx-post="{{ base_url }}/approve-all"
             hx-target="#approval-pending"
             hx-swap="innerHTML"
             class="btn btn-approve">
@@ -28,13 +30,13 @@
             <td>{{ item.preview }}</td>
             <td>{{ item.context }}</td>
             <td>
-                <button hx-post="/approval/{{ item.id }}/approve"
+                <button hx-post="{{ base_url }}/{{ item.id }}/approve"
                         hx-target="#approval-row-{{ item.id }}"
                         hx-swap="outerHTML"
                         class="btn btn-approve btn-sm">
                     Approve
                 </button>
-                <button hx-post="/approval/{{ item.id }}/reject"
+                <button hx-post="{{ base_url }}/{{ item.id }}/reject"
                         hx-target="#approval-row-{{ item.id }}"
                         hx-swap="outerHTML"
                         class="btn btn-reject btn-sm">

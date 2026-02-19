@@ -1,4 +1,4 @@
-"""Tests for dashboard routes."""
+"""Tests for phase gates routes."""
 
 from __future__ import annotations
 
@@ -39,11 +39,26 @@ def _make_summary(project: Project, error: str | None = None) -> ProjectSummary:
     )
 
 
-class TestDashboardGet:
-    def test_empty_state(self, client) -> None:
-        with patch("src.web.routes.dashboard.DashboardService") as MockSvc:
+class TestRootRedirect:
+    def test_root_redirects_to_phases(self, client) -> None:
+        resp = client.get("/", follow_redirects=False)
+        assert resp.status_code == 302
+        assert resp.headers["location"] == "/phases/"
+
+    def test_root_follow_redirect(self, client) -> None:
+        with patch("src.web.routes.phases.DashboardService") as MockSvc:
             MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[])
+            MockSvc.return_value.list_projects = lambda: []
             resp = client.get("/")
+        assert resp.status_code == 200
+
+
+class TestPhasesGet:
+    def test_empty_state(self, client) -> None:
+        with patch("src.web.routes.phases.DashboardService") as MockSvc:
+            MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[])
+            MockSvc.return_value.list_projects = lambda: []
+            resp = client.get("/phases/")
         assert resp.status_code == 200
         assert "No projects tracked yet" in resp.text
         assert "Spin Up a Project" in resp.text
@@ -57,20 +72,21 @@ class TestDashboardGet:
         )
         summary = _make_summary(project)
 
-        with patch("src.web.routes.dashboard.DashboardService") as MockSvc:
+        with patch("src.web.routes.phases.DashboardService") as MockSvc:
             MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[summary])
-            resp = client.get("/")
+            MockSvc.return_value.list_projects = lambda: [project]
+            resp = client.get("/phases/")
 
         assert resp.status_code == 200
         assert "Alpha" in resp.text
         assert "PROG-1" in resp.text
 
-    def test_contains_pipeline_stage_headers(self, client) -> None:
-        with patch("src.web.routes.dashboard.DashboardService") as MockSvc:
+    def test_page_title_says_phase_gates(self, client) -> None:
+        with patch("src.web.routes.phases.DashboardService") as MockSvc:
             MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[])
-            # Even with no projects, stage headers should not appear (empty state shown)
-            resp = client.get("/")
-        assert resp.status_code == 200
+            MockSvc.return_value.list_projects = lambda: []
+            resp = client.get("/phases/")
+        assert "Phase Gates" in resp.text
 
     def test_error_project_shows_banner(self, client, tmp_db: str) -> None:
         pid = _insert_project(tmp_db, "Broken", "PROG-99")
@@ -81,9 +97,10 @@ class TestDashboardGet:
         )
         summary = _make_summary(project, error="HTTP 503: Service Unavailable")
 
-        with patch("src.web.routes.dashboard.DashboardService") as MockSvc:
+        with patch("src.web.routes.phases.DashboardService") as MockSvc:
             MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[summary])
-            resp = client.get("/")
+            MockSvc.return_value.list_projects = lambda: [project]
+            resp = client.get("/phases/")
 
         assert resp.status_code == 200
         assert "Jira unavailable" in resp.text
@@ -93,16 +110,14 @@ class TestUpdatePhase:
     def test_post_updates_phase(self, client, tmp_db: str) -> None:
         pid = _insert_project(tmp_db, "Alpha", "PROG-1", "planning")
 
-        with patch("src.web.routes.dashboard.DashboardService") as MockSvc:
+        with patch("src.web.routes.phases.DashboardService") as MockSvc:
             instance = MockSvc.return_value
             instance.update_phase = lambda pid, phase: None
-            instance.list_projects = lambda: [
-                Project(
-                    id=pid, jira_goal_key="PROG-1", name="Alpha",
-                    confluence_charter_id=None, confluence_xft_id=None,
-                    status="active", phase="development", created_at="2026-01-01",
-                )
-            ]
+            instance.get_project_by_id = lambda pid: Project(
+                id=pid, jira_goal_key="PROG-1", name="Alpha",
+                confluence_charter_id=None, confluence_xft_id=None,
+                status="active", phase="development", created_at="2026-01-01",
+            )
             instance.get_project_summary = AsyncMock(
                 return_value=_make_summary(
                     Project(
@@ -112,6 +127,15 @@ class TestUpdatePhase:
                     )
                 )
             )
-            resp = client.post(f"/dashboard/{pid}/phase", data={"phase": "development"})
+            resp = client.post(f"/phases/{pid}/phase", data={"phase": "development"})
 
         assert resp.status_code == 200
+
+    def test_post_nonexistent_project_returns_404(self, client) -> None:
+        with patch("src.web.routes.phases.DashboardService") as MockSvc:
+            instance = MockSvc.return_value
+            instance.update_phase = lambda pid, phase: None
+            instance.get_project_by_id = lambda pid: None
+            resp = client.post("/phases/999/phase", data={"phase": "development"})
+
+        assert resp.status_code == 404

@@ -46,9 +46,16 @@ class LLMSettings:
 
 
 @dataclass(frozen=True)
+class EQMSSettings:
+    draft_space_id: str = os.getenv("EQMS_DRAFT_SPACE_ID", "")
+    released_space_id: str = os.getenv("EQMS_RELEASED_SPACE_ID", "")
+
+
+@dataclass(frozen=True)
 class Settings:
     atlassian: AtlassianSettings = field(default_factory=AtlassianSettings)
     llm: LLMSettings = field(default_factory=LLMSettings)
+    eqms: EQMSSettings = field(default_factory=EQMSSettings)
     db_path: str = os.getenv("DB_PATH", "seat.db")
     jira_field_map: dict[str, str] = field(default_factory=_load_field_map)
 

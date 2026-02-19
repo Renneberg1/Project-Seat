@@ -1,0 +1,51 @@
+{% extends "base.html" %}
+
+{% block title %}{{ detail.issue.key }} — Project Seat{% endblock %}
+
+{% block content %}
+<p><a href="/project/{{ project.id }}/features">&larr; Back to Features</a></p>
+
+<h1>{{ detail.issue.key }} — {{ detail.issue.summary }}</h1>
+<p>Status: <span class="badge badge-goal-status">{{ detail.issue.status }}</span></p>
+
+{% if detail.epics %}
+<div class="epic-list">
+    {% for epic in detail.epics %}
+    <details class="epic-accordion" open>
+        <summary class="epic-header">
+            <strong>{{ epic.issue.key }}</strong> — {{ epic.issue.summary }}
+            <span class="badge badge-goal-status">{{ epic.issue.status }}</span>
+            <span class="task-count">({{ epic.tasks | length }} tasks)</span>
+        </summary>
+        {% if epic.tasks %}
+        <table class="task-table">
+            <thead>
+                <tr>
+                    <th>Key</th>
+                    <th>Summary</th>
+                    <th>Status</th>
+                </tr>
+            </thead>
+            <tbody>
+                {% for task in epic.tasks %}
+                <tr>
+                    <td>{{ task.key }}</td>
+                    <td>{{ task.summary }}</td>
+                    <td><span class="badge badge-goal-status">{{ task.status }}</span></td>
+                </tr>
+                {% endfor %}
+            </tbody>
+        </table>
+        {% else %}
+        <p class="no-tasks">No tasks under this epic.</p>
+        {% endif %}
+    </details>
+    {% endfor %}
+</div>
+{% else %}
+<div class="empty-state">
+    <h2>No epics found</h2>
+    <p>No Epic tickets are children of this Initiative.</p>
+</div>
+{% endif %}
+{% endblock %}
