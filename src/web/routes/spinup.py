@@ -5,6 +5,7 @@ from __future__ import annotations
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 
+from src.config import settings as app_settings
 from src.models.project import SpinUpRequest
 from src.services.spinup import SpinUpService
 from src.web.deps import get_nav_context, templates
@@ -45,6 +46,7 @@ async def spinup_submit(
         target_date=target_date,
         labels=label_list,
         goal_summary=goal_summary,
+        confluence_space_key=app_settings.atlassian.confluence_space_key,
         pi_version=pi_version.strip(),
     )
 

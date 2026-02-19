@@ -180,3 +180,138 @@ class TestTranscriptService:
 
         records = service.list_transcripts(1)
         assert len(records) == 2
+
+
+# ---------------------------------------------------------------------------
+# Accept / reject suggestion tests (require temp DB with seeded data)
+# ---------------------------------------------------------------------------
+
+
+class TestSuggestionWorkflow:
+    """Test accept, reject, and accept-all flows at the service level."""
+
+    @pytest.fixture()
+    def db_path(self, tmp_path):
+        path = str(tmp_path / "test.db")
+        init_db(path)
+        import sqlite3
+        conn = sqlite3.connect(path)
+        conn.execute(
+            "INSERT INTO projects (id, jira_goal_key, name, status, phase, "
+            "confluence_charter_id, confluence_xft_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (1, "PROG-100", "Test Project", "active", "planning", "111", "222"),
+        )
+        conn.execute(
+            "INSERT INTO transcript_cache (id, project_id, filename, raw_text) "
+            "VALUES (?, ?, ?, ?)",
+            (1, 1, "meeting.vtt", "Thomas: Risk discussion"),
+        )
+        conn.commit()
+        conn.close()
+        return path
+
+    def _insert_suggestion(self, db_path, **overrides):
+        import json, sqlite3
+        defaults = dict(
+            transcript_id=1,
+            project_id=1,
+            suggestion_type="risk",
+            title="Test Risk",
+            detail="Some detail",
+            evidence="Speaker said X",
+            proposed_payload=json.dumps({
+                "project_key": "RISK",
+                "issue_type_id": "10832",
+                "summary": "Test Risk",
+                "fields": {"parent": {"key": "PROG-100"}},
+            }),
+            proposed_action="create_jira_issue",
+            proposed_preview="Type: risk\nTitle: Test Risk",
+            confidence=0.8,
+            status="pending",
+        )
+        defaults.update(overrides)
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute(
+            """INSERT INTO transcript_suggestions
+               (transcript_id, project_id, suggestion_type, title, detail,
+                evidence, proposed_payload, proposed_action, proposed_preview,
+                confidence, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (
+                defaults["transcript_id"], defaults["project_id"],
+                defaults["suggestion_type"], defaults["title"], defaults["detail"],
+                defaults["evidence"], defaults["proposed_payload"],
+                defaults["proposed_action"], defaults["proposed_preview"],
+                defaults["confidence"], defaults["status"],
+            ),
+        )
+        conn.commit()
+        sug_id = cursor.lastrowid
+        conn.close()
+        return sug_id
+
+    def _make_project(self):
+        from src.models.project import Project
+        return Project(
+            id=1, jira_goal_key="PROG-100", name="Test Project",
+            confluence_charter_id="111", confluence_xft_id="222",
+            status="active", phase="planning", created_at="2026-01-01",
+        )
+
+    def test_accept_suggestion_queues_approval_item(self, db_path):
+        sug_id = self._insert_suggestion(db_path)
+        service = TranscriptService(db_path=db_path)
+        project = self._make_project()
+
+        result = service.accept_suggestion(sug_id, project)
+
+        assert result is not None
+        assert result.status == SuggestionStatus.QUEUED
+        assert result.approval_item_id is not None
+        # Verify the approval item exists
+        from src.engine.approval import ApprovalEngine
+        engine = ApprovalEngine(db_path=db_path)
+        item = engine.get(result.approval_item_id)
+        assert item is not None
+
+    def test_accept_suggestion_pending_goal_key_raises(self, db_path):
+        sug_id = self._insert_suggestion(db_path)
+        service = TranscriptService(db_path=db_path)
+        project = self._make_project()
+        project.jira_goal_key = "pending"
+
+        with pytest.raises(ValueError, match="Goal key"):
+            service.accept_suggestion(sug_id, project)
+
+    def test_reject_suggestion_updates_status(self, db_path):
+        sug_id = self._insert_suggestion(db_path)
+        service = TranscriptService(db_path=db_path)
+
+        result = service.reject_suggestion(sug_id)
+
+        assert result is not None
+        assert result.status == SuggestionStatus.REJECTED
+
+    def test_accept_all_suggestions_queues_all(self, db_path):
+        self._insert_suggestion(db_path, title="Risk A")
+        self._insert_suggestion(db_path, title="Risk B")
+        service = TranscriptService(db_path=db_path)
+        project = self._make_project()
+
+        item_ids = service.accept_all_suggestions(1, project)
+
+        assert len(item_ids) == 2
+        # All suggestions should be queued
+        suggestions = service.list_suggestions(1)
+        assert all(s.status == SuggestionStatus.QUEUED for s in suggestions)
+
+    def test_reject_already_rejected_is_idempotent(self, db_path):
+        sug_id = self._insert_suggestion(db_path)
+        service = TranscriptService(db_path=db_path)
+
+        service.reject_suggestion(sug_id)
+        result = service.reject_suggestion(sug_id)
+
+        assert result.status == SuggestionStatus.REJECTED

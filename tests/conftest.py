@@ -94,6 +94,8 @@ def make_project():
         created_at: str = "2026-01-01T00:00:00",
         dhf_draft_root_id: str | None = None,
         dhf_released_root_id: str | None = None,
+        default_component: str | None = None,
+        default_label: str | None = None,
         **overrides,
     ) -> Project:
         kwargs = dict(
@@ -107,6 +109,8 @@ def make_project():
             created_at=created_at,
             dhf_draft_root_id=dhf_draft_root_id,
             dhf_released_root_id=dhf_released_root_id,
+            default_component=default_component,
+            default_label=default_label,
         )
         kwargs.update(overrides)
         return Project(**kwargs)

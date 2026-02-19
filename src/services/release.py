@@ -3,10 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
+from datetime import datetime, timezone
 
 import src.config
 from src.database import get_db
 from src.models.release import Release, ReleaseStatus
+
+logger = logging.getLogger(__name__)
 
 
 class ReleaseService:
@@ -67,6 +71,9 @@ class ReleaseService:
                     (release_id, title),
                 )
             conn.commit()
+        self._log_audit("save_release_documents", release_id, {
+            "release_id": release_id, "count": len(titles),
+        })
 
     def get_selected_documents(self, release_id: int) -> set[str]:
         with get_db(self._db_path) as conn:
@@ -102,6 +109,9 @@ class ReleaseService:
                 (snapshot_json, release_id),
             )
             conn.commit()
+        self._log_audit("lock_release", release_id, {
+            "release_id": release_id, "snapshot": version_data,
+        })
 
     def unlock_release(self, release_id: int) -> None:
         with get_db(self._db_path) as conn:
@@ -110,12 +120,37 @@ class ReleaseService:
                 (release_id,),
             )
             conn.commit()
+        self._log_audit("unlock_release", release_id, {"release_id": release_id})
 
     def get_version_snapshot(self, release_id: int) -> dict[str, str | None] | None:
         release = self.get_release(release_id)
         if release is None:
             return None
         return release.version_snapshot
+
+    # ------------------------------------------------------------------
+    # Audit trail
+    # ------------------------------------------------------------------
+
+    def _log_audit(self, action: str, release_id: int, details: dict) -> None:
+        """Write a release action to the audit log for traceability."""
+        # Look up project_id from the releases table
+        project_id = None
+        with get_db(self._db_path) as conn:
+            row = conn.execute(
+                "SELECT project_id FROM releases WHERE id = ?", (release_id,)
+            ).fetchone()
+            if row:
+                project_id = row["project_id"]
+        now = datetime.now(timezone.utc).isoformat()
+        with get_db(self._db_path) as conn:
+            conn.execute(
+                """INSERT INTO approval_log
+                   (project_id, action_type, payload, approved_by, approved_at, created_at)
+                   VALUES (?, ?, ?, ?, ?, ?)""",
+                (project_id, action, json.dumps(details), "local_user", now, now),
+            )
+            conn.commit()
 
     # ------------------------------------------------------------------
     # Release status computation

@@ -1,0 +1,17 @@
+WEBVTT
+
+1
+00:00:01.000 --> 00:00:08.000
+<v Thomas Renneberg>Good morning everyone, let's review the risk register for Drop 2.</v>
+
+2
+00:00:09.000 --> 00:00:18.000
+<v Sarah Chen>We identified a new risk around the model validation dataset. The sample size may be insufficient for the intended use population.</v>
+
+3
+00:00:19.000 --> 00:00:28.000
+<v Thomas Renneberg>That's a significant concern. Can we quantify the impact on our regulatory submission timeline?</v>
+
+4
+00:00:29.000 --> 00:00:40.000
+<v Sarah Chen>If we need to collect additional data, it could delay the submission by four to six weeks. I recommend we create a risk item and start the mitigation planning now.</v>

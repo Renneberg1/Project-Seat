@@ -160,6 +160,8 @@ class SpinUpService:
                     "fields": {
                         "description": "__GOAL_DESCRIPTION_PLACEHOLDER__",
                     },
+                    "goal_summary": req.goal_summary,
+                    "space_key": req.confluence_space_key,
                 },
                 preview="Update Goal description with Confluence page links",
                 context="Spin-up step 6: link Confluence pages in Goal (resolved at execution)",
@@ -242,7 +244,10 @@ class SpinUpService:
             and charter_page_id
         ):
             resolved["fields"]["description"] = self._build_goal_description(
-                charter_page_id, xft_page_id
+                charter_page_id,
+                xft_page_id,
+                goal_summary=resolved.pop("goal_summary", ""),
+                space_key=resolved.pop("space_key", ""),
             )
 
         return resolved
@@ -311,13 +316,31 @@ class SpinUpService:
             await confluence.close()
 
     def _build_goal_description(
-        self, charter_id: str, xft_id: str | None
+        self,
+        charter_id: str,
+        xft_id: str | None,
+        goal_summary: str = "",
+        space_key: str = "",
     ) -> dict:
-        """Build an ADF document with inlineCard links to Confluence pages."""
+        """Build an ADF document with inlineCard links to Confluence pages.
+
+        If *goal_summary* is provided it is prepended as a paragraph so that the
+        user's original text is preserved alongside the Confluence links.
+        """
+        space_key = space_key or settings.atlassian.confluence_space_key
         domain = settings.atlassian.domain
         base = f"https://{domain}.atlassian.net/wiki/spaces"
 
-        content = [
+        content: list[dict] = []
+
+        if goal_summary:
+            content.append({
+                "type": "paragraph",
+                "content": [{"type": "text", "text": goal_summary}],
+            })
+            content.append({"type": "rule"})
+
+        content.append(
             {
                 "type": "paragraph",
                 "content": [
@@ -325,12 +348,12 @@ class SpinUpService:
                     {
                         "type": "inlineCard",
                         "attrs": {
-                            "url": f"{base}/HPP/pages/{charter_id}",
+                            "url": f"{base}/{space_key}/pages/{charter_id}",
                         },
                     },
                 ],
             },
-        ]
+        )
 
         if xft_id:
             content.append(
@@ -341,7 +364,7 @@ class SpinUpService:
                         {
                             "type": "inlineCard",
                             "attrs": {
-                                "url": f"{base}/HPP/pages/{xft_id}",
+                                "url": f"{base}/{space_key}/pages/{xft_id}",
                             },
                         },
                     ],

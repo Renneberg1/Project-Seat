@@ -273,3 +273,90 @@ async def test_approve_and_execute_missing_item_raises_value_error(tmp_db):
 
     with pytest.raises(ValueError, match="not found"):
         await engine.approve_and_execute(99999)
+
+
+# ---------------------------------------------------------------------------
+# retry: Incoming command — assert side effect
+# ---------------------------------------------------------------------------
+
+
+async def test_retry_resets_failed_item_to_pending(tmp_db):
+    """A failed item should become pending again after retry."""
+    engine = ApprovalEngine(db_path=tmp_db)
+    item_id = engine.propose(
+        ApprovalAction.CREATE_JIRA_ISSUE,
+        {"project_key": "PROG", "issue_type_id": "10423", "summary": "Retry me"},
+        preview="Retry test",
+    )
+
+    # Force it to fail
+    with patch("src.engine.approval.JiraConnector") as MockJira:
+        instance = MockJira.return_value
+        instance.create_issue = AsyncMock(side_effect=ConnectorError(500, "boom"))
+        instance.close = AsyncMock()
+        await engine.approve_and_execute(item_id)
+
+    item = engine.get(item_id)
+    assert item.status == ApprovalStatus.FAILED
+
+    result = engine.retry(item_id)
+
+    assert result.status == ApprovalStatus.PENDING
+    assert result.result is None
+    assert result.resolved_at is None
+
+
+def test_retry_non_failed_item_raises(tmp_db):
+    """Retrying a pending item should raise ValueError."""
+    engine = ApprovalEngine(db_path=tmp_db)
+    item_id = engine.propose(
+        ApprovalAction.CREATE_JIRA_ISSUE,
+        {"project_key": "PROG"},
+        preview="test",
+    )
+
+    with pytest.raises(ValueError, match="not failed"):
+        engine.retry(item_id)
+
+
+# ---------------------------------------------------------------------------
+# Confluence append_mode: verify fetch + append behaviour
+# ---------------------------------------------------------------------------
+
+
+async def test_update_confluence_append_mode_fetches_and_appends(tmp_db):
+    """Append-mode Confluence update should fetch current body and append new content."""
+    engine = ApprovalEngine(db_path=tmp_db)
+    item_id = engine.propose(
+        ApprovalAction.UPDATE_CONFLUENCE_PAGE,
+        {
+            "page_id": "456",
+            "append_mode": True,
+            "append_content": "<h2>New Section</h2><p>Content</p>",
+        },
+        preview="Append to page",
+    )
+
+    existing_body = "<h1>Old Content</h1>"
+    mock_get_page = AsyncMock(return_value={
+        "version": {"number": 3},
+        "title": "XFT Page",
+        "body": {"storage": {"value": existing_body}},
+    })
+    mock_put = AsyncMock(return_value={"id": "456", "version": {"number": 4}})
+    mock_close = AsyncMock()
+
+    with patch("src.engine.approval.ConfluenceConnector") as MockConf:
+        instance = MockConf.return_value
+        instance.get_page = mock_get_page
+        instance.put = mock_put
+        instance.close = mock_close
+        result = await engine.approve_and_execute(item_id)
+
+    assert result.status == ApprovalStatus.EXECUTED
+
+    put_body = mock_put.call_args[1]["json_body"]
+    new_body = put_body["body"]["storage"]["value"]
+    assert new_body.startswith(existing_body)
+    assert "<h2>New Section</h2>" in new_body
+    assert put_body["version"]["number"] == 4

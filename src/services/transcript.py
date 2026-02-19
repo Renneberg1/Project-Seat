@@ -329,7 +329,13 @@ class TranscriptService:
             if components:
                 default_component = components[0].get("name")
         except (ConnectorError, Exception):
-            pass
+            logger.warning("Failed to fetch labels/components from Goal %s", project.jira_goal_key, exc_info=True)
+
+        # Fall back to project-level defaults if Goal fetch didn't yield values
+        if not default_label and getattr(project, "default_label", None):
+            default_label = project.default_label
+        if not default_component and getattr(project, "default_component", None):
+            default_component = project.default_component
 
         return ProjectContext(
             project_name=project.name,

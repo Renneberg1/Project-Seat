@@ -106,7 +106,7 @@ def test_spinup_request_default_space_key():
         goal_summary="A test project",
     )
 
-    assert result.confluence_space_key == "HPP"
+    assert result.confluence_space_key == ""  # Filled from settings at creation time
 
 
 def test_spinup_request_custom_space_key():

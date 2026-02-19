@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import asyncio
+import logging
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
+
+logger = logging.getLogger(__name__)
 
 from src.cache import cache
 from src.config import settings as app_settings
@@ -98,7 +101,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     # Show last 10
     recent_approvals = recent_approvals[-10:] if len(recent_approvals) > 10 else recent_approvals
 
-    confluence_page_base = f"https://{app_settings.atlassian.domain}.atlassian.net/wiki/spaces/HPP/pages"
+    confluence_page_base = f"https://{app_settings.atlassian.domain}.atlassian.net/wiki/spaces/{app_settings.atlassian.confluence_space_key}/pages"
 
     market_release = None
     if summary.goal and summary.goal.due_date:
@@ -107,7 +110,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
             mr = tech.replace(month=tech.month + 1) if tech.month < 12 else tech.replace(year=tech.year + 1, month=1)
             market_release = mr.isoformat()
         except ValueError:
-            pass
+            logger.warning("Failed to compute market release date from %s", summary.goal.due_date)
 
     # Check for active locked release for the Documents card
     release_service = ReleaseService()
@@ -386,7 +389,7 @@ async def lock_release(request: Request, id: int, release_id: int) -> RedirectRe
                 if doc.title in selected:
                     snapshot[doc.title] = doc.released_version
         except ConnectorError:
-            pass
+            logger.warning("Failed to fetch DHF versions for release lock — snapshot will be incomplete", exc_info=True)
 
     release_service.lock_release(release_id, snapshot)
     return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
@@ -472,11 +475,17 @@ async def approve_all(request: Request, id: int) -> HTMLResponse:
     service = SpinUpService()
     pending = engine.list_pending(project_id=id)
 
+    success_count = 0
+    fail_count = 0
     for item in pending:
         try:
             await service.execute_approved_item(item.id)
+            success_count += 1
         except Exception:
-            pass
+            fail_count += 1
+            logger.warning("Failed to execute approval item %d", item.id, exc_info=True)
+
+    logger.info("Approve-all for project %d: %d succeeded, %d failed", id, success_count, fail_count)
 
     pending = engine.list_pending(project_id=id)
     all_items = engine.list_all(project_id=id)

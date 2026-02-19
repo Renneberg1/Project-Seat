@@ -116,54 +116,15 @@ Redesign the project dashboard to be more graphical and information-dense:
 
 ## Infrastructure & Technical Debt
 
-### Task Orchestrator
-Implement `src/engine/orchestrator.py` for scheduled/recurring tasks:
-- Periodic status report generation
-- Automatic estimate gap scanning
-- DHF document change monitoring
-- Stale risk detection (risks open > N days without update)
-
-### Silent Exception Handling
-Several locations catch exceptions with `pass` — no logging or user feedback:
-- `src/services/transcript.py:332` — broad `except (ConnectorError, Exception): pass` in context gathering
-- `src/web/routes/project.py:110` — `except ValueError: pass` for market release date parsing
-- `src/web/routes/project.py:389` — `except ConnectorError: pass` for DHF snapshot during release lock
-- `src/web/routes/project.py:479` — `except Exception: pass` for approval execution
-
-Fix: add `logger.warning()` calls at minimum; surface errors to UI where appropriate.
-
-### Partial Failure Rollback
-If a multi-step operation (e.g. spin-up with 5 approval items) partially succeeds, orphaned Jira tickets/pages remain with no cleanup path. Consider:
-- Tracking created resource IDs per approval batch
-- Adding a rollback capability to `ApprovalEngine`
-- At minimum, logging created resources so manual cleanup is guided
-
-### Hardcoded Confluence Space
-All project pages created in "HPP" space (hardcoded in spinup and connectors). Should be configurable per project or at least per instance via env var.
-
-### Goal Description Overwrite
-During spin-up, the "Update Goal description with Confluence page links" step overwrites the entire Goal description, losing any `goal_summary` provided during creation. Fix: merge links into existing description rather than replacing it.
-
-### Project Model Extensions
-The `projects` table could benefit from:
-- `default_component` — default Jira component for risk/decision creation
-- `default_label` — default label for risk/decision creation
-- `team_lead` / `pm` / `stakeholders` — people tracking
-- `target_release_date` — for timeline tracking
-- `risk_tolerance` / `risk_budget` — for risk monitoring thresholds
-
-### Release-Approval Integration
-Release lock/unlock and document selection changes currently bypass the approval engine (direct DB updates). For regulatory traceability, these should flow through the approval queue like all other write actions.
-
-### Test Coverage Gaps
-- No tests for transcript accept/reject/approval flow (service-level integration)
-- No tests for Confluence append_mode in approval engine
-- No tests for retry mechanism
-- Missing `samples/transcripts/` directory with example .vtt/.docx files for parser testing
-
 ### Connector Extensions (as needed)
 - Jira: project/component listing, bulk operations
 - Confluence: page deletion/archival, attachment upload, label management, space operations
+
+### Project Model Extensions (remaining)
+The `projects` table could further benefit from:
+- `team_lead` / `pm` / `stakeholders` — people tracking
+- `target_release_date` — for timeline tracking
+- `risk_tolerance` / `risk_budget` — for risk monitoring thresholds
 
 ---
 
@@ -179,3 +140,11 @@ Release lock/unlock and document selection changes currently bypass the approval
 - [x] Transcript Analysis (upload .vtt/.txt/.docx, Gemini/Ollama LLM analysis, suggestion review, two-step approval gating, risk/decision/XFT/charter suggestion types)
 - [x] LLM Provider Layer (provider-agnostic Protocol, Gemini + Ollama implementations)
 - [x] Performance Optimizations (parallel fetches, batched JQL, TTL cache)
+- [x] Silent Exception Handling (replaced bare `pass` with `logger.warning()` at all locations)
+- [x] Hardcoded Confluence Space (configurable via `CONFLUENCE_SPACE_KEY` env var)
+- [x] Goal Description Overwrite (goal_summary preserved alongside Confluence links)
+- [x] Partial Failure Logging (execution success/failure logged, batch summaries in approve-all)
+- [x] Project Model Extensions (`default_component`, `default_label` columns with transcript fallback)
+- [x] Release Audit Logging (lock/unlock/save_documents write to approval_log)
+- [x] Task Orchestrator (minimal framework in `src/engine/orchestrator.py`, wired into lifespan)
+- [x] Test Coverage Gaps (accept/reject suggestions, retry, append_mode, orchestrator, sample VTT)

@@ -130,6 +130,10 @@ class ApprovalEngine:
             result = await self._execute(item.action_type, payload)
             result_json = json.dumps(result)
             final_status = ApprovalStatus.EXECUTED
+            logger.info(
+                "Approval item %d executed: %s — result: %s",
+                item_id, item.action_type.value, result_json,
+            )
         except Exception as exc:
             logger.exception("Failed to execute approval item %d", item_id)
             result_json = json.dumps({"error": str(exc)})

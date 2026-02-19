@@ -19,6 +19,8 @@ class Project:
     dhf_draft_root_id: str | None = None
     dhf_released_root_id: str | None = None
     pi_version: str | None = None
+    default_component: str | None = None
+    default_label: str | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> Project:
@@ -34,6 +36,8 @@ class Project:
             dhf_draft_root_id=row["dhf_draft_root_id"] if "dhf_draft_root_id" in row.keys() else None,
             dhf_released_root_id=row["dhf_released_root_id"] if "dhf_released_root_id" in row.keys() else None,
             pi_version=row["pi_version"] if "pi_version" in row.keys() else None,
+            default_component=row["default_component"] if "default_component" in row.keys() else None,
+            default_label=row["default_label"] if "default_label" in row.keys() else None,
         )
 
 
@@ -45,5 +49,5 @@ class SpinUpRequest:
     target_date: str
     labels: list[str]
     goal_summary: str
-    confluence_space_key: str = "HPP"
+    confluence_space_key: str = ""  # Filled from settings at creation time
     pi_version: str = ""

@@ -28,6 +28,7 @@ class AtlassianSettings:
     domain: str = os.getenv("ATLASSIAN_DOMAIN", "")
     email: str = os.getenv("ATLASSIAN_EMAIL", "")
     api_token: str = os.getenv("ATLASSIAN_API_TOKEN", "")
+    confluence_space_key: str = os.getenv("CONFLUENCE_SPACE_KEY", "HPP")
 
     @property
     def jira_base_url(self) -> str:

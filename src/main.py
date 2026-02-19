@@ -12,6 +12,7 @@ from fastapi.staticfiles import StaticFiles
 
 from src.config import settings
 from src.database import init_db
+from src.engine.orchestrator import Orchestrator
 from src.web.routes.approval import router as approval_router
 from src.web.routes.phases import router as phases_router
 from src.web.routes.project import router as project_router
@@ -21,13 +22,17 @@ from src.web.routes.transcript import router as transcript_router
 
 _STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
 
+orchestrator = Orchestrator()
+
 
 @asynccontextmanager
 async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
-    # Startup: initialise the database
+    # Startup: initialise the database and start background tasks
     init_db(settings.db_path)
+    await orchestrator.start()
     yield
-    # Shutdown: nothing to clean up yet (connectors are created per-request)
+    # Shutdown: stop background tasks
+    await orchestrator.stop()
 
 
 app = FastAPI(title="Project Seat", lifespan=lifespan)
