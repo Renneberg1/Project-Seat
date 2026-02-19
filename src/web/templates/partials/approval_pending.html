@@ -1,0 +1,76 @@
+<h2>Pending Approval ({{ pending|length }})</h2>
+
+{% if pending %}
+<div style="margin-bottom: 1rem;">
+    <button hx-post="/approval/approve-all"
+            hx-target="#approval-pending"
+            hx-swap="innerHTML"
+            class="btn btn-approve">
+        Approve All
+    </button>
+</div>
+
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Action</th>
+            <th>Preview</th>
+            <th>Context</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in pending %}
+        <tr id="approval-row-{{ item.id }}">
+            <td>{{ item.id }}</td>
+            <td>{{ item.action_type.value }}</td>
+            <td>{{ item.preview }}</td>
+            <td>{{ item.context }}</td>
+            <td>
+                <button hx-post="/approval/{{ item.id }}/approve"
+                        hx-target="#approval-row-{{ item.id }}"
+                        hx-swap="outerHTML"
+                        class="btn btn-approve btn-sm">
+                    Approve
+                </button>
+                <button hx-post="/approval/{{ item.id }}/reject"
+                        hx-target="#approval-row-{{ item.id }}"
+                        hx-swap="outerHTML"
+                        class="btn btn-reject btn-sm">
+                    Reject
+                </button>
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No pending actions.</p>
+{% endif %}
+
+{% if history is defined and history %}
+<h2>History</h2>
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Action</th>
+            <th>Preview</th>
+            <th>Status</th>
+            <th>Resolved</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in history %}
+        <tr class="status-{{ item.status.value }}">
+            <td>{{ item.id }}</td>
+            <td>{{ item.action_type.value }}</td>
+            <td>{{ item.preview }}</td>
+            <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
+            <td>{{ item.resolved_at or '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% endif %}

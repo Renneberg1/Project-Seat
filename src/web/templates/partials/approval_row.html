@@ -1,0 +1,7 @@
+<tr id="approval-row-{{ item.id }}" class="status-{{ item.status.value }}">
+    <td>{{ item.id }}</td>
+    <td>{{ item.action_type.value }}</td>
+    <td>{{ item.preview }}</td>
+    <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
+    <td>{{ item.resolved_at or '' }}</td>
+</tr>

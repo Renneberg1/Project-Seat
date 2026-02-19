@@ -1,0 +1,52 @@
+{% extends "base.html" %}
+
+{% block title %}Spin Up — Project Seat{% endblock %}
+
+{% block content %}
+<h1>Project Spin-Up Wizard</h1>
+<p>Fill in project details to queue Jira and Confluence creation actions for approval.</p>
+
+<form method="post" action="/spinup/">
+    <div class="form-group">
+        <label for="project_name">Project Name</label>
+        <input type="text" id="project_name" name="project_name" required
+               placeholder="e.g. HOP 2.5 Release">
+    </div>
+
+    <div class="form-group">
+        <label for="program">Program</label>
+        <select id="program" name="program" required>
+            <option value="">Select a program…</option>
+            <option value="HOP">HOP</option>
+            <option value="AIM">AIM</option>
+            <option value="CTCV">CTCV</option>
+            <option value="YAM">YAM</option>
+        </select>
+    </div>
+
+    <div class="form-group">
+        <label for="team_projects">Team Projects (comma-separated Jira keys)</label>
+        <input type="text" id="team_projects" name="team_projects"
+               placeholder="e.g. AIM, CTCV, YAM">
+    </div>
+
+    <div class="form-group">
+        <label for="target_date">Target Date</label>
+        <input type="date" id="target_date" name="target_date">
+    </div>
+
+    <div class="form-group">
+        <label for="labels">Labels (comma-separated)</label>
+        <input type="text" id="labels" name="labels"
+               placeholder="e.g. release-2.5, q3-2026">
+    </div>
+
+    <div class="form-group">
+        <label for="goal_summary">Goal Summary</label>
+        <textarea id="goal_summary" name="goal_summary" rows="4"
+                  placeholder="Brief description of the project goal…"></textarea>
+    </div>
+
+    <button type="submit">Queue Spin-Up Actions</button>
+</form>
+{% endblock %}

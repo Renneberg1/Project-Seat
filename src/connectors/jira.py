@@ -46,6 +46,11 @@ class JiraConnector(BaseConnector):
         }
         return await self.post("/issue", json_body=body)
 
+    async def update_issue(self, key: str, *, fields: dict[str, Any]) -> None:
+        """Update fields on an existing issue."""
+        body = {"fields": fields}
+        await self.put(f"/issue/{key}", json_body=body)
+
     async def search(
         self,
         jql: str,

@@ -1,0 +1,39 @@
+{% extends "base.html" %}
+
+{% block title %}Approval Queue — Project Seat{% endblock %}
+
+{% block content %}
+<h1>Approval Queue</h1>
+
+<div id="approval-pending">
+    {% include "partials/approval_pending.html" %}
+</div>
+
+<h2>History</h2>
+{% if history %}
+<table>
+    <thead>
+        <tr>
+            <th>ID</th>
+            <th>Action</th>
+            <th>Preview</th>
+            <th>Status</th>
+            <th>Resolved</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for item in history %}
+        <tr class="status-{{ item.status.value }}">
+            <td>{{ item.id }}</td>
+            <td>{{ item.action_type.value }}</td>
+            <td>{{ item.preview }}</td>
+            <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
+            <td>{{ item.resolved_at or '' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+{% else %}
+<p>No completed actions yet.</p>
+{% endif %}
+{% endblock %}

@@ -1,0 +1,12 @@
+{% extends "base.html" %}
+
+{% block title %}Spin-Up Queued — Project Seat{% endblock %}
+
+{% block content %}
+<h1>Spin-Up Actions Queued</h1>
+<p><strong>{{ project_name }}</strong> — {{ item_count }} actions have been queued for approval.</p>
+
+<p>Review and approve each action in the approval queue before they are executed.</p>
+
+<a href="/approval/" class="btn">Go to Approval Queue</a>
+{% endblock %}

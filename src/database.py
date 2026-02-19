@@ -39,6 +39,20 @@ CREATE TABLE IF NOT EXISTS transcript_cache (
     FOREIGN KEY (project_id) REFERENCES projects(id)
 );
 
+CREATE TABLE IF NOT EXISTS approval_queue (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  INTEGER,
+    action_type TEXT    NOT NULL,
+    payload     TEXT    NOT NULL,
+    preview     TEXT    NOT NULL DEFAULT '',
+    context     TEXT    NOT NULL DEFAULT '',
+    status      TEXT    NOT NULL DEFAULT 'pending',
+    result      TEXT,
+    created_at  TEXT    NOT NULL DEFAULT (datetime('now')),
+    resolved_at TEXT,
+    FOREIGN KEY (project_id) REFERENCES projects(id)
+);
+
 CREATE TABLE IF NOT EXISTS config (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
