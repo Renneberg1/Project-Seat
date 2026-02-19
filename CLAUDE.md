@@ -9,19 +9,19 @@ An AI-assisted project management cockpit for medical device software engineerin
 - **Frontend:** HTMX + Jinja2 templates
 - **Database:** SQLite (via sqlite3 stdlib, no ORM)
 - **HTTP client:** httpx (async)
-- **LLM:** TBD (Claude API or alternative — abstracted behind agent layer)
+- **LLM:** Gemini 2.5 Flash (default) or Ollama — provider-agnostic via `src/engine/agent.py`
 - **Package management:** uv (preferred) or pip + venv
 
 ## Architecture
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals), Approval Queue, Project Spin-Up Wizard, Project Import.
-2. **Core Engine** — Approval Engine (queue + gate all write actions). *Planned:* Orchestrator (task scheduling), LLM Agent Layer (prompt templates + context assembly).
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis.
+2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output). *Planned:* Orchestrator (task scheduling).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -70,12 +70,16 @@ project-seat/
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── approval.py          # Approval queue and gating logic
+│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent)
 │   │   ├── orchestrator.py      # (planned) Task queue and scheduling
-│   │   ├── agent.py             # (planned) LLM agent layer (prompts, context, parsing)
+│   │   ├── providers/
+│   │   │   ├── __init__.py
+│   │   │   ├── gemini.py        # Gemini provider (httpx, structured output via responseSchema)
+│   │   │   └── ollama.py        # Ollama provider (httpx, local inference)
 │   │   └── prompts/
 │   │       ├── __init__.py
+│   │       ├── transcript.py        # Transcript analysis: system prompt, JSON schema, ADF helpers
 │   │       ├── release_plan.py      # (planned) Release planning prompt template
-│   │       ├── transcript.py        # (planned) Transcript processing prompt template
 │   │       ├── risk_decision.py     # (planned) Risk/decision extraction prompt template
 │   │       └── estimate_check.py    # (planned) Missing estimate detection prompt template
 │   ├── services/
@@ -85,7 +89,7 @@ project-seat/
 │   │   ├── dhf.py               # DHF/EQMS document tracking (draft vs released)
 │   │   ├── import_project.py    # Import existing projects from Jira/Confluence
 │   │   ├── release.py           # Release scope-freeze and document tracking
-│   │   └── transcript.py        # (planned) Transcript upload and processing
+│   │   └── transcript.py        # Transcript parsing, LLM analysis, suggestion management
 │   ├── web/
 │   │   ├── __init__.py
 │   │   ├── routes/
@@ -95,7 +99,7 @@ project-seat/
 │   │   │   ├── phases.py           # Pipeline/phases overview
 │   │   │   ├── project.py          # Project detail (dashboard/features/docs/approvals)
 │   │   │   ├── spinup.py
-│   │   │   └── transcript.py       # (planned)
+│   │   │   └── transcript.py       # Upload, analyze, accept/reject suggestions
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
 │   │   │   ├── phases.html
@@ -108,12 +112,16 @@ project-seat/
 │   │   │   ├── project_documents.html
 │   │   │   ├── project_approvals.html
 │   │   │   ├── initiative_detail.html
-│   │   │   ├── transcript.html      # (planned)
+│   │   │   ├── transcript.html                  # Upload form + transcript history
+│   │   │   ├── transcript_suggestions_page.html # Full-page suggestion review
 │   │   │   └── partials/
 │   │   │       ├── approval_pending.html
 │   │   │       ├── approval_row.html
 │   │   │       ├── import_confirm.html
-│   │   │       └── project_card.html
+│   │   │       ├── project_card.html
+│   │   │       ├── transcript_parsed.html       # Parsed preview with Analyze button
+│   │   │       ├── transcript_suggestions.html  # Suggestions panel with Accept All
+│   │   │       └── suggestion_row.html          # Individual suggestion accept/reject
 │   │   └── static/              # CSS, JS, images
 │   │       ├── style.css
 │   │       └── htmx.min.js
@@ -124,7 +132,8 @@ project-seat/
 │       ├── jira.py              # Jira ticket data models
 │       ├── dashboard.py         # Dashboard view models
 │       ├── dhf.py               # DHF document models
-│       └── release.py           # Release and scope-freeze models
+│       ├── release.py           # Release and scope-freeze models
+│       └── transcript.py        # Transcript, suggestion, and project context models
 └── tests/
     ├── __init__.py
     ├── conftest.py              # Shared fixtures
@@ -136,8 +145,8 @@ project-seat/
     │   └── test_confluence_v2.py
     ├── test_engine/
     │   ├── test_approval.py
-    │   ├── test_orchestrator.py     # (planned)
-    │   └── test_agent.py            # (planned)
+    │   ├── test_agent.py            # Provider factory + TranscriptAgent tests
+    │   └── test_orchestrator.py     # (planned)
     ├── test_models/
     │   ├── test_project_models.py
     │   ├── test_approval_models.py
@@ -150,7 +159,7 @@ project-seat/
     │   ├── test_dhf.py
     │   ├── test_import.py
     │   ├── test_release.py
-    │   └── test_transcript.py       # (planned)
+    │   └── test_transcript.py       # Parser + service tests
     └── test_web/
         ├── test_routes_approval.py
         ├── test_routes_import.py
@@ -183,12 +192,16 @@ pytest
 - Connectors expose clean Python methods — no raw HTTP outside the connector layer
 - Never call Jira/Confluence APIs directly from services or engine code; always go through a connector
 
-### LLM Agent (planned — not yet implemented)
-- `src/engine/agent.py` and `src/engine/orchestrator.py` are planned but not yet built. The conventions below guide future implementation
+### LLM Agent Layer
 - All LLM interactions go through `src/engine/agent.py` — never call the LLM API directly from other modules
+- `LLMProvider` is a `Protocol`: `generate(system_prompt, user_prompt, *, response_schema, temperature, max_tokens) -> str`
+- Provider implementations live in `src/engine/providers/` — currently Gemini (`gemini.py`) and Ollama (`ollama.py`)
+- `get_provider(settings)` factory reads `LLM_PROVIDER` env var to instantiate the right backend
 - Prompt templates live in `src/engine/prompts/` as Python files that build the prompt string
-- The agent layer is LLM-agnostic: it takes a prompt and returns structured output. The specific LLM provider is configured in `src/config.py`
+- `TranscriptAgent` orchestrates transcript analysis: builds prompt, calls provider with JSON schema, retries on parse failure
 - All LLM responses that result in write actions must pass through the Approval Engine first
+- Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
+- Gemini uses `responseMimeType: application/json` + `responseSchema` for structured output; Ollama uses `format` parameter
 
 ### Approval Engine
 - Every write action (creating Jira tickets, updating Confluence pages, etc.) requires user approval
@@ -205,7 +218,7 @@ pytest
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
 - Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
-- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `releases`, `release_documents`, `config`
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `releases`, `release_documents`, `config`
 
 ### Testing
 - Use pytest
@@ -259,13 +272,49 @@ The Charter template page and XFT template page are regular Confluence pages (no
 ATLASSIAN_DOMAIN=yourcompany
 ATLASSIAN_EMAIL=your.email@company.com
 ATLASSIAN_API_TOKEN=your-token
-LLM_PROVIDER=claude  # or: openai, ollama, etc.
-LLM_API_KEY=your-llm-key
-LLM_MODEL=claude-sonnet-4-20250514
+LLM_PROVIDER=gemini               # or: ollama
+LLM_API_KEY=your-llm-key          # Gemini API key (not needed for Ollama)
+LLM_MODEL=gemini-2.5-flash        # or: llama3.3:70b for Ollama
+LLM_BASE_URL=http://localhost:11434  # Only needed for Ollama
 EQMS_DRAFT_SPACE_ID=...           # Confluence space ID for draft DHF documents
 EQMS_RELEASED_SPACE_ID=...        # Confluence space ID for released DHF documents
 DB_PATH=seat.db                    # Optional, defaults to seat.db
 ```
+
+## Transcript Workflow
+
+The transcript analysis pipeline is the first LLM-powered feature. It follows a two-step approval gating model for regulatory traceability.
+
+### Flow
+
+```
+Upload (.vtt/.txt/.docx)
+  → TranscriptParser.parse() → store in transcript_cache
+  → TranscriptService.analyze_transcript()
+      → gather_project_context() (parallel: Jira risks/decisions + Confluence Charter/XFT)
+      → TranscriptAgent.analyze_transcript() (LLM call with structured JSON output)
+  → Store suggestions in transcript_suggestions (status=pending)
+  → User reviews suggestions (accept/reject per item, or Accept All)
+  → accept_suggestion() patches payload with live project data → ApprovalEngine.propose()
+  → User approves in Approval Queue
+  → ApprovalEngine.approve_and_execute() → Jira/Confluence connectors
+```
+
+### Suggestion Types
+
+| Type | Action | Target |
+|---|---|---|
+| `risk` | `CREATE_JIRA_ISSUE` | RISK project, Risk type (id `10832`), child of PROG Goal |
+| `decision` | `CREATE_JIRA_ISSUE` | RISK project, Project Issue type (id `12499`), child of PROG Goal |
+| `xft_update` | `UPDATE_CONFLUENCE_PAGE` | XFT page (append meeting notes) |
+| `charter_update` | `UPDATE_CONFLUENCE_PAGE` | Charter page (update section) |
+
+### Key Design Decisions
+
+- **Payload refresh at accept time:** When a suggestion is accepted, `accept_suggestion()` patches the stored payload with current project data (goal key, fix versions, Confluence page IDs). This prevents stale data from incomplete spin-ups baking into suggestions.
+- **Confluence append mode:** XFT updates use `append_mode: true` — at execution time, the current page body is fetched and the new content is appended, preventing overwrites of changes made between suggestion and approval.
+- **Jira ADF format:** Risk/decision descriptions, Impact Analysis (`customfield_11166`), and Mitigation/Control (`customfield_11342`) are all in Atlassian Document Format. ADF builder helpers are in `src/engine/prompts/transcript.py`.
+- **Token budget:** Transcripts truncated to ~20K chars; existing risks/decisions as key+summary only; Charter/XFT content last 3K chars each. Total ~30K tokens.
 
 ## Important Notes
 

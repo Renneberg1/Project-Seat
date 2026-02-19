@@ -11,11 +11,11 @@ A locally-run project management cockpit for medical device software engineering
 - **DHF Document Tracking** — Compare draft vs released EQMS documents across Confluence spaces
 - **Approval Queue** — All automated actions require explicit human approval before execution
 - **Product Ideas Integration** — PI board version tracking linked to projects
+- **Transcript Analysis** — Upload meeting transcripts (.vtt/.txt/.docx), run LLM analysis to extract risks, decisions, XFT updates, and charter updates. Two-step approval gating: review LLM suggestions, then approve actions through the standard approval queue. Supports Gemini and Ollama providers.
 
 ### Planned / Upcoming
 
 - **Release Planning** — LLM-assisted release plan drafting with estimate gap detection
-- **Transcript Processing** — Upload meeting transcripts and extract action items, decisions, and risks
 - **Ongoing Monitoring** — Automated tracking of estimates, document completion, and scope changes
 
 ## Quick Start
