@@ -6,14 +6,13 @@ from contextlib import asynccontextmanager
 from pathlib import Path
 from typing import AsyncGenerator
 
-from fastapi import FastAPI, Request
-from fastapi.responses import HTMLResponse
+from fastapi import FastAPI
 from fastapi.staticfiles import StaticFiles
 
 from src.config import settings
 from src.database import init_db
-from src.web.deps import templates
 from src.web.routes.approval import router as approval_router
+from src.web.routes.dashboard import router as dashboard_router
 from src.web.routes.spinup import router as spinup_router
 
 _STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
@@ -29,10 +28,6 @@ async def lifespan(app: FastAPI) -> AsyncGenerator[None, None]:
 
 app = FastAPI(title="Project Seat", lifespan=lifespan)
 app.mount("/static", StaticFiles(directory=str(_STATIC_DIR)), name="static")
+app.include_router(dashboard_router)
 app.include_router(spinup_router)
 app.include_router(approval_router)
-
-
-@app.get("/", response_class=HTMLResponse)
-async def dashboard(request: Request) -> HTMLResponse:
-    return templates.TemplateResponse(request, "dashboard.html")

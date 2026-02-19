@@ -14,6 +14,7 @@ class Project:
     confluence_charter_id: str | None
     confluence_xft_id: str | None
     status: str
+    phase: str
     created_at: str
 
     @classmethod
@@ -25,6 +26,7 @@ class Project:
             confluence_charter_id=row["confluence_charter_id"],
             confluence_xft_id=row["confluence_xft_id"],
             status=row["status"],
+            phase=row["phase"],
             created_at=row["created_at"],
         )
 

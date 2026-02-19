@@ -12,9 +12,9 @@ class TestProject:
     def test_from_row_all_fields(self, tmp_db: str) -> None:
         with get_db(tmp_db) as conn:
             conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status) "
-                "VALUES (?, ?, ?, ?, ?)",
-                ("PROG-100", "Test Project", "12345", "67890", "active"),
+                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase) "
+                "VALUES (?, ?, ?, ?, ?, ?)",
+                ("PROG-100", "Test Project", "12345", "67890", "active", "development"),
             )
             conn.commit()
             row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-100'").fetchone()
@@ -25,6 +25,7 @@ class TestProject:
         assert project.confluence_charter_id == "12345"
         assert project.confluence_xft_id == "67890"
         assert project.status == "active"
+        assert project.phase == "development"
 
     def test_nullable_confluence_ids(self, tmp_db: str) -> None:
         with get_db(tmp_db) as conn:
@@ -38,6 +39,18 @@ class TestProject:
         project = Project.from_row(row)
         assert project.confluence_charter_id is None
         assert project.confluence_xft_id is None
+
+    def test_phase_defaults_to_planning(self, tmp_db: str) -> None:
+        with get_db(tmp_db) as conn:
+            conn.execute(
+                "INSERT INTO projects (jira_goal_key, name, status) VALUES (?, ?, ?)",
+                ("PROG-300", "Default Phase", "active"),
+            )
+            conn.commit()
+            row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-300'").fetchone()
+
+        project = Project.from_row(row)
+        assert project.phase == "planning"
 
 
 class TestSpinUpRequest:

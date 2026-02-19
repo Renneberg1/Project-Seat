@@ -1,0 +1,59 @@
+<div class="project-card" id="project-card-{{ summary.project.id }}">
+    {% if summary.error %}
+    <div class="error-banner">Jira unavailable: {{ summary.error }}</div>
+    {% endif %}
+
+    <div class="card-header">
+        <strong>
+            {% if summary.goal %}
+            <a href="https://{{ summary.project.jira_goal_key }}" class="card-link">
+                {{ summary.project.name }}
+            </a>
+            {% else %}
+            {{ summary.project.name }}
+            {% endif %}
+        </strong>
+        {% if summary.goal %}
+        <span class="badge badge-goal-status">{{ summary.goal.status }}</span>
+        {% endif %}
+    </div>
+
+    <div class="card-key">{{ summary.project.jira_goal_key }}</div>
+
+    {% if summary.goal and summary.goal.due_date %}
+    <div class="card-due {% if summary.goal.due_date < now_date %}badge-overdue{% endif %}">
+        Due: {{ summary.goal.due_date }}
+    </div>
+    {% endif %}
+
+    <div class="metrics">
+        <span title="Total risks">Risks: {{ summary.risk_count }}</span>
+        <span title="Open risks">Open: {{ summary.open_risk_count }}</span>
+        <span title="Decisions">Decisions: {{ summary.decision_count }}</span>
+        <span title="Initiatives">Initiatives: {{ summary.initiative_count }}</span>
+    </div>
+
+    {% if summary.project.confluence_charter_id or summary.project.confluence_xft_id %}
+    <div class="card-links">
+        {% if summary.project.confluence_charter_id %}
+        <a href="#" class="btn btn-sm">Charter</a>
+        {% endif %}
+        {% if summary.project.confluence_xft_id %}
+        <a href="#" class="btn btn-sm">XFT</a>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    <form class="phase-form"
+          hx-post="/dashboard/{{ summary.project.id }}/phase"
+          hx-target="#project-card-{{ summary.project.id }}"
+          hx-swap="outerHTML">
+        <select name="phase" class="phase-select" onchange="this.form.requestSubmit()">
+            {% for value, label in pipeline_phases %}
+            <option value="{{ value }}" {% if value == summary.project.phase %}selected{% endif %}>
+                {{ label }}
+            </option>
+            {% endfor %}
+        </select>
+    </form>
+</div>

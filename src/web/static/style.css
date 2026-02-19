@@ -115,3 +115,147 @@ th {
 .status-executed td { background: #e8f5e9; }
 .status-rejected td { background: #ffebee; }
 .status-failed td   { background: #f3e5f5; }
+
+/* Dashboard header */
+.dashboard-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 1rem;
+}
+
+/* Empty state */
+.empty-state {
+    text-align: center;
+    padding: 3rem 1rem;
+    color: #666;
+}
+
+.empty-state h2 { margin-top: 0; }
+
+/* Pipeline — horizontal stage layout */
+.pipeline {
+    display: flex;
+    gap: 0.75rem;
+    overflow-x: auto;
+    padding-bottom: 0.5rem;
+}
+
+.pipeline-stage {
+    flex: 1;
+    min-width: 150px;
+    display: flex;
+    flex-direction: column;
+}
+
+.pipeline-stage-header {
+    padding: 0.4rem 0.6rem;
+    border-radius: 4px 4px 0 0;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #fff;
+    background: #607d8b;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+}
+
+.stage-count {
+    background: rgba(255,255,255,0.25);
+    padding: 0 0.4rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+}
+
+/* Phase-specific header colours */
+.pipeline-stage-planning       { background: #5c6bc0; }
+.pipeline-stage-development    { background: #0288d1; }
+.pipeline-stage-dhf_update     { background: #00897b; }
+.pipeline-stage-verification   { background: #f57c00; }
+.pipeline-stage-validation     { background: #8e24aa; }
+.pipeline-stage-release        { background: #2e7d32; }
+
+.pipeline-stage-body {
+    flex: 1;
+    border: 1px solid #ddd;
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    padding: 0.5rem;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+    min-height: 60px;
+    background: #fafafa;
+}
+
+/* Project card */
+.project-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    padding: 0.6rem;
+    font-size: 0.85rem;
+}
+
+.card-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 0.25rem;
+}
+
+.card-header a { color: #0055aa; text-decoration: none; }
+.card-header a:hover { text-decoration: underline; }
+
+.card-key { color: #888; font-size: 0.75rem; margin-bottom: 0.3rem; }
+
+.card-due { font-size: 0.8rem; margin-bottom: 0.3rem; }
+
+.badge-overdue { color: #c62828; font-weight: 600; }
+
+.badge-goal-status { background: #607d8b; }
+
+/* Metrics row */
+.metrics {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.4rem;
+    font-size: 0.75rem;
+    color: #555;
+    margin-bottom: 0.3rem;
+}
+
+.metrics span {
+    background: #f0f0f0;
+    padding: 0.1rem 0.35rem;
+    border-radius: 3px;
+}
+
+.card-links {
+    display: flex;
+    gap: 0.25rem;
+    margin-bottom: 0.3rem;
+}
+
+/* Phase dropdown */
+.phase-form { margin-top: 0.25rem; }
+
+.phase-select {
+    width: 100%;
+    padding: 0.2rem 0.3rem;
+    font-size: 0.8rem;
+    border: 1px solid #ccc;
+    border-radius: 3px;
+    font-family: inherit;
+}
+
+/* Error banner */
+.error-banner {
+    background: #fff3e0;
+    border: 1px solid #ffb74d;
+    color: #e65100;
+    padding: 0.3rem 0.5rem;
+    border-radius: 3px;
+    font-size: 0.8rem;
+    margin-bottom: 0.4rem;
+}

@@ -15,6 +15,7 @@ CREATE TABLE IF NOT EXISTS projects (
     confluence_charter_id TEXT,
     confluence_xft_id     TEXT,
     status          TEXT    NOT NULL DEFAULT 'active',
+    phase           TEXT    NOT NULL DEFAULT 'planning',
     created_at      TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -65,6 +66,11 @@ def init_db(db_path: str | Path = "seat.db") -> None:
     conn = sqlite3.connect(str(db_path))
     try:
         conn.executescript(_SCHEMA)
+        # Migration: add phase column if not present (existing databases)
+        try:
+            conn.execute("ALTER TABLE projects ADD COLUMN phase TEXT NOT NULL DEFAULT 'planning'")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         conn.commit()
     finally:
         conn.close()
