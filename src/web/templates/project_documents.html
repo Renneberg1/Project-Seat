@@ -35,10 +35,6 @@
         <form method="post" action="/project/{{ project.id }}/releases/{{ active_release.id }}/unlock" style="display: inline;">
             <button type="submit" class="btn btn-sm">Unlock</button>
         </form>
-        {% else %}
-        <form method="post" action="/project/{{ project.id }}/releases/{{ active_release.id }}/lock" style="display: inline;">
-            <button type="submit" class="btn btn-sm btn-approve">Lock Scope</button>
-        </form>
         {% endif %}
         <button class="btn btn-sm btn-danger"
                 hx-delete="/project/{{ project.id }}/releases/{{ active_release.id }}"
@@ -130,7 +126,10 @@
         {% endfor %}
     </tbody>
 </table>
-<button type="submit" class="btn" style="margin-bottom: 1rem;">Save Selection</button>
+<div style="display: flex; gap: 0.5rem; margin-bottom: 1rem;">
+    <button type="submit" class="btn">Save Selection</button>
+    <button type="submit" formaction="/project/{{ project.id }}/releases/{{ active_release.id }}/lock" class="btn btn-approve">Lock Scope</button>
+</div>
 </form>
 <script>
 document.getElementById('select-all').addEventListener('change', function() {

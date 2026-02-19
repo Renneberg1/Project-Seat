@@ -375,3 +375,38 @@ def test_compute_release_status_pending_when_doc_missing_from_current():
     result = service.compute_release_status(snapshot, current)
 
     assert result == [("Doc A", ReleaseStatus.PENDING)]
+
+
+def test_compute_release_status_uses_selected_docs_over_snapshot_keys():
+    """selected_docs is the source of truth for which docs are in the release."""
+    service = ReleaseService(db_path=":memory:")
+    snapshot = {"Doc A": "3"}
+    current = {"Doc A": "4", "Doc B": "1"}
+
+    result = service.compute_release_status(snapshot, current, selected_docs={"Doc A", "Doc B"})
+
+    assert ("Doc A", ReleaseStatus.PUBLISHED) in result
+    assert ("Doc B", ReleaseStatus.PUBLISHED) in result
+
+
+def test_compute_release_status_selected_docs_with_empty_snapshot():
+    """Even with an empty snapshot, selected docs should appear as PENDING."""
+    service = ReleaseService(db_path=":memory:")
+    snapshot = {}
+    current = {"Doc A": None, "Doc B": None}
+
+    result = service.compute_release_status(snapshot, current, selected_docs={"Doc A", "Doc B"})
+
+    assert len(result) == 2
+    assert all(status == ReleaseStatus.PENDING for _, status in result)
+
+
+def test_compute_release_status_selected_docs_pending_when_no_new_version():
+    """Doc in selected_docs with same version as snapshot stays PENDING."""
+    service = ReleaseService(db_path=":memory:")
+    snapshot = {"Doc A": "3"}
+    current = {"Doc A": "3"}
+
+    result = service.compute_release_status(snapshot, current, selected_docs={"Doc A"})
+
+    assert result == [("Doc A", ReleaseStatus.PENDING)]

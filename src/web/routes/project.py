@@ -85,15 +85,17 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     active_locked = next((r for r in releases if r.locked), None)
     release_published = 0
     release_total = 0
-    if active_locked and active_locked.version_snapshot:
-        release_total = len(active_locked.version_snapshot)
-        if dhf_summary and dhf_summary.total_count > 0:
+    if active_locked:
+        locked_selected = release_service.get_selected_documents(active_locked.id)
+        release_total = len(locked_selected)
+        if release_total > 0 and dhf_summary and dhf_summary.total_count > 0:
             dhf_service2 = DHFService()
             try:
                 docs, _ = await dhf_service2.get_dhf_table(project)
                 current_versions = {d.title: d.released_version for d in docs}
+                snapshot = active_locked.version_snapshot or {}
                 statuses = release_service.compute_release_status(
-                    active_locked.version_snapshot, current_versions,
+                    snapshot, current_versions, locked_selected,
                 )
                 release_published = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
             except ConnectorError:
@@ -205,10 +207,11 @@ async def project_documents(
 
     if active_release:
         selected_docs = release_service.get_selected_documents(active_release.id)
-        if active_release.locked and active_release.version_snapshot:
+        if active_release.locked and selected_docs:
+            snapshot = active_release.version_snapshot or {}
             current_versions = {d.title: d.released_version for d in documents}
             statuses = release_service.compute_release_status(
-                active_release.version_snapshot, current_versions,
+                snapshot, current_versions, selected_docs,
             )
             release_statuses = {title: status.value for title, status in statuses}
             published_count = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
@@ -305,13 +308,20 @@ async def save_release_documents(
 
 @router.post("/{id}/releases/{release_id}/lock")
 async def lock_release(request: Request, id: int, release_id: int) -> RedirectResponse:
-    """Lock release scope — snapshot current released versions of selected documents."""
+    """Lock release scope — save document selection from form, then snapshot versions."""
     dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
     release_service = ReleaseService()
+
+    # Save document selection submitted with the lock form
+    form = await request.form()
+    form_titles = set(form.getlist("doc_titles"))
+    if form_titles:
+        release_service.save_documents(release_id, form_titles)
+
     selected = release_service.get_selected_documents(release_id)
 
     # Build version snapshot from current DHF data

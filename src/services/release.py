@@ -125,17 +125,24 @@ class ReleaseService:
         self,
         snapshot: dict[str, str | None],
         current_docs: dict[str, str | None],
+        selected_docs: set[str] | None = None,
     ) -> list[tuple[str, ReleaseStatus]]:
         """Compare snapshot versions vs current released versions.
+
+        Iterates over *selected_docs* (the source of truth for which
+        documents belong to the release).  Falls back to snapshot keys
+        when *selected_docs* is not provided.
 
         A document is PUBLISHED if its current released version differs from
         the snapshot (i.e., a new version was released since the freeze).
         Otherwise it is PENDING.
         """
+        titles = selected_docs if selected_docs is not None else set(snapshot.keys())
         results: list[tuple[str, ReleaseStatus]] = []
-        for title, snapshot_version in sorted(snapshot.items()):
+        for title in sorted(titles):
+            snapshot_version = snapshot.get(title)
             current_version = current_docs.get(title)
-            if current_version != snapshot_version and current_version is not None:
+            if current_version is not None and current_version != snapshot_version:
                 results.append((title, ReleaseStatus.PUBLISHED))
             else:
                 results.append((title, ReleaseStatus.PENDING))
