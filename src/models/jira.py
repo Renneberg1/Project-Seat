@@ -57,6 +57,11 @@ class JiraIssue:
     description_adf: dict[str, Any] | None
     release_priority: str | None = None
     pi_state: str | None = None
+    risk_threshold: float | None = None
+    risk_points: float | None = None
+    risk_level: str | None = None
+    timeline_impact: float | None = None
+    components: list[str] | None = None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> JiraIssue:
@@ -75,6 +80,19 @@ class JiraIssue:
         state_raw = fields.get("customfield_13530")
         pi_state = state_raw.get("value") if isinstance(state_raw, dict) else None
 
+        # Risk metrics (from Goal issues)
+        risk_threshold = fields.get("customfield_13265")
+        risk_points = fields.get("customfield_13264")
+        risk_level_raw = fields.get("customfield_13266")
+        risk_level = risk_level_raw.get("value") if isinstance(risk_level_raw, dict) else None
+
+        # Timeline Impact (from Decision / Project Issue)
+        timeline_impact = fields.get("customfield_13267")
+
+        # Components
+        components_raw = fields.get("components", [])
+        components = [c.get("name", "") for c in components_raw] if components_raw else None
+
         return cls(
             id=str(data["id"]),
             key=data["key"],
@@ -89,4 +107,9 @@ class JiraIssue:
             description_adf=fields.get("description"),
             release_priority=release_priority,
             pi_state=pi_state,
+            risk_threshold=risk_threshold,
+            risk_points=risk_points,
+            risk_level=risk_level,
+            timeline_impact=timeline_impact,
+            components=components,
         )

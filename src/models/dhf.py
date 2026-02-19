@@ -22,6 +22,7 @@ class DHFDocument:
     last_modified: str
     author: str
     page_url: str
+    release_status: str | None = None
 
 
 @dataclass
@@ -30,4 +31,6 @@ class DHFSummary:
     released_count: int
     draft_update_count: int
     in_draft_count: int
+    published_count: int = 0
+    pending_count: int = 0
     error: str | None = None

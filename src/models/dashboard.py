@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 from src.models.jira import JiraIssue
 from src.models.project import Project
@@ -29,6 +29,11 @@ class ProjectSummary:
     decision_count: int
     initiative_count: int
     error: str | None
+    risk_threshold: float | None = None
+    risk_points: float | None = None
+    risk_level: str | None = None
+    risks: list[JiraIssue] = field(default_factory=list)
+    decisions: list[JiraIssue] = field(default_factory=list)
 
 
 @dataclass

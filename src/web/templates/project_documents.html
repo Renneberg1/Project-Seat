@@ -11,6 +11,61 @@
 
 {% if project.dhf_draft_root_id and project.dhf_released_root_id %}
 
+{# Release controls #}
+<div class="release-controls">
+    <div class="release-selector">
+        <label for="release-select"><strong>Release:</strong></label>
+        <select id="release-select" onchange="if(this.value==='') window.location.href='/project/{{ project.id }}/documents{% if selected_area %}?area={{ selected_area }}{% endif %}'; else window.location.href='/project/{{ project.id }}/documents?release_id='+this.value+'{% if selected_area %}&area={{ selected_area }}{% endif %}';">
+            <option value="">None</option>
+            {% for r in releases %}
+            <option value="{{ r.id }}" {% if active_release and active_release.id == r.id %}selected{% endif %}>{{ r.name }}{% if r.locked %} (locked){% endif %}</option>
+            {% endfor %}
+        </select>
+
+        {# Inline create form #}
+        <form method="post" action="/project/{{ project.id }}/releases" style="display: inline-flex; gap: 0.25rem; margin-left: 0.5rem;">
+            <input type="text" name="release_name" placeholder="New release name" style="width: 150px; padding: 0.25rem 0.4rem; font-size: 0.85rem;">
+            <button type="submit" class="btn btn-sm">Create</button>
+        </form>
+    </div>
+
+    {% if active_release %}
+    <div class="release-actions">
+        {% if active_release.locked %}
+        <form method="post" action="/project/{{ project.id }}/releases/{{ active_release.id }}/unlock" style="display: inline;">
+            <button type="submit" class="btn btn-sm">Unlock</button>
+        </form>
+        {% else %}
+        <form method="post" action="/project/{{ project.id }}/releases/{{ active_release.id }}/lock" style="display: inline;">
+            <button type="submit" class="btn btn-sm btn-approve">Lock Scope</button>
+        </form>
+        {% endif %}
+        <button class="btn btn-sm btn-danger"
+                hx-delete="/project/{{ project.id }}/releases/{{ active_release.id }}"
+                hx-confirm="Delete release '{{ active_release.name }}'? This cannot be undone."
+                style="margin-left: 0.25rem;">
+            Delete
+        </button>
+    </div>
+    {% endif %}
+</div>
+
+{# Release progress bar (locked only) #}
+{% if active_release and active_release.locked and (published_count + pending_count) > 0 %}
+{% set total = published_count + pending_count %}
+{% set pct = (published_count * 100 / total) | int %}
+<div class="release-progress">
+    <div class="release-progress-label">
+        <span class="badge badge-release-published">{{ published_count }} Published</span>
+        <span class="badge badge-release-pending">{{ pending_count }} Pending</span>
+        <span style="margin-left: 0.5rem; color: #666;">{{ pct }}% complete</span>
+    </div>
+    <div class="release-progress-bar">
+        <div class="release-progress-fill" style="width: {{ pct }}%;"></div>
+    </div>
+</div>
+{% endif %}
+
 {# Summary bar #}
 {% if documents %}
 <div class="dhf-summary-bar">
@@ -27,7 +82,8 @@
     {# Area filter #}
     {% if areas | length > 1 %}
     <div class="dhf-filters">
-        <select onchange="if(this.value==='') window.location.href='/project/{{ project.id }}/documents'; else window.location.href='/project/{{ project.id }}/documents?area='+encodeURIComponent(this.value);">
+        {% set qs = "release_id=" ~ active_release.id ~ "&" if active_release else "" %}
+        <select onchange="if(this.value==='') window.location.href='/project/{{ project.id }}/documents?{{ qs }}'; else window.location.href='/project/{{ project.id }}/documents?{{ qs }}area='+encodeURIComponent(this.value);">
             <option value="">All areas</option>
             {% for a in areas %}
             <option value="{{ a }}" {% if selected_area == a %}selected{% endif %}>{{ a }}</option>
@@ -38,8 +94,90 @@
 </div>
 {% endif %}
 
-{# Status table #}
-{% if documents %}
+{# === Mode 2: Active release, UNLOCKED — checkboxes + save === #}
+{% if active_release and not active_release.locked and documents %}
+<form method="post" action="/project/{{ project.id }}/releases/{{ active_release.id }}/documents">
+<table>
+    <thead>
+        <tr>
+            <th style="width: 2.5rem; text-align: center;">
+                <input type="checkbox" id="select-all" title="Select / deselect all">
+            </th>
+            <th>Title</th>
+            <th>Area</th>
+            <th>Status</th>
+            <th>Released Ver.</th>
+            <th>Draft Ver.</th>
+            <th>Last Modified</th>
+            <th>Author</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for doc in documents %}
+        <tr class="dhf-status-{{ doc.status.value }}">
+            <td style="text-align: center;">
+                <input type="checkbox" name="doc_titles" value="{{ doc.title }}"
+                       {% if doc.title in selected_docs %}checked{% endif %}>
+            </td>
+            <td>{% if doc.page_url %}<a href="{{ doc.page_url }}" target="_blank">{{ doc.title }}</a>{% else %}{{ doc.title }}{% endif %}</td>
+            <td>{{ doc.area }}</td>
+            <td><span class="badge badge-dhf-{{ doc.status.value }}">{{ doc.status.value | replace('_', ' ') | title }}</span></td>
+            <td>{{ doc.released_version or '—' }}</td>
+            <td>{{ doc.draft_version or '—' }}</td>
+            <td>{{ doc.last_modified[:10] if doc.last_modified else '—' }}</td>
+            <td>{{ doc.author or '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+<button type="submit" class="btn" style="margin-bottom: 1rem;">Save Selection</button>
+</form>
+<script>
+document.getElementById('select-all').addEventListener('change', function() {
+    document.querySelectorAll('input[name="doc_titles"]').forEach(function(cb) { cb.checked = this.checked; }.bind(this));
+});
+</script>
+
+{# === Mode 3: Active release, LOCKED — release status column === #}
+{% elif active_release and active_release.locked and documents %}
+<table>
+    <thead>
+        <tr>
+            <th>Title</th>
+            <th>Area</th>
+            <th>Status</th>
+            <th>Released Ver.</th>
+            <th>Draft Ver.</th>
+            <th>Release Status</th>
+            <th>Last Modified</th>
+            <th>Author</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for doc in documents %}
+        {% set in_release = doc.title in release_statuses %}
+        <tr class="{% if in_release %}dhf-status-{{ doc.status.value }}{% endif %}">
+            <td>{% if doc.page_url %}<a href="{{ doc.page_url }}" target="_blank">{{ doc.title }}</a>{% else %}{{ doc.title }}{% endif %}</td>
+            <td>{{ doc.area }}</td>
+            <td><span class="badge badge-dhf-{{ doc.status.value }}">{{ doc.status.value | replace('_', ' ') | title }}</span></td>
+            <td>{{ doc.released_version or '—' }}</td>
+            <td>{{ doc.draft_version or '—' }}</td>
+            <td>
+                {% if in_release %}
+                <span class="badge badge-release-{{ release_statuses[doc.title] }}">{{ release_statuses[doc.title] | title }}</span>
+                {% else %}
+                <span style="color: #999;">—</span>
+                {% endif %}
+            </td>
+            <td>{{ doc.last_modified[:10] if doc.last_modified else '—' }}</td>
+            <td>{{ doc.author or '—' }}</td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{# === Mode 1: No active release — read-only table === #}
+{% elif documents %}
 <table>
     <thead>
         <tr>

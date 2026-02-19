@@ -8,6 +8,16 @@ from src.database import get_db
 from src.models.approval import ApprovalAction, ApprovalItem, ApprovalStatus
 
 
+def _insert_project(db_path):
+    with get_db(db_path) as conn:
+        cursor = conn.execute(
+            "INSERT INTO projects (jira_goal_key, name, status, phase) VALUES (?, ?, ?, ?)",
+            ("PROG-100", "Test", "active", "planning"),
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
 # ---------------------------------------------------------------------------
 # ApprovalAction enum: Contract tests
 # ---------------------------------------------------------------------------
@@ -55,12 +65,13 @@ def test_approval_status_invalid_value_raises_value_error():
 
 
 def test_approval_item_from_row_round_trip(tmp_db):
+    pid = _insert_project(tmp_db)
     with get_db(tmp_db) as conn:
         conn.execute(
             """INSERT INTO approval_queue
                (project_id, action_type, payload, preview, context, status)
                VALUES (?, ?, ?, ?, ?, ?)""",
-            (1, "create_jira_issue", '{"key": "PROG"}', "Create goal", "spin-up", "pending"),
+            (pid, "create_jira_issue", '{"key": "PROG"}', "Create goal", "spin-up", "pending"),
         )
         conn.commit()
         row = conn.execute("SELECT * FROM approval_queue ORDER BY id DESC LIMIT 1").fetchone()
@@ -72,6 +83,6 @@ def test_approval_item_from_row_round_trip(tmp_db):
     assert result.payload == '{"key": "PROG"}'
     assert result.preview == "Create goal"
     assert result.context == "spin-up"
-    assert result.project_id == 1
+    assert result.project_id == pid
     assert result.result is None
     assert result.resolved_at is None

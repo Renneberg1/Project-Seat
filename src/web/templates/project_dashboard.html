@@ -11,12 +11,15 @@
 
 <div class="project-overview">
     <div class="overview-card">
-        <h3>Goal</h3>
+        <h3>Overview</h3>
         {% if summary.goal %}
         <p><strong>{{ summary.goal.key }}</strong> — {{ summary.goal.summary }}</p>
-        <p>Status: <span class="badge badge-goal-status">{{ summary.goal.status }}</span></p>
+        <p>Phase: <span class="badge badge-goal-status">{{ project.phase | replace('_', ' ') | title }}</span></p>
         {% if summary.goal.due_date %}
-        <p>Due: {{ summary.goal.due_date }}</p>
+        <p>Technical Release: {{ summary.goal.due_date }}</p>
+        {% endif %}
+        {% if market_release %}
+        <p>Market Release: {{ market_release }}</p>
         {% endif %}
         {% else %}
         <p>No goal data available.</p>
@@ -26,16 +29,51 @@
     <div class="overview-card">
         <h3>Risks</h3>
         <p class="overview-metric">{{ summary.open_risk_count }} open / {{ summary.risk_count }} total</p>
+        {% if summary.risk_level %}
+        <p>Level: {{ summary.risk_level }} | Threshold: {{ summary.risk_threshold }} | Points: {{ summary.risk_points }}</p>
+        {% endif %}
+        {% if summary.risks %}
+        <details style="margin-top: 0.5rem;">
+            <summary style="cursor: pointer;">View risks</summary>
+            <table style="margin-top: 0.5rem;">
+                <thead><tr><th>Key</th><th>Summary</th><th>Component</th><th>Risk Points</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for risk in summary.risks %}
+                <tr>
+                    <td>{{ risk.key }}</td>
+                    <td>{{ risk.summary }}</td>
+                    <td>{{ risk.components | join(', ') if risk.components else '' }}</td>
+                    <td>{{ risk.risk_points if risk.risk_points is not none else '' }}</td>
+                    <td><span class="badge badge-risk-{{ risk.status | lower | replace(' ', '-') }}">{{ risk.status }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
     </div>
 
     <div class="overview-card">
         <h3>Decisions</h3>
         <p class="overview-metric">{{ summary.decision_count }}</p>
-    </div>
-
-    <div class="overview-card">
-        <h3>Initiatives</h3>
-        <p class="overview-metric">{{ summary.initiative_count }}</p>
+        {% if summary.decisions %}
+        <details style="margin-top: 0.5rem;">
+            <summary style="cursor: pointer;">View decisions</summary>
+            <table style="margin-top: 0.5rem;">
+                <thead><tr><th>Key</th><th>Summary</th><th>Timeline Impact</th><th>Status</th></tr></thead>
+                <tbody>
+                {% for dec in summary.decisions %}
+                <tr>
+                    <td>{{ dec.key }}</td>
+                    <td>{{ dec.summary }}</td>
+                    <td>{{ dec.timeline_impact if dec.timeline_impact is not none else '' }}</td>
+                    <td><span class="badge badge-goal-status">{{ dec.status }}</span></td>
+                </tr>
+                {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
     </div>
 
     <div class="overview-card">
@@ -67,7 +105,14 @@
             <span class="badge badge-dhf-draft_update">{{ dhf_summary.draft_update_count }} Draft Update</span>
             <span class="badge badge-dhf-in_draft">{{ dhf_summary.in_draft_count }} In Draft</span>
         </div>
-        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/documents" class="btn btn-sm">View All</a></p>
+        {% if active_locked_release and release_total > 0 %}
+        <p style="margin-top: 0.5rem; font-size: 0.85em;">
+            <strong>{{ active_locked_release.name }}:</strong>
+            <span class="badge badge-release-published">{{ release_published }}</span> /
+            {{ release_total }} published
+        </p>
+        {% endif %}
+        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/documents{% if active_locked_release %}?release_id={{ active_locked_release.id }}{% endif %}" class="btn btn-sm">View All</a></p>
         {% elif dhf_summary and dhf_summary.error %}
         <div class="error-banner">{{ dhf_summary.error }}</div>
         {% elif project.dhf_draft_root_id and project.dhf_released_root_id %}
@@ -77,20 +122,22 @@
         <p>No DHF configured.</p>
         <a href="/project/{{ project.id }}/documents" class="btn btn-sm">Configure</a>
         {% endif %}
-        <div class="card-links" style="margin-top: 0.5rem;">
+    </div>
+
+    {% if project.confluence_charter_id or project.confluence_xft_id %}
+    <div class="overview-card">
+        <h3>Project Documentation</h3>
+        <div class="card-links">
             {% if project.confluence_charter_id %}
-            <a href="#" class="btn btn-sm">Charter</a>
+            <a href="{{ confluence_page_base }}/{{ project.confluence_charter_id }}/{{ project.name | replace(' ', '+') }}+Charter" target="_blank" class="btn btn-sm">Charter</a>
             {% endif %}
             {% if project.confluence_xft_id %}
-            <a href="#" class="btn btn-sm">XFT</a>
+            <a href="{{ confluence_page_base }}/{{ project.confluence_xft_id }}/{{ project.name | replace(' ', '+') }}+XFT" target="_blank" class="btn btn-sm">XFT</a>
             {% endif %}
         </div>
     </div>
+    {% endif %}
 
-    <div class="overview-card">
-        <h3>Phase</h3>
-        <p><span class="badge badge-goal-status">{{ project.phase | replace('_', ' ') | title }}</span></p>
-    </div>
 </div>
 
 <h2>Recent Approvals</h2>
@@ -130,4 +177,13 @@
         Remove from Seat
     </button>
 </details>
+
+<script>
+document.querySelectorAll('.overview-card').forEach(function(card) {
+    card.addEventListener('click', function(e) {
+        if (e.target.closest('a, button, input, select, textarea')) return;
+        card.classList.toggle('expanded');
+    });
+});
+</script>
 {% endblock %}

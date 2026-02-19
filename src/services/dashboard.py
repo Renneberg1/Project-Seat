@@ -76,39 +76,50 @@ class DashboardService:
         """
         jira = JiraConnector(settings=self._settings)
         try:
-            goal_data, risks, decisions, initiatives = await asyncio.gather(
+            goal_data, risks_raw, decisions_raw, initiatives = await asyncio.gather(
                 jira.get_issue(project.jira_goal_key, fields=[
                     "summary", "status", "issuetype", "project", "labels",
                     "fixVersions", "duedate", "parent", "description",
+                    "customfield_13265", "customfield_13264", "customfield_13266",
                 ]),
                 jira.search(
                     f'project = RISK AND issuetype = Risk AND fixVersion = "{project.name}"',
-                    fields=["status"],
+                    fields=["summary", "status", "issuetype", "project", "labels",
+                            "fixVersions", "duedate", "parent", "description", "components",
+                            "customfield_13264"],
                 ),
                 jira.search(
                     f'project = RISK AND issuetype = "Project Issue" AND fixVersion = "{project.name}"',
-                    fields=["status"],
+                    fields=["summary", "status", "issuetype", "project", "labels",
+                            "fixVersions", "duedate", "parent", "description",
+                            "customfield_13267", "components"],
                 ),
                 jira.search(
-                    f'issuetype = Initiative AND fixVersion = "{project.name}"',
+                    f'parent = {project.jira_goal_key} AND project != RISK',
                     fields=["status"],
                 ),
             )
 
             goal = JiraIssue.from_api(goal_data)
+            risk_issues = [JiraIssue.from_api(r) for r in risks_raw]
+            decision_issues = [JiraIssue.from_api(d) for d in decisions_raw]
             done_statuses = {"Done", "Closed"}
             open_risk_count = sum(
-                1 for r in risks
-                if r.get("fields", {}).get("status", {}).get("name") not in done_statuses
+                1 for r in risk_issues if r.status not in done_statuses
             )
 
             return ProjectSummary(
                 project=project,
                 goal=goal,
-                risk_count=len(risks),
+                risk_count=len(risk_issues),
                 open_risk_count=open_risk_count,
-                decision_count=len(decisions),
+                decision_count=len(decision_issues),
                 initiative_count=len(initiatives),
+                risk_threshold=goal.risk_threshold,
+                risk_points=goal.risk_points,
+                risk_level=goal.risk_level,
+                risks=risk_issues,
+                decisions=decision_issues,
                 error=None,
             )
         except ConnectorError as exc:
@@ -195,7 +206,7 @@ class DashboardService:
         jira = JiraConnector(settings=self._settings)
         try:
             initiatives = await jira.search(
-                f'issuetype = Initiative AND fixVersion = "{project.name}"',
+                f'parent = {project.jira_goal_key} AND project != RISK',
                 fields=["summary", "status", "issuetype", "project", "labels",
                         "fixVersions", "duedate", "parent", "description"],
             )

@@ -2,16 +2,21 @@
 
 from __future__ import annotations
 
+from datetime import date, timedelta
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
+from src.config import settings as app_settings
 from src.connectors.base import ConnectorError
 from src.database import get_db
 from src.engine.approval import ApprovalEngine
 from src.services.import_project import ImportService
 from src.models.approval import ApprovalStatus
+from src.models.release import ReleaseStatus
 from src.services.dashboard import DashboardService
 from src.services.dhf import DHFService
+from src.services.release import ReleaseService
 from src.services.spinup import SpinUpService
 from src.web.deps import get_nav_context, templates
 
@@ -63,12 +68,48 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     # Show last 10
     recent_approvals = recent_approvals[-10:] if len(recent_approvals) > 10 else recent_approvals
 
+    confluence_page_base = f"https://{app_settings.atlassian.domain}.atlassian.net/wiki/spaces/HPP/pages"
+
+    market_release = None
+    if summary.goal and summary.goal.due_date:
+        try:
+            tech = date.fromisoformat(summary.goal.due_date)
+            mr = tech.replace(month=tech.month + 1) if tech.month < 12 else tech.replace(year=tech.year + 1, month=1)
+            market_release = mr.isoformat()
+        except ValueError:
+            pass
+
+    # Check for active locked release for the Documents card
+    release_service = ReleaseService()
+    releases = release_service.list_releases(id)
+    active_locked = next((r for r in releases if r.locked), None)
+    release_published = 0
+    release_total = 0
+    if active_locked and active_locked.version_snapshot:
+        release_total = len(active_locked.version_snapshot)
+        if dhf_summary and dhf_summary.total_count > 0:
+            dhf_service2 = DHFService()
+            try:
+                docs, _ = await dhf_service2.get_dhf_table(project)
+                current_versions = {d.title: d.released_version for d in docs}
+                statuses = release_service.compute_release_status(
+                    active_locked.version_snapshot, current_versions,
+                )
+                release_published = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
+            except ConnectorError:
+                pass
+
     return _render(request, "project_dashboard.html", {
         "project": project,
         "summary": summary,
         "dhf_summary": dhf_summary,
         "pi_summary": pi_summary,
         "recent_approvals": recent_approvals,
+        "confluence_page_base": confluence_page_base,
+        "market_release": market_release,
+        "active_locked_release": active_locked,
+        "release_published": release_published,
+        "release_total": release_total,
     }, id)
 
 
@@ -128,8 +169,10 @@ async def initiative_detail(request: Request, id: int, key: str) -> HTMLResponse
 # ------------------------------------------------------------------
 
 @router.get("/{id}/documents", response_class=HTMLResponse)
-async def project_documents(request: Request, id: int, area: str | None = None) -> HTMLResponse:
-    """DHF document status table with optional area filter."""
+async def project_documents(
+    request: Request, id: int, area: str | None = None, release_id: int | None = None,
+) -> HTMLResponse:
+    """DHF document status table with optional area filter and release context."""
     service = DashboardService()
     project = service.get_project_by_id(id)
     if project is None:
@@ -148,12 +191,41 @@ async def project_documents(request: Request, id: int, area: str | None = None) 
         except ConnectorError as exc:
             error = str(exc)
 
+    # Release context
+    release_service = ReleaseService()
+    releases = release_service.list_releases(id)
+    active_release = None
+    selected_docs: set[str] = set()
+    release_statuses: dict[str, str] = {}
+    published_count = 0
+    pending_count = 0
+
+    if release_id:
+        active_release = release_service.get_release(release_id)
+
+    if active_release:
+        selected_docs = release_service.get_selected_documents(active_release.id)
+        if active_release.locked and active_release.version_snapshot:
+            current_versions = {d.title: d.released_version for d in documents}
+            statuses = release_service.compute_release_status(
+                active_release.version_snapshot, current_versions,
+            )
+            release_statuses = {title: status.value for title, status in statuses}
+            published_count = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
+            pending_count = sum(1 for _, s in statuses if s == ReleaseStatus.PENDING)
+
     return _render(request, "project_documents.html", {
         "project": project,
         "documents": documents,
         "areas": areas,
         "selected_area": area,
         "error": error,
+        "releases": releases,
+        "active_release": active_release,
+        "selected_docs": selected_docs,
+        "release_statuses": release_statuses,
+        "published_count": published_count,
+        "pending_count": pending_count,
     }, id)
 
 
@@ -190,6 +262,80 @@ async def save_dhf_config(
         )
         conn.commit()
     return RedirectResponse(f"/project/{id}/documents", status_code=303)
+
+
+# ------------------------------------------------------------------
+# Releases (scope-freeze & publish tracking)
+# ------------------------------------------------------------------
+
+@router.post("/{id}/releases")
+async def create_release(
+    request: Request, id: int, release_name: str = Form(""),
+) -> RedirectResponse:
+    """Create a new named release for a project."""
+    name = release_name.strip()
+    if not name:
+        return RedirectResponse(f"/project/{id}/documents", status_code=303)
+    service = ReleaseService()
+    release = service.create_release(id, name)
+    return RedirectResponse(f"/project/{id}/documents?release_id={release.id}", status_code=303)
+
+
+@router.delete("/{id}/releases/{release_id}", response_class=HTMLResponse)
+async def delete_release(request: Request, id: int, release_id: int) -> HTMLResponse:
+    """Delete a release and its document selections."""
+    service = ReleaseService()
+    service.delete_release(release_id)
+    return HTMLResponse(
+        headers={"HX-Redirect": f"/project/{id}/documents"}, content="", status_code=200,
+    )
+
+
+@router.post("/{id}/releases/{release_id}/documents")
+async def save_release_documents(
+    request: Request, id: int, release_id: int,
+) -> RedirectResponse:
+    """Save document selection for a release (checkboxes)."""
+    form = await request.form()
+    titles = set(form.getlist("doc_titles"))
+    service = ReleaseService()
+    service.save_documents(release_id, titles)
+    return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
+
+
+@router.post("/{id}/releases/{release_id}/lock")
+async def lock_release(request: Request, id: int, release_id: int) -> RedirectResponse:
+    """Lock release scope — snapshot current released versions of selected documents."""
+    dashboard = DashboardService()
+    project = dashboard.get_project_by_id(id)
+    if project is None:
+        return HTMLResponse("Project not found", status_code=404)
+
+    release_service = ReleaseService()
+    selected = release_service.get_selected_documents(release_id)
+
+    # Build version snapshot from current DHF data
+    snapshot: dict[str, str | None] = {}
+    if project.dhf_draft_root_id and project.dhf_released_root_id:
+        dhf_service = DHFService()
+        try:
+            documents, _ = await dhf_service.get_dhf_table(project)
+            for doc in documents:
+                if doc.title in selected:
+                    snapshot[doc.title] = doc.released_version
+        except ConnectorError:
+            pass
+
+    release_service.lock_release(release_id, snapshot)
+    return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
+
+
+@router.post("/{id}/releases/{release_id}/unlock")
+async def unlock_release(request: Request, id: int, release_id: int) -> RedirectResponse:
+    """Unlock release scope (preserves snapshot)."""
+    service = ReleaseService()
+    service.unlock_release(release_id)
+    return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
 
 
 # ------------------------------------------------------------------

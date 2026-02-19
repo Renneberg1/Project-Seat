@@ -13,6 +13,16 @@ from src.engine.approval import ApprovalEngine
 from src.models.approval import ApprovalAction, ApprovalStatus
 
 
+def _insert_project(db_path, name="Test Project", goal_key="PROG-100", id_override=None):
+    with get_db(db_path) as conn:
+        cursor = conn.execute(
+            "INSERT INTO projects (jira_goal_key, name, status, phase) VALUES (?, ?, ?, ?)",
+            (goal_key, name, "active", "planning"),
+        )
+        conn.commit()
+        return cursor.lastrowid
+
+
 # ---------------------------------------------------------------------------
 # propose: Incoming command — assert side effect (returns item ID)
 # ---------------------------------------------------------------------------
@@ -60,11 +70,13 @@ def test_list_pending_excludes_rejected_items(tmp_db):
 
 
 def test_list_pending_filters_by_project_id(tmp_db):
+    pid1 = _insert_project(tmp_db, "Project A", "PROG-1")
+    pid2 = _insert_project(tmp_db, "Project B", "PROG-2")
     engine = ApprovalEngine(db_path=tmp_db)
-    engine.propose(ApprovalAction.CREATE_JIRA_ISSUE, {}, preview="a", project_id=1)
-    engine.propose(ApprovalAction.CREATE_JIRA_VERSION, {}, preview="b", project_id=2)
+    engine.propose(ApprovalAction.CREATE_JIRA_ISSUE, {}, preview="a", project_id=pid1)
+    engine.propose(ApprovalAction.CREATE_JIRA_VERSION, {}, preview="b", project_id=pid2)
 
-    result = engine.list_pending(project_id=1)
+    result = engine.list_pending(project_id=pid1)
 
     assert len(result) == 1
     assert result[0].preview == "a"
@@ -198,12 +210,13 @@ async def test_approve_and_execute_update_confluence_page_increments_version(tmp
 
 
 async def test_approve_and_execute_writes_to_audit_log(tmp_db):
+    pid = _insert_project(tmp_db)
     engine = ApprovalEngine(db_path=tmp_db)
     item_id = engine.propose(
         ApprovalAction.CREATE_JIRA_VERSION,
         {"project_key": "RISK", "name": "Test Version"},
         preview="Create version",
-        project_id=1,
+        project_id=pid,
     )
 
     with patch("src.engine.approval.JiraConnector") as MockJira:

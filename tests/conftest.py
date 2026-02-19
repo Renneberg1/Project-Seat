@@ -213,6 +213,34 @@ def make_raw_dhf_doc():
     return _make
 
 
+@pytest.fixture()
+def make_release():
+    """Factory fixture: build Release dataclass instances."""
+    from src.models.release import Release
+
+    def _make(
+        id: int = 1,
+        project_id: int = 1,
+        name: str = "v1.0",
+        locked: bool = False,
+        created_at: str = "2026-01-01T00:00:00",
+        version_snapshot: dict | None = None,
+        **overrides,
+    ) -> Release:
+        kwargs = dict(
+            id=id,
+            project_id=project_id,
+            name=name,
+            locked=locked,
+            created_at=created_at,
+            version_snapshot=version_snapshot,
+        )
+        kwargs.update(overrides)
+        return Release(**kwargs)
+
+    return _make
+
+
 # ---------------------------------------------------------------------------
 # Sample data fixtures — load once per session
 # ---------------------------------------------------------------------------

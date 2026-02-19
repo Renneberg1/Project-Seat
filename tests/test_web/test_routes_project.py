@@ -385,6 +385,59 @@ def test_save_dhf_config_redirects_to_documents(client, tmp_db):
 
 
 # ---------------------------------------------------------------------------
+# POST /project/{id}/releases — create release: Contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_create_release_redirects_with_release_id(client, tmp_db):
+    pid = _insert_project(tmp_db, "Alpha", "PROG-1")
+
+    result = client.post(
+        f"/project/{pid}/releases",
+        data={"release_name": "v1.0"},
+        follow_redirects=False,
+    )
+
+    assert result.status_code == 303
+    assert f"/project/{pid}/documents?release_id=" in result.headers["location"]
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT * FROM releases WHERE project_id = ?", (pid,)).fetchone()
+    assert row is not None
+    assert row["name"] == "v1.0"
+
+
+def test_create_release_empty_name_redirects_to_documents(client, tmp_db):
+    pid = _insert_project(tmp_db, "Alpha", "PROG-1")
+
+    result = client.post(
+        f"/project/{pid}/releases",
+        data={"release_name": "  "},
+        follow_redirects=False,
+    )
+
+    assert result.status_code == 303
+    assert result.headers["location"] == f"/project/{pid}/documents"
+
+
+def test_delete_release_returns_redirect_header(client, tmp_db):
+    pid = _insert_project(tmp_db, "Alpha", "PROG-1")
+    with get_db(tmp_db) as conn:
+        cursor = conn.execute(
+            "INSERT INTO releases (project_id, name) VALUES (?, ?)", (pid, "v1.0")
+        )
+        conn.commit()
+        rid = cursor.lastrowid
+
+    result = client.delete(f"/project/{pid}/releases/{rid}")
+
+    assert result.status_code == 200
+    assert result.headers.get("HX-Redirect") == f"/project/{pid}/documents"
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT * FROM releases WHERE id = ?", (rid,)).fetchone()
+    assert row is None
+
+
+# ---------------------------------------------------------------------------
 # GET /project/{id}/approvals — project approvals: Contract tests
 # ---------------------------------------------------------------------------
 

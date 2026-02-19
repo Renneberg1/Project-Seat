@@ -58,12 +58,32 @@ CREATE TABLE IF NOT EXISTS config (
     key   TEXT PRIMARY KEY,
     value TEXT NOT NULL
 );
+
+CREATE TABLE IF NOT EXISTS releases (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id       INTEGER NOT NULL,
+    name             TEXT NOT NULL,
+    locked           INTEGER NOT NULL DEFAULT 0,
+    version_snapshot TEXT,
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id),
+    UNIQUE (project_id, name)
+);
+
+CREATE TABLE IF NOT EXISTS release_documents (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    release_id  INTEGER NOT NULL,
+    doc_title   TEXT NOT NULL,
+    FOREIGN KEY (release_id) REFERENCES releases(id) ON DELETE CASCADE,
+    UNIQUE (release_id, doc_title)
+);
 """
 
 
 def init_db(db_path: str | Path = "seat.db") -> None:
     """Create all tables if they don't already exist."""
     conn = sqlite3.connect(str(db_path))
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         conn.executescript(_SCHEMA)
         # Migration: add phase column if not present (existing databases)
@@ -98,6 +118,7 @@ def get_db(db_path: str | Path = "seat.db") -> Generator[sqlite3.Connection, Non
     """
     conn = sqlite3.connect(str(db_path))
     conn.row_factory = sqlite3.Row
+    conn.execute("PRAGMA foreign_keys = ON")
     try:
         yield conn
     finally:
