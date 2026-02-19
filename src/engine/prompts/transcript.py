@@ -73,20 +73,20 @@ TRANSCRIPT_ANALYSIS_SCHEMA: dict[str, Any] = {
                         "enum": ["High", "Medium", "Low"],
                     },
                     "timeline_impact_days": {
-                        "type": ["number", "null"],
-                        "description": "Estimated days of timeline impact (null if unknown)",
+                        "type": "number",
+                        "description": "Estimated days of timeline impact (0 if unknown)",
                     },
                     "confidence": {
                         "type": "number",
                         "description": "0.0-1.0 confidence score",
                     },
                     "confluence_section_title": {
-                        "type": ["string", "null"],
-                        "description": "For xft/charter: section heading",
+                        "type": "string",
+                        "description": "For xft/charter: section heading. Empty string if not applicable.",
                     },
                     "confluence_content": {
-                        "type": ["string", "null"],
-                        "description": "For xft/charter: content to add",
+                        "type": "string",
+                        "description": "For xft/charter: content to add. Empty string if not applicable.",
                     },
                 },
                 "required": ["type", "title", "evidence", "confidence"],

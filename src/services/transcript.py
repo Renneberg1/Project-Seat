@@ -495,7 +495,11 @@ class TranscriptService:
     def accept_suggestion(
         self, suggestion_id: int, project: Any
     ) -> TranscriptSuggestion | None:
-        """Accept a suggestion and queue it in the approval engine."""
+        """Accept a suggestion and queue it in the approval engine.
+
+        Refreshes payload fields from current project data so that fixes
+        to goal key or Confluence page IDs take effect without re-analysis.
+        """
         from src.engine.approval import ApprovalEngine
         from src.models.approval import ApprovalAction
 
@@ -504,6 +508,30 @@ class TranscriptService:
             return sug
 
         payload = json.loads(sug.proposed_payload)
+
+        # Patch payload with current project data
+        if sug.proposed_action == "create_jira_issue":
+            if not project.jira_goal_key or project.jira_goal_key == "pending":
+                raise ValueError(
+                    f"Cannot accept: project Goal key is '{project.jira_goal_key}'. "
+                    "Complete the project spin-up first."
+                )
+            payload.setdefault("fields", {})["parent"] = {"key": project.jira_goal_key}
+            payload["fields"]["fixVersions"] = [{"name": project.name}]
+
+        elif sug.proposed_action == "update_confluence_page":
+            # Determine correct page ID from suggestion type
+            if sug.suggestion_type == SuggestionType.XFT_UPDATE:
+                page_id = project.confluence_xft_id
+            else:
+                page_id = project.confluence_charter_id
+            if not page_id:
+                raise ValueError(
+                    "Cannot accept: project has no Confluence page configured. "
+                    "Set Charter/XFT page IDs first."
+                )
+            payload["page_id"] = page_id
+
         action_map = {
             "create_jira_issue": ApprovalAction.CREATE_JIRA_ISSUE,
             "update_confluence_page": ApprovalAction.UPDATE_CONFLUENCE_PAGE,
@@ -612,7 +640,7 @@ class TranscriptService:
 
         # Timeline Impact (customfield_13267)
         timeline_days = suggestion.get("timeline_impact_days")
-        if timeline_days is not None:
+        if timeline_days:
             fields["customfield_13267"] = timeline_days
 
         return {

@@ -163,7 +163,13 @@ async def accept_suggestion(request: Request, id: int, tid: int, sid: int) -> HT
         return HTMLResponse("Project not found", status_code=404)
 
     service = TranscriptService()
-    sug = service.accept_suggestion(sid, project)
+    try:
+        sug = service.accept_suggestion(sid, project)
+    except ValueError as exc:
+        return HTMLResponse(
+            f'<div class="error-banner">{exc}</div>',
+            status_code=400,
+        )
     if sug is None:
         return HTMLResponse("Suggestion not found", status_code=404)
 
