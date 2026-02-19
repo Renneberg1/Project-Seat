@@ -1,15 +1,22 @@
 # Project Seat
 
-A locally-run project management cockpit for medical device software engineering projects. Automates project spin-up, release planning, transcript processing, and ongoing monitoring across Jira and Confluence.
+A locally-run project management cockpit for medical device software engineering projects. Automates project spin-up, release tracking, and DHF document monitoring across Jira and Confluence.
 
 ## Features
 
 - **Project Spin-Up** — Create Jira Goal tickets, fix versions, and Confluence page trees from templates in one step
+- **Project Import** — Import existing projects from Jira/Confluence into the cockpit
+- **Pipeline Dashboard** — CI-style pipeline view of active projects grouped by phase
+- **Release Tracking** — Scope-freeze snapshots and document tracking per release
+- **DHF Document Tracking** — Compare draft vs released EQMS documents across Confluence spaces
+- **Approval Queue** — All automated actions require explicit human approval before execution
+- **Product Ideas Integration** — PI board version tracking linked to projects
+
+### Planned / Upcoming
+
 - **Release Planning** — LLM-assisted release plan drafting with estimate gap detection
 - **Transcript Processing** — Upload meeting transcripts and extract action items, decisions, and risks
-- **Approval Queue** — All automated actions require explicit human approval before execution
-- **Dashboard** — CI-style pipeline view of active projects and feature progression
-- **Monitoring** — Track estimates, document completion, and scope changes
+- **Ongoing Monitoring** — Automated tracking of estimates, document completion, and scope changes
 
 ## Quick Start
 
@@ -25,8 +32,8 @@ uv sync  # or: pip install -e .
 cp .env.example .env
 # Edit .env with your API keys
 
-# Run
-uvicorn src.main:app --reload --port 8000
+# Run (kills stale processes on port 8000 first)
+python dev.py
 ```
 
 ## Documentation

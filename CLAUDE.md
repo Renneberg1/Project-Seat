@@ -4,7 +4,7 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 ## Tech Stack
 
-- **Language:** Python 3.14
+- **Language:** Python 3.12+
 - **Web framework:** FastAPI + Uvicorn
 - **Frontend:** HTMX + Jinja2 templates
 - **Database:** SQLite (via sqlite3 stdlib, no ORM)
@@ -16,10 +16,12 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Four views: Dashboard (CI-style pipeline), Approval Queue, Project Spin-Up Wizard, Transcript Upload.
-2. **Core Engine** — Orchestrator (task scheduling), LLM Agent Layer (prompt templates + context assembly), Approval Engine (queue + gate all write actions).
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals), Approval Queue, Project Spin-Up Wizard, Project Import.
+2. **Core Engine** — Approval Engine (queue + gate all write actions). *Planned:* Orchestrator (task scheduling), LLM Agent Layer (prompt templates + context assembly).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
+
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -51,8 +53,10 @@ project-seat/
 │   ├── confluence/
 │   │   ├── charter-template.json
 │   │   ├── xft-template.json
-│   │   └── page-*.json
-│   └── transcripts/             # Sample meeting transcripts for testing
+│   │   ├── page-hop-program.json
+│   │   ├── page-product-development-projects.json
+│   │   └── page-projects-releases.json
+│   └── transcripts/             # (planned) Sample meeting transcripts for testing
 ├── src/
 │   ├── __init__.py
 │   ├── main.py                  # FastAPI app entry point
@@ -65,55 +69,94 @@ project-seat/
 │   │   └── confluence.py        # Confluence REST API connector
 │   ├── engine/
 │   │   ├── __init__.py
-│   │   ├── orchestrator.py      # Task queue and scheduling
-│   │   ├── agent.py             # LLM agent layer (prompts, context, parsing)
 │   │   ├── approval.py          # Approval queue and gating logic
+│   │   ├── orchestrator.py      # (planned) Task queue and scheduling
+│   │   ├── agent.py             # (planned) LLM agent layer (prompts, context, parsing)
 │   │   └── prompts/
-│   │       ├── release_plan.py      # Release planning prompt template
-│   │       ├── transcript.py        # Transcript processing prompt template
-│   │       ├── risk_decision.py     # Risk/decision extraction prompt template
-│   │       └── estimate_check.py    # Missing estimate detection prompt template
+│   │       ├── __init__.py
+│   │       ├── release_plan.py      # (planned) Release planning prompt template
+│   │       ├── transcript.py        # (planned) Transcript processing prompt template
+│   │       ├── risk_decision.py     # (planned) Risk/decision extraction prompt template
+│   │       └── estimate_check.py    # (planned) Missing estimate detection prompt template
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── spinup.py            # Project spin-up wizard logic
-│   │   ├── transcript.py        # Transcript upload and processing
 │   │   ├── dashboard.py         # Dashboard data aggregation
-│   │   └── monitoring.py        # Ongoing project monitoring
+│   │   ├── dhf.py               # DHF/EQMS document tracking (draft vs released)
+│   │   ├── import_project.py    # Import existing projects from Jira/Confluence
+│   │   ├── release.py           # Release scope-freeze and document tracking
+│   │   └── transcript.py        # (planned) Transcript upload and processing
 │   ├── web/
 │   │   ├── __init__.py
 │   │   ├── routes/
 │   │   │   ├── __init__.py
-│   │   │   ├── dashboard.py
 │   │   │   ├── approval.py
+│   │   │   ├── import_project.py
+│   │   │   ├── phases.py           # Pipeline/phases overview
+│   │   │   ├── project.py          # Project detail (dashboard/features/docs/approvals)
 │   │   │   ├── spinup.py
-│   │   │   └── transcript.py
+│   │   │   └── transcript.py       # (planned)
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
-│   │   │   ├── dashboard.html
+│   │   │   ├── phases.html
 │   │   │   ├── approval.html
 │   │   │   ├── spinup.html
-│   │   │   └── transcript.html
+│   │   │   ├── spinup_result.html
+│   │   │   ├── import.html
+│   │   │   ├── project_dashboard.html
+│   │   │   ├── project_features.html
+│   │   │   ├── project_documents.html
+│   │   │   ├── project_approvals.html
+│   │   │   ├── initiative_detail.html
+│   │   │   ├── transcript.html      # (planned)
+│   │   │   └── partials/
+│   │   │       ├── approval_pending.html
+│   │   │       ├── approval_row.html
+│   │   │       ├── import_confirm.html
+│   │   │       └── project_card.html
 │   │   └── static/              # CSS, JS, images
 │   │       ├── style.css
 │   │       └── htmx.min.js
 │   └── models/
 │       ├── __init__.py
-│       ├── project.py           # Project, release data models
+│       ├── project.py           # Project data models
 │       ├── approval.py          # Approval queue item models
-│       └── jira.py              # Jira ticket data models
+│       ├── jira.py              # Jira ticket data models
+│       ├── dashboard.py         # Dashboard view models
+│       ├── dhf.py               # DHF document models
+│       └── release.py           # Release and scope-freeze models
 └── tests/
     ├── __init__.py
     ├── conftest.py              # Shared fixtures
+    ├── test_database.py
     ├── test_connectors/
+    │   ├── test_base.py
     │   ├── test_jira.py
-    │   └── test_confluence.py
+    │   ├── test_confluence.py
+    │   └── test_confluence_v2.py
     ├── test_engine/
-    │   ├── test_orchestrator.py
-    │   ├── test_agent.py
-    │   └── test_approval.py
-    └── test_services/
-        ├── test_spinup.py
-        └── test_transcript.py
+    │   ├── test_approval.py
+    │   ├── test_orchestrator.py     # (planned)
+    │   └── test_agent.py            # (planned)
+    ├── test_models/
+    │   ├── test_project_models.py
+    │   ├── test_approval_models.py
+    │   ├── test_jira_models.py
+    │   ├── test_dashboard_models.py
+    │   └── test_dhf_models.py
+    ├── test_services/
+    │   ├── test_spinup.py
+    │   ├── test_dashboard.py
+    │   ├── test_dhf.py
+    │   ├── test_import.py
+    │   ├── test_release.py
+    │   └── test_transcript.py       # (planned)
+    └── test_web/
+        ├── test_routes_approval.py
+        ├── test_routes_import.py
+        ├── test_routes_phases.py
+        ├── test_routes_project.py
+        └── test_routes_spinup.py
 ```
 
 ## How to Run
@@ -140,7 +183,8 @@ pytest
 - Connectors expose clean Python methods — no raw HTTP outside the connector layer
 - Never call Jira/Confluence APIs directly from services or engine code; always go through a connector
 
-### LLM Agent
+### LLM Agent (planned — not yet implemented)
+- `src/engine/agent.py` and `src/engine/orchestrator.py` are planned but not yet built. The conventions below guide future implementation
 - All LLM interactions go through `src/engine/agent.py` — never call the LLM API directly from other modules
 - Prompt templates live in `src/engine/prompts/` as Python files that build the prompt string
 - The agent layer is LLM-agnostic: it takes a prompt and returns structured output. The specific LLM provider is configured in `src/config.py`
@@ -160,8 +204,8 @@ pytest
 
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
-- Schema migrations in `src/database.py`
-- Tables: projects, approval_log, transcript_cache, config
+- Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `releases`, `release_documents`, `config`
 
 ### Testing
 - Use pytest
@@ -218,6 +262,9 @@ ATLASSIAN_API_TOKEN=your-token
 LLM_PROVIDER=claude  # or: openai, ollama, etc.
 LLM_API_KEY=your-llm-key
 LLM_MODEL=claude-sonnet-4-20250514
+EQMS_DRAFT_SPACE_ID=...           # Confluence space ID for draft DHF documents
+EQMS_RELEASED_SPACE_ID=...        # Confluence space ID for released DHF documents
+DB_PATH=seat.db                    # Optional, defaults to seat.db
 ```
 
 ## Important Notes
