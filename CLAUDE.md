@@ -29,6 +29,7 @@ See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 project-seat/
 ├── CLAUDE.md                    # This file
 ├── README.md                    # Project overview and setup instructions
+├── dev.py                       # Dev server launcher (kills stale port 8000 processes)
 ├── pyproject.toml               # Python project config and dependencies
 ├── .env.example                 # Template for required API keys
 ├── .gitignore
@@ -124,8 +125,8 @@ uv sync  # or: pip install -e .
 # Copy and fill in API keys
 cp .env.example .env
 
-# Run the app
-uvicorn src.main:app --reload --port 8000
+# Run the app (kills stale processes on port 8000 first)
+python dev.py
 
 # Run tests
 pytest
