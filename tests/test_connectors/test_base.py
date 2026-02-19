@@ -93,17 +93,17 @@ class TestRequest:
 
 class TestPaginationJira:
     async def test_single_page(self, connector: BaseConnector) -> None:
-        data = {"issues": [{"id": "1"}, {"id": "2"}], "total": 2}
-        with patch.object(connector, "get", new_callable=AsyncMock, return_value=data):
-            results = await connector.get_all_jira("/search")
+        data = {"issues": [{"id": "1"}, {"id": "2"}]}
+        with patch.object(connector, "post", new_callable=AsyncMock, return_value=data):
+            results = await connector.post_all_jira("/search/jql")
         assert len(results) == 2
 
     async def test_multiple_pages(self, connector: BaseConnector) -> None:
-        page1 = {"issues": [{"id": "1"}, {"id": "2"}], "total": 3}
-        page2 = {"issues": [{"id": "3"}], "total": 3}
+        page1 = {"issues": [{"id": "1"}, {"id": "2"}], "nextPageToken": "token123"}
+        page2 = {"issues": [{"id": "3"}]}
         mock = AsyncMock(side_effect=[page1, page2])
-        with patch.object(connector, "get", mock):
-            results = await connector.get_all_jira("/search", page_size=2)
+        with patch.object(connector, "post", mock):
+            results = await connector.post_all_jira("/search/jql", page_size=2)
         assert len(results) == 3
         assert mock.call_count == 2
 

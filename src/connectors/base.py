@@ -149,29 +149,29 @@ class BaseConnector:
     # Pagination helpers
     # ------------------------------------------------------------------
 
-    async def get_all_jira(
+    async def post_all_jira(
         self,
         path: str,
         *,
-        params: dict[str, Any] | None = None,
+        body: dict[str, Any] | None = None,
         results_key: str = "issues",
         page_size: int = 50,
     ) -> list[dict[str, Any]]:
-        """Paginate through a Jira endpoint that uses startAt/maxResults."""
-        params = dict(params or {})
-        params["maxResults"] = page_size
-        start_at = 0
+        """Paginate through a Jira POST endpoint that uses nextPageToken."""
+        body = dict(body or {})
+        body["maxResults"] = page_size
         all_results: list[dict[str, Any]] = []
 
+        next_token: str | None = None
         while True:
-            params["startAt"] = start_at
-            data = await self.get(path, params=params)
+            if next_token:
+                body["nextPageToken"] = next_token
+            data = await self.post(path, json_body=body)
             results = data.get(results_key, [])
             all_results.extend(results)
 
-            total = data.get("total", len(all_results))
-            start_at += len(results)
-            if start_at >= total or not results:
+            next_token = data.get("nextPageToken")
+            if not next_token or not results:
                 break
 
         return all_results

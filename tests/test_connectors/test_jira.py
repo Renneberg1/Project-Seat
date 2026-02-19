@@ -55,11 +55,11 @@ class TestUpdateIssue:
 class TestSearch:
     async def test_uses_jql_via_pagination(self, jira: JiraConnector) -> None:
         mock = AsyncMock(return_value=[{"id": "1"}, {"id": "2"}])
-        with patch.object(jira, "get_all_jira", mock):
+        with patch.object(jira, "post_all_jira", mock):
             results = await jira.search("project = PROG")
         mock.assert_called_once()
         call_kwargs = mock.call_args
-        assert call_kwargs[1]["params"]["jql"] == "project = PROG"
+        assert call_kwargs[1]["body"]["jql"] == "project = PROG"
 
 
 class TestGetIssueTypes:

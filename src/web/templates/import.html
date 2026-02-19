@@ -1,0 +1,24 @@
+{% extends "base.html" %}
+
+{% block title %}Import Project — Project Seat{% endblock %}
+
+{% block content %}
+<h1>Import Existing Project</h1>
+<p>Enter a PROG Goal key to import an existing project into Seat for tracking.</p>
+
+{% if error %}
+<div class="error-banner">{{ error }}</div>
+{% endif %}
+
+<form hx-post="/import/fetch" hx-target="#import-result" hx-swap="innerHTML">
+    <div class="form-group">
+        <label for="goal_key">PROG Goal Key</label>
+        <input type="text" id="goal_key" name="goal_key" required
+               placeholder="e.g. PROG-256" pattern="[A-Za-z]+-\d+"
+               style="text-transform: uppercase;">
+    </div>
+    <button type="submit">Fetch from Jira</button>
+</form>
+
+<div id="import-result" style="margin-top: 1.5rem;"></div>
+{% endblock %}

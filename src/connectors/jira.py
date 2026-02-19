@@ -58,11 +58,14 @@ class JiraConnector(BaseConnector):
         fields: list[str] | None = None,
         max_results: int = 50,
     ) -> list[dict[str, Any]]:
-        """Execute a JQL search and return all matching issues (auto-paginated)."""
-        params: dict[str, Any] = {"jql": jql}
+        """Execute a JQL search and return all matching issues (auto-paginated).
+
+        Uses the /search/jql POST endpoint (replaces the deprecated /search GET).
+        """
+        body: dict[str, Any] = {"jql": jql}
         if fields:
-            params["fields"] = ",".join(fields)
-        return await self.get_all_jira("/search", params=params, page_size=max_results)
+            body["fields"] = fields
+        return await self.post_all_jira("/search/jql", body=body, page_size=max_results)
 
     # ------------------------------------------------------------------
     # Issue types

@@ -1,0 +1,51 @@
+<div class="import-confirm">
+    <h2>Confirm Import</h2>
+
+    <form method="post" action="/import/save">
+        <input type="hidden" name="goal_key" value="{{ preview.goal_key }}">
+
+        <div class="form-group">
+            <label for="name">Project Name</label>
+            <input type="text" id="name" name="name" required
+                   value="{{ preview.goal_summary }}">
+        </div>
+
+        <div class="form-group">
+            <label for="charter_id">Charter Page ID</label>
+            <input type="text" id="charter_id" name="charter_id"
+                   value="{{ preview.charter_id or '' }}"
+                   placeholder="Confluence page ID">
+        </div>
+
+        <div class="form-group">
+            <label for="xft_id">XFT / Scope Page ID</label>
+            <input type="text" id="xft_id" name="xft_id"
+                   value="{{ preview.xft_id or '' }}"
+                   placeholder="Confluence page ID">
+        </div>
+
+        {% if preview.detected_pages %}
+        <details open>
+            <summary>Detected Confluence Pages ({{ preview.detected_pages | length }})</summary>
+            <table>
+                <thead>
+                    <tr>
+                        <th>Page ID</th>
+                        <th>Title (from URL)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {% for page in preview.detected_pages %}
+                    <tr>
+                        <td>{{ page.page_id }}</td>
+                        <td><a href="{{ page.url }}" target="_blank">{{ page.slug }}</a></td>
+                    </tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </details>
+        {% endif %}
+
+        <button type="submit">Import Project</button>
+    </form>
+</div>

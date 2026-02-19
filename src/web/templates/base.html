@@ -12,6 +12,7 @@
         <div class="nav-global">
             <a href="/phases/" class="nav-link {% if request.url.path.startswith('/phases') %}active{% endif %}">Phase Gates</a>
             <a href="/spinup/" class="nav-link {% if request.url.path.startswith('/spinup') %}active{% endif %}">Spin Up</a>
+            <a href="/import/" class="nav-link {% if request.url.path.startswith('/import') %}active{% endif %}">Import</a>
         </div>
         <div class="nav-project-selector">
             {% if nav_projects is defined and nav_projects %}

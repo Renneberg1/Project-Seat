@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+from datetime import date
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 
@@ -35,6 +37,7 @@ async def phases(request: Request) -> HTMLResponse:
             "phases": phases_with_projects,
             "total_projects": len(summaries),
             "pipeline_phases": PIPELINE_PHASES,
+            "now_date": date.today().isoformat(),
             **get_nav_context(request),
         },
     )
@@ -58,5 +61,5 @@ async def update_phase(
     return templates.TemplateResponse(
         request,
         "partials/project_card.html",
-        {"summary": summary, "pipeline_phases": PIPELINE_PHASES},
+        {"summary": summary, "pipeline_phases": PIPELINE_PHASES, "now_date": date.today().isoformat()},
     )

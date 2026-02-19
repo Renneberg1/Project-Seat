@@ -8,6 +8,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from src.connectors.base import ConnectorError
 from src.database import get_db
 from src.engine.approval import ApprovalEngine
+from src.services.import_project import ImportService
 from src.models.approval import ApprovalStatus
 from src.services.dashboard import DashboardService
 from src.services.dhf import DHFService
@@ -65,6 +66,14 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         "dhf_summary": dhf_summary,
         "recent_approvals": recent_approvals,
     }, id)
+
+
+@router.delete("/{id}", response_class=HTMLResponse)
+async def delete_project(request: Request, id: int) -> HTMLResponse:
+    """Remove a project from the local DB (no Jira/Confluence changes)."""
+    service = ImportService()
+    service.delete_project(id)
+    return HTMLResponse(headers={"HX-Redirect": "/phases/"}, content="", status_code=200)
 
 
 # ------------------------------------------------------------------

@@ -99,4 +99,14 @@
 {% else %}
 <p>No approval activity for this project.</p>
 {% endif %}
+
+<details class="danger-zone">
+    <summary>Danger Zone</summary>
+    <p>Remove this project from Seat. This only deletes local tracking data — Jira and Confluence are not affected.</p>
+    <button class="btn btn-danger"
+            hx-delete="/project/{{ project.id }}"
+            hx-confirm="Remove '{{ project.name }}' from Seat? This cannot be undone.">
+        Remove from Seat
+    </button>
+</details>
 {% endblock %}
