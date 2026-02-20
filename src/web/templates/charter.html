@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Charter — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Charter — {{ project.name }}</h1>
+</div>
+
+{% if sections %}
+<details class="charter-sections-toggle">
+    <summary><strong>Current Charter Sections</strong> ({{ sections|length }} sections)</summary>
+    <table class="charter-sections-table">
+        <thead>
+            <tr>
+                <th>Section</th>
+                <th>Content</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for s in sections %}
+            <tr>
+                <td><strong>{{ s.name }}</strong></td>
+                <td>{{ s.content }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% else %}
+<div class="error-banner">
+    No Charter page configured or unable to fetch sections.
+    {% if not project.confluence_charter_id %}
+    Set a Charter page ID in the project settings.
+    {% endif %}
+</div>
+{% endif %}
+
+<div class="charter-update-section">
+    <h2>Update Charter</h2>
+    <p>Describe the changes you want to make. The LLM will ask clarifying questions before proposing edits.</p>
+
+    <form hx-post="/project/{{ project.id }}/charter/ask"
+          hx-target="#charter-result"
+          hx-indicator="#charter-spinner">
+        <div class="form-group">
+            <label for="user_input">Describe your changes</label>
+            <textarea id="user_input" name="user_input" rows="6"
+                      placeholder="E.g. 'We decided to add CTCV team to the project scope. The new target date is March 2027. Success criteria should include 95% sensitivity threshold.'"
+                      required></textarea>
+        </div>
+        <button type="submit">Analyze with LLM</button>
+        <span id="charter-spinner" class="htmx-indicator"> Analyzing Charter...</span>
+    </form>
+</div>
+
+<div id="charter-result"></div>
+
+{% if suggestions %}
+<h2>Past Charter Suggestions</h2>
+<div class="suggestions-list">
+    {% for sug in suggestions %}
+    {% include "partials/charter_suggestion_row.html" %}
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

@@ -770,3 +770,105 @@ th {
     white-space: pre-wrap;
     margin-top: 0.5rem;
 }
+
+/* Charter sections */
+.charter-sections-toggle {
+    margin-bottom: 1.5rem;
+}
+
+.charter-sections-toggle summary {
+    cursor: pointer;
+    color: #0055aa;
+    margin-bottom: 0.5rem;
+}
+
+.charter-sections-table {
+    width: 100%;
+    font-size: 0.9rem;
+}
+
+.charter-sections-table td:first-child {
+    width: 200px;
+    white-space: nowrap;
+    vertical-align: top;
+}
+
+.charter-update-section {
+    margin-bottom: 2rem;
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fafafa;
+}
+
+/* Charter questions */
+.charter-questions {
+    margin-top: 1rem;
+    padding: 1rem;
+    border: 1px solid #90caf9;
+    border-radius: 6px;
+    background: #e3f2fd;
+}
+
+.charter-question-item {
+    margin-bottom: 1rem;
+    padding: 0.75rem;
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+}
+
+.charter-question-item label {
+    display: block;
+    margin-bottom: 0.5rem;
+}
+
+.charter-question-section {
+    display: block;
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 0.15rem;
+}
+
+.charter-question-why {
+    display: block;
+    font-size: 0.8rem;
+    color: #888;
+    font-style: italic;
+    margin-top: 0.1rem;
+}
+
+.charter-question-item textarea {
+    width: 100%;
+    padding: 0.5rem;
+    border: 1px solid #ccc;
+    border-radius: 4px;
+    font-size: 1rem;
+    font-family: inherit;
+    resize: vertical;
+}
+
+/* Charter diff (current vs proposed) */
+.charter-diff {
+    display: grid;
+    grid-template-columns: 1fr 1fr;
+    gap: 0.75rem;
+    margin: 0.5rem 0;
+}
+
+.charter-diff-current,
+.charter-diff-proposed {
+    padding: 0.5rem;
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.charter-diff-current {
+    background: #ffebee;
+    border: 1px solid #ef9a9a;
+}
+
+.charter-diff-proposed {
+    background: #e8f5e9;
+    border: 1px solid #a5d6a7;
+}

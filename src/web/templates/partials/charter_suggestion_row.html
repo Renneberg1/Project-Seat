@@ -1,0 +1,44 @@
+<div class="suggestion-row suggestion-{{ sug.status.value }}" id="charter-sug-{{ sug.id }}">
+    <div class="suggestion-header">
+        <span class="badge badge-sug-charter_update">{{ sug.section_name }}</span>
+        <span class="suggestion-confidence" title="LLM confidence">{{ "%.0f"|format(sug.confidence * 100) }}%</span>
+        <span class="badge badge-{{ sug.status.value }}">{{ sug.status.value }}</span>
+    </div>
+
+    <div class="charter-diff">
+        <div class="charter-diff-current">
+            <strong>Current:</strong>
+            <p>{{ sug.current_text or "(empty)" }}</p>
+        </div>
+        <div class="charter-diff-proposed">
+            <strong>Proposed:</strong>
+            <p>{{ sug.proposed_text }}</p>
+        </div>
+    </div>
+
+    {% if sug.rationale %}
+    <details class="suggestion-detail">
+        <summary>Rationale</summary>
+        <div class="suggestion-body">
+            <p>{{ sug.rationale }}</p>
+        </div>
+    </details>
+    {% endif %}
+
+    {% if sug.status.value == "pending" %}
+    <div class="suggestion-actions">
+        <button class="btn btn-approve btn-sm"
+                hx-post="/project/{{ project.id }}/charter/suggestions/{{ sug.id }}/accept"
+                hx-target="#charter-sug-{{ sug.id }}"
+                hx-swap="outerHTML">Accept</button>
+        <button class="btn btn-reject btn-sm"
+                hx-post="/project/{{ project.id }}/charter/suggestions/{{ sug.id }}/reject"
+                hx-target="#charter-sug-{{ sug.id }}"
+                hx-swap="outerHTML">Reject</button>
+    </div>
+    {% elif sug.status.value == "queued" and sug.approval_item_id %}
+    <div class="suggestion-actions">
+        <a href="/project/{{ project.id }}/approvals" class="btn btn-sm">View in Approval Queue</a>
+    </div>
+    {% endif %}
+</div>

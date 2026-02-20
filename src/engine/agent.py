@@ -141,3 +141,103 @@ class TranscriptAgent:
             text = text.rsplit("```", 1)[0]
 
         return json.loads(text)
+
+
+# ------------------------------------------------------------------
+# Charter Agent
+# ------------------------------------------------------------------
+
+class CharterAgent:
+    """Two-step Charter update agent: ask questions, then propose edits."""
+
+    def __init__(self, provider: LLMProvider) -> None:
+        self._provider = provider
+
+    async def ask_questions(
+        self,
+        current_sections: list[dict[str, str]],
+        user_input: str,
+        project_context: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Step 1: Identify gaps in the user's description.
+
+        Returns parsed JSON with a ``questions`` list.
+        """
+        from src.engine.prompts.charter import (
+            QUESTIONS_SYSTEM_PROMPT,
+            CHARTER_QUESTIONS_SCHEMA,
+            build_questions_prompt,
+        )
+
+        user_prompt = build_questions_prompt(current_sections, user_input, project_context)
+        return await self._generate_with_retry(
+            QUESTIONS_SYSTEM_PROMPT, user_prompt, CHARTER_QUESTIONS_SCHEMA,
+            max_tokens=2048,
+        )
+
+    async def propose_edits(
+        self,
+        current_sections: list[dict[str, str]],
+        user_input: str,
+        qa_pairs: list[dict[str, str]],
+        project_context: dict[str, str] | None = None,
+    ) -> dict[str, Any]:
+        """Step 2: Propose precise section edits.
+
+        Returns parsed JSON with ``summary`` and ``section_edits`` list.
+        """
+        from src.engine.prompts.charter import (
+            EDITS_SYSTEM_PROMPT,
+            CHARTER_EDITS_SCHEMA,
+            build_edits_prompt,
+        )
+
+        user_prompt = build_edits_prompt(
+            current_sections, user_input, qa_pairs, project_context
+        )
+        return await self._generate_with_retry(
+            EDITS_SYSTEM_PROMPT, user_prompt, CHARTER_EDITS_SCHEMA,
+        )
+
+    async def _generate_with_retry(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: dict[str, Any],
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> dict[str, Any]:
+        """Generate and parse JSON, retrying once on parse failure."""
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_schema=schema,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        try:
+            return json.loads(raw)
+        except json.JSONDecodeError:
+            logger.warning("Charter LLM returned invalid JSON, retrying")
+
+        correction = (
+            "\n\nIMPORTANT: Your previous response was not valid JSON. "
+            "Please respond with ONLY valid JSON matching the required schema. "
+            "No markdown, no explanation — just the JSON object."
+        )
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt + correction,
+            response_schema=schema,
+            temperature=0.2,
+            max_tokens=max_tokens,
+        )
+
+        text = raw.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+
+        return json.loads(text)

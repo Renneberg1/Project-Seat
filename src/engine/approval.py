@@ -225,12 +225,21 @@ class ApprovalEngine:
                 )
                 current_version = page["version"]["number"]
                 title = payload.get("title") or page.get("title", "Untitled")
+                current_body = (
+                    page.get("body", {}).get("storage", {}).get("value", "")
+                )
 
-                if payload.get("append_mode"):
-                    # Append mode: fetch current body and append new content
-                    current_body = (
-                        page.get("body", {}).get("storage", {}).get("value", "")
+                if payload.get("section_replace_mode"):
+                    # Section replace mode: swap one section's content in-place
+                    from src.engine.charter_storage_utils import replace_section_content
+
+                    new_body = replace_section_content(
+                        current_body,
+                        payload["section_name"],
+                        payload["new_content"],
                     )
+                elif payload.get("append_mode"):
+                    # Append mode: fetch current body and append new content
                     new_body = current_body + payload["append_content"]
                 else:
                     new_body = payload["body_storage"]

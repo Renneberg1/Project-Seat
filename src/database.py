@@ -135,6 +135,26 @@ def init_db(db_path: str | Path = "seat.db") -> None:
                 FOREIGN KEY (approval_item_id) REFERENCES approval_queue(id)
             )
         """)
+        # Migration: charter_suggestions table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS charter_suggestions (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id       INTEGER NOT NULL,
+                section_name     TEXT    NOT NULL,
+                current_text     TEXT    NOT NULL DEFAULT '',
+                proposed_text    TEXT    NOT NULL DEFAULT '',
+                rationale        TEXT    NOT NULL DEFAULT '',
+                confidence       REAL   NOT NULL DEFAULT 0.0,
+                proposed_payload TEXT    NOT NULL DEFAULT '{}',
+                proposed_preview TEXT    NOT NULL DEFAULT '',
+                analysis_summary TEXT   NOT NULL DEFAULT '',
+                status           TEXT    NOT NULL DEFAULT 'pending',
+                approval_item_id INTEGER,
+                created_at       TEXT    NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                FOREIGN KEY (approval_item_id) REFERENCES approval_queue(id)
+            )
+        """)
         conn.commit()
     finally:
         conn.close()

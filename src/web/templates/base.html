@@ -38,6 +38,8 @@
                class="nav-link {% if request.url.path == '/project/' ~ selected_project_id|string ~ '/approvals' %}active{% endif %}">Approvals</a>
             <a href="/project/{{ selected_project_id }}/transcript/"
                class="nav-link {% if '/transcript' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Transcripts</a>
+            <a href="/project/{{ selected_project_id }}/charter/"
+               class="nav-link {% if '/charter' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Charter</a>
             <button class="nav-link refresh-btn"
                     hx-post="/project/{{ selected_project_id }}/refresh"
                     title="Refresh cached data">&#x21bb;</button>

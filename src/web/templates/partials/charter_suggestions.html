@@ -1,0 +1,30 @@
+<div class="suggestions-panel" id="charter-suggestions-panel">
+    {% if analysis_summary %}
+    <div class="meeting-summary">
+        <h3>Analysis Summary</h3>
+        <p>{{ analysis_summary }}</p>
+    </div>
+    {% endif %}
+
+    {% if suggestions %}
+    <div class="suggestions-header">
+        <h3>Proposed Edits ({{ suggestions|length }})</h3>
+        <button class="btn btn-approve btn-sm"
+                hx-post="/project/{{ project.id }}/charter/suggestions/accept-all"
+                hx-target="#charter-suggestions-panel"
+                hx-confirm="Accept all {{ suggestions|selectattr('status.value', 'equalto', 'pending')|list|length }} pending edits?">
+            Accept All Pending
+        </button>
+    </div>
+
+    <div class="suggestions-list">
+        {% for sug in suggestions %}
+        {% include "partials/charter_suggestion_row.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <div class="empty-state">
+        <p>No edits proposed. The LLM did not identify any changes to make.</p>
+    </div>
+    {% endif %}
+</div>
