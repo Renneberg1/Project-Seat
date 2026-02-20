@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request, UploadFile, File
+from fastapi import APIRouter, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 
 from src.services.dashboard import DashboardService
@@ -65,6 +65,44 @@ async def upload_transcript(
     if not parsed.segments:
         return HTMLResponse(
             '<div class="error-banner">No speech segments found in transcript.</div>',
+            status_code=400,
+        )
+
+    service = TranscriptService()
+    transcript_id = service.store_transcript(id, parsed)
+
+    return templates.TemplateResponse(request, "partials/transcript_parsed.html", {
+        "project": project,
+        "parsed": parsed,
+        "transcript_id": transcript_id,
+    })
+
+
+@router.post("/paste", response_class=HTMLResponse)
+async def paste_transcript(
+    request: Request,
+    id: int,
+    transcript_text: str = Form(...),
+) -> HTMLResponse:
+    """Parse pasted text, store, return parsed preview partial."""
+    dashboard = DashboardService()
+    project = dashboard.get_project_by_id(id)
+    if project is None:
+        return HTMLResponse("Project not found", status_code=404)
+
+    text = transcript_text.strip()
+    if not text:
+        return HTMLResponse(
+            '<div class="error-banner">Please enter some text.</div>',
+            status_code=400,
+        )
+
+    parser = TranscriptParser()
+    parsed = parser.parse("pasted-input.txt", text.encode("utf-8"))
+
+    if not parsed.segments:
+        return HTMLResponse(
+            '<div class="error-banner">No speech segments found in the text.</div>',
             status_code=400,
         )
 

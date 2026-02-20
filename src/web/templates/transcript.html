@@ -7,14 +7,21 @@
 </div>
 
 <div class="transcript-upload-section">
-    <h2>Upload Transcript</h2>
-    <p>Upload a meeting transcript (.vtt, .txt, or .docx) to analyze for risks, decisions, and action items.</p>
-    <form hx-post="/project/{{ project.id }}/transcript/upload"
+    <h2>Add Transcript</h2>
+    <p>Upload a meeting transcript file or paste text directly to analyze for risks, decisions, and action items.</p>
+
+    <div class="input-mode-tabs">
+        <button class="input-mode-tab active" onclick="switchInputMode('file', this)">Upload File</button>
+        <button class="input-mode-tab" onclick="switchInputMode('text', this)">Paste Text</button>
+    </div>
+
+    <form id="transcript-file-form"
+          hx-post="/project/{{ project.id }}/transcript/upload"
           hx-target="#upload-result"
           hx-encoding="multipart/form-data"
           hx-indicator="#upload-spinner">
         <div class="form-group">
-            <label for="file">Transcript file</label>
+            <label for="file">Transcript file (.vtt, .txt, or .docx)</label>
             <input type="file" id="file" name="file"
                    accept=".vtt,.txt,.docx"
                    required>
@@ -22,7 +29,31 @@
         <button type="submit">Upload & Parse</button>
         <span id="upload-spinner" class="htmx-indicator"> Parsing...</span>
     </form>
+
+    <form id="transcript-text-form" style="display: none;"
+          hx-post="/project/{{ project.id }}/transcript/paste"
+          hx-target="#upload-result"
+          hx-indicator="#paste-spinner">
+        <div class="form-group">
+            <label for="transcript_text">Meeting notes or transcript</label>
+            <textarea id="transcript_text" name="transcript_text"
+                      rows="12"
+                      placeholder="Paste meeting notes here...&#10;&#10;You can use 'Speaker: text' format, or just plain text."
+                      required></textarea>
+        </div>
+        <button type="submit">Parse Text</button>
+        <span id="paste-spinner" class="htmx-indicator"> Parsing...</span>
+    </form>
 </div>
+
+<script>
+function switchInputMode(mode, btn) {
+    document.getElementById('transcript-file-form').style.display = mode === 'file' ? '' : 'none';
+    document.getElementById('transcript-text-form').style.display = mode === 'text' ? '' : 'none';
+    document.querySelectorAll('.input-mode-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+}
+</script>
 
 <div id="upload-result"></div>
 
