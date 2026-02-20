@@ -16,12 +16,12 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis.
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update.
 2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output). *Planned:* Orchestrator (task scheduling).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -70,7 +70,8 @@ project-seat/
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── approval.py          # Approval queue and gating logic
-│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent)
+│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent)
+│   │   ├── charter_storage_utils.py  # Charter XHTML section extraction and replacement
 │   │   ├── orchestrator.py      # (planned) Task queue and scheduling
 │   │   ├── providers/
 │   │   │   ├── __init__.py
@@ -79,6 +80,7 @@ project-seat/
 │   │   └── prompts/
 │   │       ├── __init__.py
 │   │       ├── transcript.py        # Transcript analysis: system prompt, JSON schema, ADF helpers
+│   │       ├── charter.py           # Charter update: questions + edits prompts, JSON schemas
 │   │       ├── release_plan.py      # (planned) Release planning prompt template
 │   │       ├── risk_decision.py     # (planned) Risk/decision extraction prompt template
 │   │       └── estimate_check.py    # (planned) Missing estimate detection prompt template
@@ -89,7 +91,8 @@ project-seat/
 │   │   ├── dhf.py               # DHF/EQMS document tracking (draft vs released)
 │   │   ├── import_project.py    # Import existing projects from Jira/Confluence
 │   │   ├── release.py           # Release scope-freeze and document tracking
-│   │   └── transcript.py        # Transcript parsing, LLM analysis, suggestion management
+│   │   ├── transcript.py        # Transcript parsing, LLM analysis, suggestion management
+│   │   └── charter.py           # Charter section fetch, LLM Q&A, edit proposals, suggestion management
 │   ├── web/
 │   │   ├── __init__.py
 │   │   ├── routes/
@@ -99,7 +102,8 @@ project-seat/
 │   │   │   ├── phases.py           # Pipeline/phases overview
 │   │   │   ├── project.py          # Project detail (dashboard/features/docs/approvals)
 │   │   │   ├── spinup.py
-│   │   │   └── transcript.py       # Upload, analyze, accept/reject suggestions
+│   │   │   ├── transcript.py       # Upload, analyze, accept/reject suggestions
+│   │   │   └── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
 │   │   │   ├── phases.html
@@ -114,6 +118,7 @@ project-seat/
 │   │   │   ├── initiative_detail.html
 │   │   │   ├── transcript.html                  # Upload form + transcript history
 │   │   │   ├── transcript_suggestions_page.html # Full-page suggestion review
+│   │   │   ├── charter.html                     # Charter sections view + LLM update form
 │   │   │   └── partials/
 │   │   │       ├── approval_pending.html
 │   │   │       ├── approval_row.html
@@ -121,7 +126,10 @@ project-seat/
 │   │   │       ├── project_card.html
 │   │   │       ├── transcript_parsed.html       # Parsed preview with Analyze button
 │   │   │       ├── transcript_suggestions.html  # Suggestions panel with Accept All
-│   │   │       └── suggestion_row.html          # Individual suggestion accept/reject
+│   │   │       ├── suggestion_row.html          # Individual suggestion accept/reject
+│   │   │       ├── charter_questions.html       # LLM clarifying questions form
+│   │   │       ├── charter_suggestions.html     # Charter edit proposals with Accept All
+│   │   │       └── charter_suggestion_row.html  # Individual charter edit accept/reject
 │   │   └── static/              # CSS, JS, images
 │   │       ├── style.css
 │   │       └── htmx.min.js
@@ -133,7 +141,8 @@ project-seat/
 │       ├── dashboard.py         # Dashboard view models
 │       ├── dhf.py               # DHF document models
 │       ├── release.py           # Release and scope-freeze models
-│       └── transcript.py        # Transcript, suggestion, and project context models
+│       ├── transcript.py        # Transcript, suggestion, and project context models
+│       └── charter.py           # Charter suggestion status and dataclass
 └── tests/
     ├── __init__.py
     ├── conftest.py              # Shared fixtures
@@ -146,6 +155,8 @@ project-seat/
     ├── test_engine/
     │   ├── test_approval.py
     │   ├── test_agent.py            # Provider factory + TranscriptAgent tests
+    │   ├── test_charter_storage_utils.py  # Charter XHTML parsing + replacement tests
+    │   ├── test_charter_agent.py    # CharterAgent questions + edits tests
     │   └── test_orchestrator.py     # (planned)
     ├── test_models/
     │   ├── test_project_models.py
@@ -159,13 +170,15 @@ project-seat/
     │   ├── test_dhf.py
     │   ├── test_import.py
     │   ├── test_release.py
-    │   └── test_transcript.py       # Parser + service tests
+    │   ├── test_transcript.py       # Parser + service tests
+    │   └── test_charter.py          # Charter service + suggestion workflow tests
     └── test_web/
         ├── test_routes_approval.py
         ├── test_routes_import.py
         ├── test_routes_phases.py
         ├── test_routes_project.py
-        └── test_routes_spinup.py
+        ├── test_routes_spinup.py
+        └── test_routes_charter.py   # Charter route contract tests
 ```
 
 ## How to Run
@@ -199,6 +212,7 @@ pytest
 - `get_provider(settings)` factory reads `LLM_PROVIDER` env var to instantiate the right backend
 - Prompt templates live in `src/engine/prompts/` as Python files that build the prompt string
 - `TranscriptAgent` orchestrates transcript analysis: builds prompt, calls provider with JSON schema, retries on parse failure
+- `CharterAgent` orchestrates Charter updates via two-step LLM interaction: `ask_questions()` identifies gaps, `propose_edits()` returns section replacements — both retry on JSON parse failure
 - All LLM responses that result in write actions must pass through the Approval Engine first
 - Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
 - Gemini uses `responseMimeType: application/json` + `responseSchema` for structured output; Ollama uses `format` parameter
@@ -218,7 +232,7 @@ pytest
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
 - Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
-- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `releases`, `release_documents`, `config`
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`
 
 ### Testing
 - Use pytest
@@ -315,6 +329,43 @@ Upload (.vtt/.txt/.docx)
 - **Confluence append mode:** XFT updates use `append_mode: true` — at execution time, the current page body is fetched and the new content is appended, preventing overwrites of changes made between suggestion and approval.
 - **Jira ADF format:** Risk/decision descriptions, Impact Analysis (`customfield_11166`), and Mitigation/Control (`customfield_11342`) are all in Atlassian Document Format. ADF builder helpers are in `src/engine/prompts/transcript.py`.
 - **Token budget:** Transcripts truncated to ~20K chars; existing risks/decisions as key+summary only; Charter/XFT content last 3K chars each. Total ~30K tokens.
+
+## Charter Update Workflow
+
+The Charter update pipeline is the second LLM-powered feature. It uses a two-step LLM interaction (clarifying questions, then precise edits) with the same approval gating model as transcripts.
+
+### Charter XHTML Structure
+
+The Charter page is stored in Confluence as XHTML with a `<table>` inside an `<ac:structured-macro ac:name="details">` block. Each `<tr>` has a `<th>` (section name) and `<td>` (content). **Project Scope** uses `rowspan="2"` — one `<th>` spanning two rows for "In Scope" and "Out of Scope" sub-sections.
+
+The `charter_storage_utils.py` module handles parsing and modification:
+- `extract_sections(storage_body)` → `[{name, content}]` (plain text, handles rowspan)
+- `replace_section_content(storage_body, section_name, new_content)` → modified XHTML
+
+### Flow
+
+```
+User enters free-form text describing changes
+  → POST /charter/ask → CharterService.generate_questions()
+      → CharterAgent.ask_questions() (LLM call #1: identify gaps)
+  → UI shows clarifying questions with answer fields
+  → User answers → POST /charter/analyze → CharterService.analyze_charter_update()
+      → CharterAgent.propose_edits() (LLM call #2: section replacements)
+  → Store suggestions in charter_suggestions (status=pending)
+  → User reviews/accepts/rejects each edit
+  → accept_suggestion() → ApprovalEngine.propose() with section_replace_mode payload
+  → User approves in Approval Queue
+  → ApprovalEngine.approve_and_execute() → replace_section_content() → Confluence update
+```
+
+If the LLM returns no questions (user input is already complete), the questions partial auto-submits to the analyze endpoint, skipping the Q&A step.
+
+### Key Design Decisions
+
+- **Two-step LLM interaction:** Step 1 (questions) ensures completeness before Step 2 (edits) proposes changes. Each step has its own system prompt and JSON schema.
+- **Stateless Q&A:** No DB storage for the intermediate Q&A state — the questions form carries `user_input` as a hidden field and answers as form fields. Only the final suggestions are persisted.
+- **Section replace mode:** The approval engine's `UPDATE_CONFLUENCE_PAGE` action supports `section_replace_mode: true` — at execution time, the current page body is fetched and `replace_section_content()` swaps the target `<td>` in-place, preventing overwrites of other sections changed between suggestion and approval.
+- **Payload refresh at accept time:** Like transcripts, `accept_suggestion()` patches the `page_id` from current project data to prevent stale Confluence page references.
 
 ## Important Notes
 
