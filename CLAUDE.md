@@ -6,7 +6,7 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 - **Language:** Python 3.12+
 - **Web framework:** FastAPI + Uvicorn
-- **Frontend:** HTMX + Jinja2 templates
+- **Frontend:** HTMX + Jinja2 templates + Chart.js (burnup charts)
 - **Database:** SQLite (via sqlite3 stdlib, no ORM)
 - **HTTP client:** httpx (async)
 - **LLM:** Gemini 2.5 Flash (default) or Ollama — provider-agnostic via `src/engine/agent.py`
@@ -16,12 +16,12 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update.
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update.
 2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output), Orchestrator (task scheduling framework, wired into lifespan).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, per-team version progress tracking with burnup charts.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -35,9 +35,13 @@ project-seat/
 ├── pyproject.toml               # Python project config and dependencies
 ├── .env.example                 # Template for required API keys
 ├── .gitignore
+├── scripts/
+│   └── seed_burnup.py           # Seed script for burnup chart test data
 ├── docs/
 │   ├── architecture.pdf         # System architecture diagram
 │   ├── workflow.pdf             # Product workflow diagram
+│   ├── feature-backlog.md       # Planned features and technical debt tracker
+│   ├── spinup-flow.md           # Spin-up workflow documentation
 │   ├── jira-structure.md        # Jira hierarchy and template documentation
 │   └── confluence-structure.md  # Confluence page tree and template documentation
 ├── samples/                     # Sample API responses (do NOT commit API tokens)
@@ -90,7 +94,9 @@ project-seat/
 │   │   ├── import_project.py    # Import existing projects from Jira/Confluence
 │   │   ├── release.py           # Release scope-freeze and document tracking
 │   │   ├── transcript.py        # Transcript parsing, LLM analysis, suggestion management
-│   │   └── charter.py           # Charter section fetch, LLM Q&A, edit proposals, suggestion management
+│   │   ├── charter.py           # Charter section fetch, LLM Q&A, edit proposals, suggestion management
+│   │   ├── team_progress.py     # Per-team version progress tracking (JQL-based)
+│   │   └── team_snapshot.py     # Daily team progress snapshots for burnup charts
 │   ├── web/
 │   │   ├── __init__.py
 │   │   ├── routes/
@@ -117,6 +123,7 @@ project-seat/
 │   │   │   ├── transcript.html                  # Upload form + transcript history
 │   │   │   ├── transcript_suggestions_page.html # Full-page suggestion review
 │   │   │   ├── charter.html                     # Charter sections view + LLM update form
+│   │   │   ├── project_team_progress.html       # Per-team version progress + burnup chart
 │   │   │   └── partials/
 │   │   │       ├── approval_pending.html
 │   │   │       ├── approval_row.html
@@ -128,9 +135,8 @@ project-seat/
 │   │   │       ├── charter_questions.html       # LLM clarifying questions form
 │   │   │       ├── charter_suggestions.html     # Charter edit proposals with Accept All
 │   │   │       └── charter_suggestion_row.html  # Individual charter edit accept/reject
-│   │   └── static/              # CSS, JS, images
-│   │       ├── style.css
-│   │       └── htmx.min.js
+│   │   └── static/              # CSS (JS loaded from CDN: HTMX, Chart.js)
+│   │       └── style.css
 │   └── models/
 │       ├── __init__.py
 │       ├── project.py           # Project data models
@@ -169,14 +175,18 @@ project-seat/
     │   ├── test_import.py
     │   ├── test_release.py
     │   ├── test_transcript.py       # Parser + service tests
-    │   └── test_charter.py          # Charter service + suggestion workflow tests
+    │   ├── test_charter.py          # Charter service + suggestion workflow tests
+    │   ├── test_team_progress.py    # Team progress service tests
+    │   └── test_team_snapshot.py    # Snapshot service tests
     └── test_web/
         ├── test_routes_approval.py
         ├── test_routes_import.py
         ├── test_routes_phases.py
         ├── test_routes_project.py
         ├── test_routes_spinup.py
-        └── test_routes_charter.py   # Charter route contract tests
+        ├── test_routes_transcript.py
+        ├── test_routes_charter.py   # Charter route contract tests
+        └── test_routes_team_progress.py  # Team progress route tests
 ```
 
 ## How to Run
@@ -223,6 +233,7 @@ pytest
 
 ### Frontend
 - HTMX for reactivity — no JavaScript framework
+- Chart.js for data visualisation (burnup charts on team progress page)
 - Jinja2 templates in `src/web/templates/`
 - Keep templates simple; business logic lives in services, not in templates or routes
 - Routes are thin — validate input, call a service, return a template
@@ -230,7 +241,7 @@ pytest
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
 - Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
-- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`
 
 ### Testing
 - Use pytest
@@ -253,7 +264,7 @@ Goal (PROG project)
 
 **At spin-up, the cockpit creates:**
 1. Goal ticket in PROG project
-2. Fix version in RISK project and all selected team projects
+2. Fix version in RISK project and each selected team project (per-team version mapping: `{PROJECT_KEY: version_name}`, teams can use different version names)
 3. Confluence Charter page from template (page ID: 3559363918), placed under the correct Program → Projects/Releases parent
 4. Confluence XFT page from template (page ID: 3559363934), as child of Charter page
 5. Links to Confluence pages in the Goal ticket description

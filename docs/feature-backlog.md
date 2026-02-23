@@ -62,19 +62,6 @@ Automated periodic status report generation per project. Pulls live data from Ji
 
 Delivery: Confluence page update or email-ready format.
 
-### Version Report Tracking Per Software Team
-Track fix version progress across each software team (AIM, CTCV, YAM, etc.) within a project. For each team's Jira project + fix version:
-- Total issues, completed, in progress, remaining
-- Story points completed vs total
-- Burndown or progress bar
-- Blockers and overdue items
-- Cross-team dependency status
-
-Display as a per-team breakdown on the project dashboard. Requires:
-- Querying each team project's fix version (already created at spin-up)
-- New `VersionReportService` or extension to `DashboardService`
-- New dashboard section or dedicated "Team Progress" tab
-
 ---
 
 ## Dashboard & UI
@@ -86,7 +73,7 @@ Redesign the project dashboard to be more graphical and information-dense:
 - **Timeline view** showing project phases with current position indicator
 - **Sparklines** for trend data (risk count over time, velocity, doc completion)
 - **Card-based layout** replacing the current table-heavy design
-- Consider lightweight charting: Chart.js (small, no framework dependency) or pure CSS/SVG charts to keep the HTMX-only frontend
+- Chart.js is already integrated (burnup chart on Team Progress tab) — extend to other dashboard sections
 
 ### Pipeline View Enhancements
 - Drag-and-drop phase transitions (currently button-based)
@@ -139,3 +126,6 @@ The `projects` table could further benefit from:
 - [x] LLM Charter Generation / Update (two-step Q&A flow, `CharterAgent`, section-level edits via approval queue)
 - [x] LLM Loading Spinners (HTMX indicators on all LLM buttons: analyze, charter ask/analyze, re-analyze)
 - [x] Re-analyze Button (re-run LLM on same transcript with updated project context)
+- [x] Version Report Tracking Per Team (per-team version mapping with auto-detect at import, team progress dashboard with per-version JQL grouping, story point totals)
+- [x] Burnup Chart (Chart.js burnup with scope vs done over time, dashed projection to due date, team filter, velocity override)
+- [x] Confluence Formatting Guidance (LLM prompts include Confluence-specific formatting instructions for better output quality)
