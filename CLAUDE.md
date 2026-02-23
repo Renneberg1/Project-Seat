@@ -17,7 +17,7 @@ An AI-assisted project management cockpit for medical device software engineerin
 The application has four layers:
 
 1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update.
-2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output). *Planned:* Orchestrator (task scheduling).
+2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output), Orchestrator (task scheduling framework, wired into lifespan).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
@@ -56,7 +56,7 @@ project-seat/
 │   │   ├── page-hop-program.json
 │   │   ├── page-product-development-projects.json
 │   │   └── page-projects-releases.json
-│   └── transcripts/             # (planned) Sample meeting transcripts for testing
+│   └── transcripts/             # Sample meeting transcripts for testing
 ├── src/
 │   ├── __init__.py
 │   ├── main.py                  # FastAPI app entry point
@@ -72,7 +72,7 @@ project-seat/
 │   │   ├── approval.py          # Approval queue and gating logic
 │   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent)
 │   │   ├── charter_storage_utils.py  # Charter XHTML section extraction and replacement
-│   │   ├── orchestrator.py      # (planned) Task queue and scheduling
+│   │   ├── orchestrator.py      # Task queue and scheduling (framework implemented, no tasks registered yet)
 │   │   ├── providers/
 │   │   │   ├── __init__.py
 │   │   │   ├── gemini.py        # Gemini provider (httpx, structured output via responseSchema)
@@ -81,9 +81,7 @@ project-seat/
 │   │       ├── __init__.py
 │   │       ├── transcript.py        # Transcript analysis: system prompt, JSON schema, ADF helpers
 │   │       ├── charter.py           # Charter update: questions + edits prompts, JSON schemas
-│   │       ├── release_plan.py      # (planned) Release planning prompt template
-│   │       ├── risk_decision.py     # (planned) Risk/decision extraction prompt template
-│   │       └── estimate_check.py    # (planned) Missing estimate detection prompt template
+│   │       └── (planned: release_plan.py, risk_decision.py, estimate_check.py — see docs/feature-backlog.md)
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── spinup.py            # Project spin-up wizard logic
@@ -157,7 +155,7 @@ project-seat/
     │   ├── test_agent.py            # Provider factory + TranscriptAgent tests
     │   ├── test_charter_storage_utils.py  # Charter XHTML parsing + replacement tests
     │   ├── test_charter_agent.py    # CharterAgent questions + edits tests
-    │   └── test_orchestrator.py     # (planned)
+    │   └── test_orchestrator.py
     ├── test_models/
     │   ├── test_project_models.py
     │   ├── test_approval_models.py
@@ -366,6 +364,10 @@ If the LLM returns no questions (user input is already complete), the questions 
 - **Stateless Q&A:** No DB storage for the intermediate Q&A state — the questions form carries `user_input` as a hidden field and answers as form fields. Only the final suggestions are persisted.
 - **Section replace mode:** The approval engine's `UPDATE_CONFLUENCE_PAGE` action supports `section_replace_mode: true` — at execution time, the current page body is fetched and `replace_section_content()` swaps the target `<td>` in-place, preventing overwrites of other sections changed between suggestion and approval.
 - **Payload refresh at accept time:** Like transcripts, `accept_suggestion()` patches the `page_id` from current project data to prevent stale Confluence page references.
+
+## Feature Backlog & Technical Debt
+
+All planned features, improvements, and technical debt are tracked in `docs/feature-backlog.md`. When asked about remaining work, what to build next, or the project roadmap, always consult that file for the authoritative list. The backlog is grouped by theme (LLM features, Reporting, Dashboard/UI, Infrastructure) and includes a Completed section for reference.
 
 ## Important Notes
 

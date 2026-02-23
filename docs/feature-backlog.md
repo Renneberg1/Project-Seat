@@ -6,17 +6,6 @@ Tracking planned features, improvements, and technical debt. Grouped by theme, r
 
 ## LLM-Powered Features
 
-### Transcript Direct Input
-Allow users to paste or type meeting notes directly into a text box instead of requiring a file upload. The existing `TranscriptParser._parse_txt()` already handles plain text — wire a textarea input through the same pipeline.
-
-### LLM Charter Generation / Update
-Guided LLM walkthrough to generate a new Charter page or update an existing one. The user answers structured questions (project scope, timeline, objectives, success criteria, regulatory strategy) and the LLM assembles a Charter page in the correct Confluence template format. For updates, the LLM diffs the current Charter content against new information (e.g. from a transcript or user input) and proposes section-level edits via the approval queue.
-
-- New prompt template: `src/engine/prompts/charter.py`
-- New agent method or dedicated `CharterAgent` class
-- UI: step-by-step wizard in the project Charter tab
-- Output: `UPDATE_CONFLUENCE_PAGE` approval items (one per section changed)
-
 ### LLM XFT Minutes Setup
 LLM-assisted creation and formatting of XFT meeting minutes. Given a transcript or direct input, the LLM:
 1. Structures minutes into the XFT template format (attendees, agenda, discussion, action items, decisions)
@@ -105,8 +94,6 @@ Redesign the project dashboard to be more graphical and information-dense:
 - Collapsed vs expanded project cards with quick-glance metrics
 
 ### Transcript UI Improvements
-- Loading spinner on "Analyze with LLM" button — LLM calls take 3-8+ seconds; the button currently gives no feedback. Add an HTMX indicator (spinner + "Analyzing..." text) and disable the button during the request.
-- Re-analyze button (re-run LLM on same transcript with updated project context)
 - Diff preview for Confluence update suggestions (show what will be appended)
 - Confidence threshold filter (hide low-confidence suggestions)
 - Bulk operations: select multiple suggestions to accept/reject
@@ -148,3 +135,7 @@ The `projects` table could further benefit from:
 - [x] Release Audit Logging (lock/unlock/save_documents write to approval_log)
 - [x] Task Orchestrator (minimal framework in `src/engine/orchestrator.py`, wired into lifespan)
 - [x] Test Coverage Gaps (accept/reject suggestions, retry, append_mode, orchestrator, sample VTT)
+- [x] Transcript Direct Input (textarea alternative to file upload)
+- [x] LLM Charter Generation / Update (two-step Q&A flow, `CharterAgent`, section-level edits via approval queue)
+- [x] LLM Loading Spinners (HTMX indicators on all LLM buttons: analyze, charter ask/analyze, re-analyze)
+- [x] Re-analyze Button (re-run LLM on same transcript with updated project context)
