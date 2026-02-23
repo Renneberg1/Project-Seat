@@ -1,20 +1,28 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="en" data-theme="">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Project Seat{% endblock %}</title>
+    <script>
+    /* FOUC prevention — set theme before first paint */
+    (function() {
+        var saved = localStorage.getItem('seat-theme');
+        var theme = saved || (window.matchMedia('(prefers-color-scheme: dark)').matches ? 'dark' : 'light');
+        document.documentElement.setAttribute('data-theme', theme);
+    })();
+    </script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=9">
+    <link rel="stylesheet" href="/static/style.css?v=10">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
     <nav class="nav-bar">
         <a href="/phases/" class="nav-logo" aria-label="harrison.ai">
-            <svg viewBox="0 0 180 186" width="20" height="21" fill="#000F5B" aria-hidden="true">
+            <svg viewBox="0 0 180 186" width="20" height="21" fill="currentColor" aria-hidden="true">
                 <polygon points="22.13 81.41 26.77 81.41 26.77 40.31 26.95 40.31 26.95 4.32 0 4.32 0 81.41 22.13 81.41"/>
                 <polygon points="153.24 81.47 153.24 4.32 125.64 4.32 125.64 81.12 53.54 81.42 26.78 81.42 26.78 108.19 0 108.2 0 185.07 26.95 185.07 26.77 108.2 125.64 108.04 125.64 185.07 153.24 185.07 153.24 108.26 179.87 108.26 179.87 81.47 153.24 81.47"/>
             </svg>
@@ -59,9 +67,52 @@
                     title="Refresh cached data">&#x21bb;</button>
             {% endif %}
         </div>
+        <button id="theme-toggle" class="theme-toggle-btn" type="button" aria-label="Toggle dark mode" title="Toggle dark mode">
+            <svg class="icon-sun" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <circle cx="12" cy="12" r="5"/><line x1="12" y1="1" x2="12" y2="3"/><line x1="12" y1="21" x2="12" y2="23"/><line x1="4.22" y1="4.22" x2="5.64" y2="5.64"/><line x1="18.36" y1="18.36" x2="19.78" y2="19.78"/><line x1="1" y1="12" x2="3" y2="12"/><line x1="21" y1="12" x2="23" y2="12"/><line x1="4.22" y1="19.78" x2="5.64" y2="18.36"/><line x1="18.36" y1="5.64" x2="19.78" y2="4.22"/>
+            </svg>
+            <svg class="icon-moon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/>
+            </svg>
+        </button>
     </nav>
     <main>
         {% block content %}{% endblock %}
     </main>
+    <script>
+    /* Theme toggle logic */
+    (function() {
+        var toggle = document.getElementById('theme-toggle');
+        var html = document.documentElement;
+
+        function getTheme() {
+            return html.getAttribute('data-theme') || 'light';
+        }
+        function setTheme(theme) {
+            html.setAttribute('data-theme', theme);
+            localStorage.setItem('seat-theme', theme);
+            toggle.setAttribute('aria-label', theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode');
+            window.dispatchEvent(new CustomEvent('theme-changed', { detail: { theme: theme } }));
+        }
+
+        toggle.addEventListener('click', function() {
+            setTheme(getTheme() === 'dark' ? 'light' : 'dark');
+        });
+
+        /* Listen for OS preference changes (only when no explicit user choice) */
+        window.matchMedia('(prefers-color-scheme: dark)').addEventListener('change', function(e) {
+            if (!localStorage.getItem('seat-theme')) {
+                setTheme(e.matches ? 'dark' : 'light');
+            }
+        });
+
+        /* Show/hide sun/moon icons via CSS */
+        var style = document.createElement('style');
+        style.textContent =
+            '[data-theme="light"] .icon-moon, :not([data-theme="dark"]) .icon-moon { display: none; }' +
+            '[data-theme="dark"] .icon-sun { display: none; }';
+        document.head.appendChild(style);
+    })();
+    </script>
 </body>
 </html>

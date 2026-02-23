@@ -251,6 +251,7 @@ pytest
 - Routes are thin — validate input, call a service, return a template
 - LLM loading indicators use animated CSS spinners (opacity-based, compatible with HTMX's built-in `.htmx-indicator` mechanism) and `hx-disabled-elt` for button disabling during requests
 - Dashboard layout uses CSS Grid with `.dash-*` class prefix: hero bar, 4-column metric cards, full-width team breakdown, 3-column activity/links section. Responsive at 768px (2-col) and 480px (1-col).
+- **Dark mode** uses `data-theme` attribute on `<html>` (`"light"` or `"dark"`). All colors are CSS custom properties defined in `:root` (light) and `[data-theme="dark"]` (dark) blocks in `style.css`. Never use hardcoded color values — always reference a `var(--*)` token. The toggle button is in `base.html` with localStorage persistence and OS preference detection via `prefers-color-scheme`. Chart.js charts read colors via `getThemeColor('--var-name')` and rebuild on the `theme-changed` custom event. Utility classes: `.text-secondary`, `.text-tertiary`, `.text-muted`.
 
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM

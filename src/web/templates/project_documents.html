@@ -54,7 +54,7 @@
     <div class="release-progress-label">
         <span class="badge badge-release-published">{{ published_count }} Published</span>
         <span class="badge badge-release-pending">{{ pending_count }} Pending</span>
-        <span style="margin-left: 0.5rem; color: #666;">{{ pct }}% complete</span>
+        <span class="text-secondary" style="margin-left: 0.5rem;">{{ pct }}% complete</span>
     </div>
     <div class="release-progress-bar">
         <div class="release-progress-fill" style="width: {{ pct }}%;"></div>
@@ -72,7 +72,7 @@
         <span class="badge badge-dhf-released">{{ released }} Released</span>
         <span class="badge badge-dhf-draft_update">{{ draft_update }} Draft Update</span>
         <span class="badge badge-dhf-in_draft">{{ in_draft }} In Draft</span>
-        <span style="margin-left: 0.5rem; color: #666;">{{ documents | length }} total{% if selected_area %} in {{ selected_area }}{% endif %}</span>
+        <span class="text-secondary" style="margin-left: 0.5rem;">{{ documents | length }} total{% if selected_area %} in {{ selected_area }}{% endif %}</span>
     </div>
 
     {# Area filter #}
@@ -165,7 +165,7 @@ document.getElementById('select-all').addEventListener('change', function() {
                 {% if in_release %}
                 <span class="badge badge-release-{{ release_statuses[doc.title] }}">{{ release_statuses[doc.title] | title }}</span>
                 {% else %}
-                <span style="color: #999;">—</span>
+                <span class="text-muted">—</span>
                 {% endif %}
             </td>
             <td>{{ doc.last_modified[:10] if doc.last_modified else '—' }}</td>

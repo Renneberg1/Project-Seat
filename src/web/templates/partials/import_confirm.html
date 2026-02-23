@@ -42,7 +42,7 @@
                    value="{% if preview.detected_teams %}{{ preview.detected_teams.items() | map('join', ':') | join(', ') }}{% endif %}"
                    placeholder="e.g. AIM:HOP Drop 2, CTCV:HOP Drop 2">
             {% if preview.detected_teams %}
-            <small style="color: #666;">Auto-detected {{ preview.detected_teams | length }} team(s) from child initiatives</small>
+            <small class="text-secondary">Auto-detected {{ preview.detected_teams | length }} team(s) from child initiatives</small>
             {% endif %}
         </div>
 

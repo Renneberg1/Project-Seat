@@ -280,6 +280,11 @@
 {# ── CHART.JS SCRIPTS ─────────────────────────────────────── #}
 <script>
 (function() {
+    /* Read a CSS variable from :root */
+    function getThemeColor(varName) {
+        return getComputedStyle(document.documentElement).getPropertyValue(varName).trim();
+    }
+
     /* Center text plugin for doughnut charts */
     var centerTextPlugin = {
         id: 'centerText',
@@ -292,7 +297,7 @@
             var centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
             ctx.save();
             ctx.font = 'bold 14px system-ui, sans-serif';
-            ctx.fillStyle = '#333';
+            ctx.fillStyle = getThemeColor('--chart-center-text');
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.fillText(text, centerX, centerY);
@@ -301,72 +306,84 @@
     };
     Chart.register(centerTextPlugin);
 
-    var doughnutDefaults = {
-        cutout: '65%',
-        responsive: true,
-        maintainAspectRatio: false,
-        plugins: {
-            legend: { display: false },
-            centerText: { text: '' }
-        }
-    };
+    function doughnutDefaults() {
+        return {
+            cutout: '65%',
+            responsive: true,
+            maintainAspectRatio: false,
+            plugins: {
+                legend: { display: false },
+                centerText: { text: '' }
+            }
+        };
+    }
+
+    /* Chart instances for teardown/rebuild */
+    var riskChart = null, dhfChart = null, teamChart = null;
 
     /* ── Risk Doughnut ── */
     {% if summary.risk_count > 0 %}
-    (function() {
+    function buildRiskChart() {
         var ctx = document.getElementById('riskDoughnut');
         if (!ctx) return;
-        new Chart(ctx, {
+        if (riskChart) riskChart.destroy();
+        riskChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: ['Open', 'Controlled', 'Closed'],
                 datasets: [{
                     data: [{{ risk_by_status.Open }}, {{ risk_by_status.Controlled }}, {{ risk_by_status.Closed }}],
-                    backgroundColor: ['#c62828', '#1565c0', '#2e7d32'],
-                    borderWidth: 1
+                    backgroundColor: [getThemeColor('--status-red'), getThemeColor('--status-blue'), getThemeColor('--status-green')],
+                    borderColor: getThemeColor('--bg-surface'),
+                    borderWidth: 2
                 }]
             },
-            options: Object.assign({}, doughnutDefaults, {
+            options: Object.assign({}, doughnutDefaults(), {
                 plugins: {
                     legend: { display: false },
                     centerText: { text: '{{ summary.risk_count }}' }
                 }
             })
         });
-    })();
+    }
+    buildRiskChart();
     {% endif %}
 
     /* ── DHF Doughnut ── */
     {% if dhf_summary and dhf_summary.total_count > 0 %}
-    (function() {
+    function buildDhfChart() {
         var ctx = document.getElementById('dhfDoughnut');
         if (!ctx) return;
-        new Chart(ctx, {
+        if (dhfChart) dhfChart.destroy();
+        dhfChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
                 labels: ['Released', 'Draft Update', 'In Draft'],
                 datasets: [{
                     data: [{{ dhf_summary.released_count }}, {{ dhf_summary.draft_update_count }}, {{ dhf_summary.in_draft_count }}],
-                    backgroundColor: ['#2e7d32', '#f57c00', '#1565c0'],
-                    borderWidth: 1
+                    backgroundColor: [getThemeColor('--status-green'), getThemeColor('--status-orange'), getThemeColor('--status-blue')],
+                    borderColor: getThemeColor('--bg-surface'),
+                    borderWidth: 2
                 }]
             },
-            options: Object.assign({}, doughnutDefaults, {
+            options: Object.assign({}, doughnutDefaults(), {
                 plugins: {
                     legend: { display: false },
                     centerText: { text: '{{ dhf_summary.released_count }}/{{ dhf_summary.total_count }}' }
                 }
             })
         });
-    })();
+    }
+    buildDhfChart();
     {% endif %}
 
     /* ── Team Breakdown Stacked Bar ── */
     {% if team_reports and team_reports|length > 0 %}
-    (function() {
+    function buildTeamChart() {
         var ctx = document.getElementById('teamBreakdownChart');
         if (!ctx) return;
-        new Chart(ctx, {
+        if (teamChart) teamChart.destroy();
+        teamChart = new Chart(ctx, {
             type: 'bar',
             data: {
                 labels: {{ team_reports | map(attribute='team_key') | list | tojson }},
@@ -374,17 +391,17 @@
                     {
                         label: 'Done',
                         data: {{ team_reports | map(attribute='done_count') | list | tojson }},
-                        backgroundColor: '#2e7d32'
+                        backgroundColor: getThemeColor('--status-green')
                     },
                     {
                         label: 'In Progress',
                         data: {{ team_reports | map(attribute='in_progress_count') | list | tojson }},
-                        backgroundColor: '#f57c00'
+                        backgroundColor: getThemeColor('--status-orange')
                     },
                     {
                         label: 'To Do',
                         data: {{ team_reports | map(attribute='todo_count') | list | tojson }},
-                        backgroundColor: '#e0e0e0'
+                        backgroundColor: getThemeColor('--chart-todo')
                     }
                 ]
             },
@@ -394,19 +411,37 @@
                 maintainAspectRatio: false,
                 scales: {
                     x: { stacked: true, display: false },
-                    y: { stacked: true, grid: { display: false } }
+                    y: {
+                        stacked: true,
+                        grid: { display: false },
+                        ticks: { color: getThemeColor('--text-secondary') }
+                    }
                 },
                 plugins: {
                     legend: {
                         display: true,
                         position: 'bottom',
-                        labels: { boxWidth: 12, font: { size: 11 } }
+                        labels: {
+                            boxWidth: 12,
+                            font: { size: 11 },
+                            color: getThemeColor('--text-secondary')
+                        }
                     }
                 }
             }
         });
-    })();
+    }
+    buildTeamChart();
     {% endif %}
+
+    /* Rebuild all charts on theme change */
+    window.addEventListener('theme-changed', function() {
+        Chart.defaults.color = getThemeColor('--text-secondary');
+        Chart.defaults.borderColor = getThemeColor('--border-subtle');
+        {% if summary.risk_count > 0 %}buildRiskChart();{% endif %}
+        {% if dhf_summary and dhf_summary.total_count > 0 %}buildDhfChart();{% endif %}
+        {% if team_reports and team_reports|length > 0 %}buildTeamChart();{% endif %}
+    });
 })();
 </script>
 {% endblock %}

@@ -17,6 +17,7 @@ A locally-run project management cockpit for medical device software engineering
 - **Team Progress Tracking** — Per-team version progress with auto-detected team mapping at import, story point breakdowns, and Chart.js burnup charts with projection and velocity override
 - **Jira Plans Timeline** — Embed Jira Plans (Advanced Roadmaps) Gantt chart on the project dashboard via iframe, with direct link to Jira
 - **Dashboard Redesign** — Information-dense layout with hero bar (phase/health/countdown), Chart.js doughnut charts (risks, DHF docs), scope composition bar, team breakdown stacked bars, 3-column activity/links section. Responsive at 768px and 480px breakpoints.
+- **Dark Mode** — Toggle between light and dark themes. Defaults to OS preference, persists choice in localStorage. All colors driven by CSS custom properties with dark palette derived from brand navy. Chart.js charts rebuild on theme change.
 
 ### Planned / Upcoming
 
