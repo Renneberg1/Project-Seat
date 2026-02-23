@@ -4,12 +4,21 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Project Seat{% endblock %}</title>
-    <link rel="stylesheet" href="/static/style.css?v=7">
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
+    <link rel="stylesheet" href="/static/style.css?v=9">
     <script src="https://unpkg.com/htmx.org@2.0.4"></script>
     <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
 </head>
 <body>
     <nav class="nav-bar">
+        <a href="/phases/" class="nav-logo" aria-label="harrison.ai">
+            <svg viewBox="0 0 180 186" width="20" height="21" fill="#000F5B" aria-hidden="true">
+                <polygon points="22.13 81.41 26.77 81.41 26.77 40.31 26.95 40.31 26.95 4.32 0 4.32 0 81.41 22.13 81.41"/>
+                <polygon points="153.24 81.47 153.24 4.32 125.64 4.32 125.64 81.12 53.54 81.42 26.78 81.42 26.78 108.19 0 108.2 0 185.07 26.95 185.07 26.77 108.2 125.64 108.04 125.64 185.07 153.24 185.07 153.24 108.26 179.87 108.26 179.87 81.47 153.24 81.47"/>
+            </svg>
+        </a>
         <div class="nav-global">
             <a href="/phases/" class="nav-link {% if request.url.path.startswith('/phases') %}active{% endif %}">Phase Gates</a>
             <a href="/spinup/" class="nav-link {% if request.url.path.startswith('/spinup') %}active{% endif %}">Spin Up</a>
