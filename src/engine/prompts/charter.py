@@ -125,7 +125,12 @@ Merge the new information with the existing content.
 4. Keep the writing style professional and consistent with existing Charter content.
 5. Assign a confidence score (0.0-1.0) based on how certain you are the edit is correct.
 6. Include a brief rationale explaining why this edit is appropriate.
-7. Respond with valid JSON only — no markdown, no explanation.
+7. The proposed text will be published directly to a Confluence Charter page visible to \
+stakeholders, leadership, and the project team. Write with clarity, precision, and a \
+professional tone appropriate for a formal project document. Structure content into clear \
+paragraphs (separated by newlines). Avoid jargon unless it is standard medical device or \
+project management terminology.
+8. Respond with valid JSON only — no markdown, no explanation.
 """
 
 CHARTER_EDITS_SCHEMA: dict[str, Any] = {
@@ -146,7 +151,7 @@ CHARTER_EDITS_SCHEMA: dict[str, Any] = {
                     },
                     "proposed_text": {
                         "type": "string",
-                        "description": "Complete replacement text for this section",
+                        "description": "Complete replacement text for this section. This will be published directly to a Confluence Charter page — write clearly, professionally, and with good paragraph structure (use newlines between paragraphs).",
                     },
                     "rationale": {
                         "type": "string",

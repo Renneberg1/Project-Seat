@@ -28,7 +28,12 @@ in the context. If a risk/decision already exists, skip it.
 6. Always generate an xft_update suggestion with meeting notes if there's substantive discussion.
 7. Only suggest charter_update if there are clear scope/timeline/objective changes discussed.
 8. Keep titles concise (under 80 characters) — they become Jira summaries.
-9. Respond with valid JSON only — no markdown, no explanation.
+9. For xft_update and charter_update suggestions: the confluence_content text will be \
+published directly to a Confluence page visible to the entire project team and stakeholders. \
+Write with clarity, professional tone, and good structure. Use separate paragraphs \
+(separated by newlines) for distinct points. Avoid casual language, abbreviations, or \
+incomplete sentences. Content should read as polished documentation, not rough meeting notes.
+10. Respond with valid JSON only — no markdown, no explanation.
 """
 
 # JSON schema for structured LLM output
@@ -86,7 +91,7 @@ TRANSCRIPT_ANALYSIS_SCHEMA: dict[str, Any] = {
                     },
                     "confluence_content": {
                         "type": "string",
-                        "description": "For xft/charter: content to add. Empty string if not applicable.",
+                        "description": "For xft/charter: content to publish on the Confluence page. Write clearly and professionally — this will be published as-is to a document visible to the project team. Use separate paragraphs (newlines) for distinct points. Empty string if not applicable.",
                     },
                 },
                 "required": ["type", "title", "evidence", "confidence"],

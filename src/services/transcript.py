@@ -673,11 +673,13 @@ class TranscriptService:
 
         # Build storage-format HTML for the new section
         from datetime import date
+        from html import escape as _html_escape
         today = date.today().isoformat()
-        append_html = (
-            f"<h2>{section_title} — {today}</h2>"
-            f"<p>{content}</p>"
-        )
+        escaped = _html_escape(content, quote=True)
+        # Wrap each paragraph (newline-separated) in its own <p> tag
+        paragraphs = [line.strip() for line in escaped.split("\n") if line.strip()]
+        body_html = "".join(f"<p>{p}</p>" for p in paragraphs) if paragraphs else f"<p>{escaped}</p>"
+        append_html = f"<h2>{section_title} — {today}</h2>{body_html}"
 
         return {
             "page_id": page_id,
