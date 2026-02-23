@@ -85,7 +85,7 @@ project-seat/
 │   │       ├── __init__.py
 │   │       ├── transcript.py        # Transcript analysis: system prompt, JSON schema, ADF helpers
 │   │       ├── charter.py           # Charter update: questions + edits prompts, JSON schemas
-│   │       └── (planned: release_plan.py, risk_decision.py, estimate_check.py — see docs/feature-backlog.md)
+│   │       └── (planned: release_plan.py, estimate_check.py — see docs/feature-backlog.md)
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── spinup.py            # Project spin-up wizard logic

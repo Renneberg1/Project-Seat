@@ -23,12 +23,6 @@ LLM-assisted release plan drafting with estimate gap detection. Analyses the ini
 - Inputs: Jira initiative hierarchy + epic estimates + sprint data
 - Outputs: Release plan document, list of missing estimates, scope risk warnings
 
-### Risk/Decision Extraction (Standalone)
-Extract risks and decisions from arbitrary text input (not just transcripts). Useful for processing email threads, Slack exports, or design review notes.
-
-- Prompt template: `src/engine/prompts/risk_decision.py` (stub exists in CLAUDE.md, file missing)
-- Could share the suggestion review UI from the transcript workflow
-
 ### Estimate Gap Detection
 Scan a project's Jira hierarchy and flag epics/tasks missing story points or time estimates. LLM provides confidence-weighted suggestions for likely estimate ranges based on similar past tickets.
 
@@ -129,3 +123,4 @@ The `projects` table could further benefit from:
 - [x] Version Report Tracking Per Team (per-team version mapping with auto-detect at import, team progress dashboard with per-version JQL grouping, story point totals)
 - [x] Burnup Chart (Chart.js burnup with scope vs done over time, dashed projection to due date, team filter, velocity override)
 - [x] Confluence Formatting Guidance (LLM prompts include Confluence-specific formatting instructions for better output quality)
+- [x] Risk/Decision Extraction from Arbitrary Text (covered by Transcript Direct Input — textarea accepts any text, not just transcripts)
