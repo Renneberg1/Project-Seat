@@ -123,7 +123,7 @@ The `projects` table could further benefit from:
 - [x] Test Coverage Gaps (accept/reject suggestions, retry, append_mode, orchestrator, sample VTT)
 - [x] Transcript Direct Input (textarea alternative to file upload)
 - [x] LLM Charter Generation / Update (two-step Q&A flow, `CharterAgent`, section-level edits via approval queue)
-- [x] LLM Loading Spinners (HTMX indicators on all LLM buttons: analyze, charter ask/analyze, re-analyze)
+- [x] LLM Loading Spinners (animated CSS spinner + button disabling on all LLM buttons via HTMX indicators and hx-disabled-elt)
 - [x] Re-analyze Button (re-run LLM on same transcript with updated project context)
 - [x] Version Report Tracking Per Team (per-team version mapping with auto-detect at import, team progress dashboard with per-version JQL grouping, story point totals)
 - [x] Burnup Chart (Chart.js burnup with scope vs done over time, dashed projection to due date, team filter, velocity override)

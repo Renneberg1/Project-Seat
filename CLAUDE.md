@@ -16,12 +16,12 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update.
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update, Health Review.
 2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output), Orchestrator (task scheduling framework, wired into lifespan).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, per-team version progress tracking with burnup charts, Jira Plans timeline embed.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, per-team version progress tracking with burnup charts, Jira Plans timeline embed.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -74,7 +74,7 @@ project-seat/
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── approval.py          # Approval queue and gating logic
-│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent)
+│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent, HealthReviewAgent)
 │   │   ├── charter_storage_utils.py  # Charter XHTML section extraction and replacement
 │   │   ├── orchestrator.py      # Task queue and scheduling (framework implemented, no tasks registered yet)
 │   │   ├── providers/
@@ -85,6 +85,7 @@ project-seat/
 │   │       ├── __init__.py
 │   │       ├── transcript.py        # Transcript analysis: system prompt, JSON schema, ADF helpers
 │   │       ├── charter.py           # Charter update: questions + edits prompts, JSON schemas
+│   │       ├── health_review.py     # Health review: questions + review prompts, JSON schemas
 │   │       └── (planned: release_plan.py, estimate_check.py — see docs/feature-backlog.md)
 │   ├── services/
 │   │   ├── __init__.py
@@ -95,6 +96,7 @@ project-seat/
 │   │   ├── release.py           # Release scope-freeze and document tracking
 │   │   ├── transcript.py        # Transcript parsing, LLM analysis, suggestion management
 │   │   ├── charter.py           # Charter section fetch, LLM Q&A, edit proposals, suggestion management
+│   │   ├── health_review.py     # Health review: context gathering, LLM Q&A, review persistence
 │   │   ├── team_progress.py     # Per-team version progress tracking (JQL-based)
 │   │   └── team_snapshot.py     # Daily team progress snapshots for burnup charts
 │   ├── web/
@@ -107,7 +109,8 @@ project-seat/
 │   │   │   ├── project.py          # Project detail (dashboard/features/docs/approvals)
 │   │   │   ├── spinup.py
 │   │   │   ├── transcript.py       # Upload, analyze, accept/reject suggestions
-│   │   │   └── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
+│   │   │   ├── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
+│   │   │   └── health_review.py    # Health review page, LLM Q&A, review output
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
 │   │   │   ├── phases.html
@@ -124,6 +127,7 @@ project-seat/
 │   │   │   ├── transcript_suggestions_page.html # Full-page suggestion review
 │   │   │   ├── charter.html                     # Charter sections view + LLM update form
 │   │   │   ├── project_team_progress.html       # Per-team version progress + burnup chart
+│   │   │   ├── project_health_review.html      # Health review page + past reviews
 │   │   │   └── partials/
 │   │   │       ├── approval_pending.html
 │   │   │       ├── approval_row.html
@@ -134,7 +138,9 @@ project-seat/
 │   │   │       ├── suggestion_row.html          # Individual suggestion accept/reject
 │   │   │       ├── charter_questions.html       # LLM clarifying questions form
 │   │   │       ├── charter_suggestions.html     # Charter edit proposals with Accept All
-│   │   │       └── charter_suggestion_row.html  # Individual charter edit accept/reject
+│   │   │       ├── charter_suggestion_row.html  # Individual charter edit accept/reject
+│   │   │       ├── health_review_questions.html # Health review clarifying questions form
+│   │   │       └── health_review_output.html    # Health review structured output
 │   │   └── static/              # CSS (JS loaded from CDN: HTMX, Chart.js)
 │   │       └── style.css
 │   └── models/
@@ -161,6 +167,7 @@ project-seat/
     │   ├── test_agent.py            # Provider factory + TranscriptAgent tests
     │   ├── test_charter_storage_utils.py  # Charter XHTML parsing + replacement tests
     │   ├── test_charter_agent.py    # CharterAgent questions + edits tests
+    │   ├── test_health_review_agent.py  # HealthReviewAgent questions + review tests
     │   └── test_orchestrator.py
     ├── test_models/
     │   ├── test_project_models.py
@@ -176,6 +183,7 @@ project-seat/
     │   ├── test_release.py
     │   ├── test_transcript.py       # Parser + service tests
     │   ├── test_charter.py          # Charter service + suggestion workflow tests
+    │   ├── test_health_review.py    # Health review service tests
     │   ├── test_team_progress.py    # Team progress service tests
     │   └── test_team_snapshot.py    # Snapshot service tests
     └── test_web/
@@ -186,6 +194,7 @@ project-seat/
         ├── test_routes_spinup.py
         ├── test_routes_transcript.py
         ├── test_routes_charter.py   # Charter route contract tests
+        ├── test_routes_health_review.py  # Health review route tests
         └── test_routes_team_progress.py  # Team progress route tests
 ```
 
@@ -221,9 +230,12 @@ pytest
 - Prompt templates live in `src/engine/prompts/` as Python files that build the prompt string
 - `TranscriptAgent` orchestrates transcript analysis: builds prompt, calls provider with JSON schema, retries on parse failure
 - `CharterAgent` orchestrates Charter updates via two-step LLM interaction: `ask_questions()` identifies gaps, `propose_edits()` returns section replacements — both retry on JSON parse failure
+- `HealthReviewAgent` orchestrates project health reviews via two-step LLM interaction: `ask_questions()` identifies data gaps, `generate_review()` returns structured assessment — read-only, no approval queue needed
 - All LLM responses that result in write actions must pass through the Approval Engine first
 - Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
+- Gemini limitation: 2.5 Flash uses "thinking" tokens that count against `maxOutputTokens` — use 16384+ for structured output to avoid truncation
 - Gemini uses `responseMimeType: application/json` + `responseSchema` for structured output; Ollama uses `format` parameter
+- Gemini provider logs `finishReason` warnings when response is truncated (`MAX_TOKENS`, `SAFETY`, etc.)
 
 ### Approval Engine
 - Every write action (creating Jira tickets, updating Confluence pages, etc.) requires user approval
@@ -237,11 +249,12 @@ pytest
 - Jinja2 templates in `src/web/templates/`
 - Keep templates simple; business logic lives in services, not in templates or routes
 - Routes are thin — validate input, call a service, return a template
+- LLM loading indicators use animated CSS spinners (opacity-based, compatible with HTMX's built-in `.htmx-indicator` mechanism) and `hx-disabled-elt` for button disabling during requests
 
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
 - Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
-- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`, `health_reviews`
 
 ### Testing
 - Use pytest
@@ -375,6 +388,41 @@ If the LLM returns no questions (user input is already complete), the questions 
 - **Stateless Q&A:** No DB storage for the intermediate Q&A state — the questions form carries `user_input` as a hidden field and answers as form fields. Only the final suggestions are persisted.
 - **Section replace mode:** The approval engine's `UPDATE_CONFLUENCE_PAGE` action supports `section_replace_mode: true` — at execution time, the current page body is fetched and `replace_section_content()` swaps the target `<td>` in-place, preventing overwrites of other sections changed between suggestion and approval.
 - **Payload refresh at accept time:** Like transcripts, `accept_suggestion()` patches the `page_id` from current project data to prevent stale Confluence page references.
+
+## Health Review Workflow
+
+The health review is the third LLM-powered feature. It uses the same two-step Q&A pattern as Charter Update, but is read-only (no write actions, no approval queue).
+
+### Flow
+
+```
+User clicks "Start Health Review"
+  → POST /health-review/ask → HealthReviewService.generate_questions()
+      → gather_all_context() (parallel: summary, initiatives, PI, team progress,
+        snapshots, DHF, transcript context, releases, meeting summaries)
+      → HealthReviewAgent.ask_questions() (LLM call #1: identify data gaps)
+  → UI shows clarifying questions (or auto-submits if none needed)
+  → User answers → POST /health-review/analyze → HealthReviewService.generate_review()
+      → HealthReviewAgent.generate_review() (LLM call #2: structured review)
+  → Persist review in health_reviews table
+  → Display structured output (rating, concerns, positives, next actions)
+```
+
+### Output Structure
+
+- **health_rating**: Green / Amber / Red
+- **health_rationale**: One-line summary
+- **top_concerns**: Ranked list with area, severity, evidence, recommendation
+- **positive_observations**: Things going well
+- **questions_for_pm**: Things warranting investigation
+- **suggested_next_actions**: Concrete next steps
+
+### Key Design Decisions
+
+- **Read-only:** No write actions to Jira/Confluence — purely advisory, no approval queue needed
+- **Comprehensive context:** Ingests all available project data (9 parallel fetches with graceful error handling per source)
+- **Persisted reviews:** Stored in `health_reviews` table for historical comparison, displayed on the Health Review page
+- **High token budget:** Uses `maxOutputTokens: 16384` because Gemini 2.5 Flash thinking tokens count against the output budget
 
 ## Feature Backlog & Technical Debt
 
