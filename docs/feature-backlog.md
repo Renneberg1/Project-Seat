@@ -60,15 +60,6 @@ Delivery: Confluence page update or email-ready format.
 
 ## Dashboard & UI
 
-### Dashboard UI Refresh
-Redesign the project dashboard to be more graphical and information-dense:
-- **Progress rings/bars** for DHF completion, release readiness, sprint progress
-- **Risk heat map** or severity distribution chart (High/Medium/Low counts as coloured badges or mini bar chart)
-- **Timeline view** showing project phases with current position indicator
-- **Sparklines** for trend data (risk count over time, velocity, doc completion)
-- **Card-based layout** replacing the current table-heavy design
-- Chart.js is already integrated (burnup chart on Team Progress tab) — extend to other dashboard sections
-
 ### Pipeline View Enhancements
 - Drag-and-drop phase transitions (currently button-based)
 - Project health indicator (green/amber/red) based on risk count + timeline status
@@ -131,3 +122,4 @@ The `projects` table could further benefit from:
 - [x] Risk/Decision Extraction from Arbitrary Text (covered by Transcript Direct Input — textarea accepts any text, not just transcripts)
 - [x] Jira Plans Timeline Embed (iframe embed on dashboard, accepts bare URL or `<iframe>` snippet from Jira Plans Share, stored per project, integrated into import and spin-up flows)
 - [x] Project Health Review (on-demand LLM health check: two-step Q&A flow, gathers all project data, structured review with Green/Amber/Red rating, concerns, positives, next actions, persisted in `health_reviews` table)
+- [x] Dashboard UI Redesign (hero bar with phase/health/countdown, 4 metric cards with Chart.js doughnuts for risks and DHF, scope composition bar with type pills, team % card, full-width team breakdown stacked bars, 3-column activity/links section, responsive at 768px/480px, body widened to 1280px)

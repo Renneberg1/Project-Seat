@@ -16,6 +16,7 @@ A locally-run project management cockpit for medical device software engineering
 - **Project Health Review** — On-demand LLM health check: gathers all project data (risks, decisions, team progress, DHF docs, charter, meeting summaries), asks clarifying questions, then produces a structured Green/Amber/Red assessment with concerns, positives, and next actions
 - **Team Progress Tracking** — Per-team version progress with auto-detected team mapping at import, story point breakdowns, and Chart.js burnup charts with projection and velocity override
 - **Jira Plans Timeline** — Embed Jira Plans (Advanced Roadmaps) Gantt chart on the project dashboard via iframe, with direct link to Jira
+- **Dashboard Redesign** — Information-dense layout with hero bar (phase/health/countdown), Chart.js doughnut charts (risks, DHF docs), scope composition bar, team breakdown stacked bars, 3-column activity/links section. Responsive at 768px and 480px breakpoints.
 
 ### Planned / Upcoming
 
@@ -24,7 +25,6 @@ See `docs/feature-backlog.md` for the full list. Highlights:
 - **LLM XFT Minutes** — Structure meeting transcripts into formal XFT minutes
 - **Release Planning Assistant** — LLM-assisted release plan drafting with estimate gap detection
 - **CEO Review Output** — Aggregated project status reports for executive review
-- **Dashboard UI Refresh** — Progress rings, risk heat maps, timeline views
 
 ## Quick Start
 

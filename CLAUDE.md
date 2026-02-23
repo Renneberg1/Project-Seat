@@ -6,7 +6,7 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 - **Language:** Python 3.12+
 - **Web framework:** FastAPI + Uvicorn
-- **Frontend:** HTMX + Jinja2 templates + Chart.js (burnup charts)
+- **Frontend:** HTMX + Jinja2 templates + Chart.js (dashboard doughnuts, stacked bars, burnup charts)
 - **Database:** SQLite (via sqlite3 stdlib, no ORM)
 - **HTTP client:** httpx (async)
 - **LLM:** Gemini 2.5 Flash (default) or Ollama — provider-agnostic via `src/engine/agent.py`
@@ -245,11 +245,12 @@ pytest
 
 ### Frontend
 - HTMX for reactivity — no JavaScript framework
-- Chart.js for data visualisation (burnup charts on team progress page)
+- Chart.js for data visualisation: doughnut charts (risk/DHF on dashboard), stacked horizontal bars (team breakdown on dashboard), burnup charts (team progress page)
 - Jinja2 templates in `src/web/templates/`
 - Keep templates simple; business logic lives in services, not in templates or routes
 - Routes are thin — validate input, call a service, return a template
 - LLM loading indicators use animated CSS spinners (opacity-based, compatible with HTMX's built-in `.htmx-indicator` mechanism) and `hx-disabled-elt` for button disabling during requests
+- Dashboard layout uses CSS Grid with `.dash-*` class prefix: hero bar, 4-column metric cards, full-width team breakdown, 3-column activity/links section. Responsive at 768px (2-col) and 480px (1-col).
 
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
@@ -261,6 +262,15 @@ pytest
 - Mock API responses using sample data from `samples/`
 - Test connectors against saved JSON responses, not live APIs
 - Test the agent layer with known prompts and expected structured outputs
+
+### Documentation Updates on Feature Commits
+When committing a new feature or significant change, **always update the following project documentation** as part of the same commit:
+1. **`README.md`** — Update the Features list if a new user-visible capability was added. Remove from "Planned / Upcoming" if it was listed there.
+2. **`CLAUDE.md`** — Update the relevant sections: Tech Stack (if new dependencies), Architecture (if new views/layers), Folder Structure (if new files), Key Conventions (if new patterns). Keep descriptions factual and concise.
+3. **`docs/feature-backlog.md`** — Move the feature from its planned section to the "Completed Features" list at the bottom. Include a one-line summary of what was delivered.
+4. **Folder Structure in CLAUDE.md** — Add any new files or directories created by the feature.
+
+This ensures project docs stay in sync with the codebase without requiring a separate documentation pass.
 
 ## Jira Structure
 
