@@ -53,6 +53,7 @@ def test_import_fetch_returns_confirm_partial(client):
         ],
         charter_id="100",
         xft_id="200",
+        detected_teams={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"},
     )
 
     with patch("src.web.routes.import_project.ImportService") as MockSvc:
@@ -65,6 +66,8 @@ def test_import_fetch_returns_confirm_partial(client):
     assert "100" in result.text
     assert "200" in result.text
     assert "Charter" in result.text
+    assert "Auto-detected 2 team(s)" in result.text
+    assert "AIM:HOP Drop 2" in result.text
 
 
 def test_import_fetch_handles_connector_error(client):
@@ -105,12 +108,22 @@ def test_import_save_redirects_to_dashboard(client, tmp_db):
                 "name": "HOP Drop 2",
                 "charter_id": "100",
                 "xft_id": "200",
+                "team_projects": "AIM:HOP Drop 2, CTCV:HOP Drop 2",
             },
             follow_redirects=False,
         )
 
     assert result.status_code == 303
     assert "/project/42/dashboard" in result.headers["location"]
+    # Verify team_projects was parsed as dict
+    MockSvc.return_value.save_project.assert_called_once_with(
+        goal_key="PROG-256",
+        name="HOP Drop 2",
+        charter_id="100",
+        xft_id="200",
+        pi_version=None,
+        team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"},
+    )
 
 
 def test_import_save_duplicate_shows_error(client, tmp_db):
@@ -148,4 +161,5 @@ def test_import_save_empty_page_ids_saved_as_none(client, tmp_db):
         charter_id=None,
         xft_id=None,
         pi_version=None,
+        team_projects=None,
     )

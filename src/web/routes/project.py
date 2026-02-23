@@ -24,6 +24,7 @@ from src.services.dashboard import DashboardService
 from src.services.dhf import DHFService
 from src.services.release import ReleaseService
 from src.services.spinup import SpinUpService
+from src.services.team_progress import TeamProgressService, TeamVersionReport
 from src.services.transcript import TranscriptService
 from src.web.deps import get_nav_context, templates
 
@@ -132,6 +133,9 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     transcript_service = TranscriptService()
     transcript_summary = transcript_service.get_transcript_summary(id)
 
+    team_service = TeamProgressService()
+    team_reports = await team_service.get_team_reports(project)
+
     return _render(request, "project_dashboard.html", {
         "project": project,
         "summary": summary,
@@ -144,6 +148,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         "release_published": release_published,
         "release_total": release_total,
         "transcript_summary": transcript_summary,
+        "team_reports": team_reports,
     }, id)
 
 
@@ -169,6 +174,7 @@ async def refresh_project(request: Request, id: int) -> HTMLResponse:
         cache.invalidate(f"initiatives:{project.jira_goal_key}")
         if project.pi_version:
             cache.invalidate(f"pi:{project.pi_version}")
+        cache.invalidate(f"team_progress:{project.jira_goal_key}")
         if project.dhf_draft_root_id and project.dhf_released_root_id:
             cache.invalidate(f"dhf:{project.dhf_draft_root_id}:{project.dhf_released_root_id}")
     # Redirect back to the referring page (or dashboard)
@@ -401,6 +407,83 @@ async def unlock_release(request: Request, id: int, release_id: int) -> Redirect
     service = ReleaseService()
     service.unlock_release(release_id)
     return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
+
+
+# ------------------------------------------------------------------
+# Team Progress
+# ------------------------------------------------------------------
+
+
+@router.get("/{id}/team-progress", response_class=HTMLResponse)
+async def project_team_progress(request: Request, id: int) -> HTMLResponse:
+    """Per-team fix version progress (issue counts + story points)."""
+    service = DashboardService()
+    project = service.get_project_by_id(id)
+    if project is None:
+        return HTMLResponse("Project not found", status_code=404)
+
+    team_service = TeamProgressService()
+    reports = await team_service.get_team_reports(project)
+
+    # Compute totals row
+    totals = None
+    if reports:
+        totals = TeamVersionReport(
+            team_key="TOTAL",
+            version_name=project.name,
+            total_issues=sum(r.total_issues for r in reports),
+            done_count=sum(r.done_count for r in reports),
+            in_progress_count=sum(r.in_progress_count for r in reports),
+            todo_count=sum(r.todo_count for r in reports),
+            blocker_count=sum(r.blocker_count for r in reports),
+            sp_total=sum(r.sp_total for r in reports),
+            sp_done=sum(r.sp_done for r in reports),
+            sp_missing_count=sum(r.sp_missing_count for r in reports),
+        )
+
+    return _render(request, "project_team_progress.html", {
+        "project": project,
+        "reports": reports,
+        "totals": totals,
+    }, id)
+
+
+@router.post("/{id}/team-projects/config")
+async def save_team_projects_config(
+    request: Request,
+    id: int,
+    team_projects: str = Form(""),
+) -> RedirectResponse:
+    """Save team project keys for a project."""
+    import json
+    import src.config
+    # Parse KEY:VERSION pairs (e.g. "AIM:HOP Drop 2, CTCV:HOP Drop 2")
+    team_dict: dict[str, str] = {}
+    # We need the project name for default version fallback
+    service_dash = DashboardService()
+    project_obj = service_dash.get_project_by_id(id)
+    default_version = project_obj.name if project_obj else ""
+    for entry in team_projects.split(","):
+        entry = entry.strip()
+        if not entry:
+            continue
+        if ":" in entry:
+            key, version = entry.split(":", 1)
+            team_dict[key.strip().upper()] = version.strip()
+        else:
+            team_dict[entry.upper()] = default_version
+    with get_db(src.config.settings.db_path) as conn:
+        conn.execute(
+            "UPDATE projects SET team_projects = ? WHERE id = ?",
+            (json.dumps(team_dict) if team_dict else None, id),
+        )
+        conn.commit()
+    # Invalidate any cached team progress for this project
+    service = DashboardService()
+    project = service.get_project_by_id(id)
+    if project:
+        cache.invalidate(f"team_progress:{project.jira_goal_key}")
+    return RedirectResponse(f"/project/{id}/team-progress", status_code=303)
 
 
 # ------------------------------------------------------------------

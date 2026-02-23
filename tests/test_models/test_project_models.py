@@ -100,7 +100,7 @@ def test_spinup_request_default_space_key():
     result = SpinUpRequest(
         project_name="Test",
         program="HOP",
-        team_projects=["AIM"],
+        team_projects={"AIM": "Test"},
         target_date="2026-06-01",
         labels=["test"],
         goal_summary="A test project",
@@ -113,7 +113,7 @@ def test_spinup_request_custom_space_key():
     result = SpinUpRequest(
         project_name="Test",
         program="HOP",
-        team_projects=[],
+        team_projects={},
         target_date="",
         labels=[],
         goal_summary="",
@@ -121,3 +121,35 @@ def test_spinup_request_custom_space_key():
     )
 
     assert result.confluence_space_key == "CUSTOM"
+
+
+def test_project_from_row_backward_compat_list_team_projects(tmp_db):
+    """Old-format list team_projects JSON is auto-converted to dict."""
+    import json
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (jira_goal_key, name, status, team_projects) VALUES (?, ?, ?, ?)",
+            ("PROG-600", "Legacy", "active", json.dumps(["AIM", "CTCV"])),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-600'").fetchone()
+
+    result = Project.from_row(row)
+
+    assert result.team_projects == {"AIM": "Legacy", "CTCV": "Legacy"}
+
+
+def test_project_from_row_dict_team_projects(tmp_db):
+    """New-format dict team_projects JSON is preserved as-is."""
+    import json
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (jira_goal_key, name, status, team_projects) VALUES (?, ?, ?, ?)",
+            ("PROG-700", "New Format", "active", json.dumps({"AIM": "HOP Drop 2", "CTCV": "HOP Drop 3"})),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-700'").fetchone()
+
+    result = Project.from_row(row)
+
+    assert result.team_projects == {"AIM": "HOP Drop 2", "CTCV": "HOP Drop 3"}

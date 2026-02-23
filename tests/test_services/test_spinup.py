@@ -51,7 +51,7 @@ async def test_prepare_spinup_creates_local_project(service, tmp_db, make_spinup
 
 
 async def test_prepare_spinup_queues_correct_item_count(service, make_spinup_request):
-    req = make_spinup_request(team_projects=["AIM", "CTCV"])
+    req = make_spinup_request(team_projects={"AIM": "HOP Drop 4", "CTCV": "HOP Drop 4"})
     p1, p2 = _patch_templates(service)
 
     with p1, p2:
@@ -90,7 +90,7 @@ async def test_prepare_spinup_second_item_is_risk_version(service, make_spinup_r
 
 
 async def test_prepare_spinup_team_version_payloads(service, make_spinup_request):
-    req = make_spinup_request(team_projects=["AIM", "CTCV"])
+    req = make_spinup_request(team_projects={"AIM": "HOP Drop 4", "CTCV": "HOP Drop 4"})
     p1, p2 = _patch_templates(service)
 
     with p1, p2:
@@ -104,7 +104,7 @@ async def test_prepare_spinup_team_version_payloads(service, make_spinup_request
 
 
 async def test_prepare_spinup_xft_uses_charter_sentinel(service, make_spinup_request):
-    req = make_spinup_request(team_projects=[])
+    req = make_spinup_request(team_projects={})
     p1, p2 = _patch_templates(service)
 
     with p1, p2:
@@ -117,7 +117,7 @@ async def test_prepare_spinup_xft_uses_charter_sentinel(service, make_spinup_req
 
 
 async def test_prepare_spinup_update_goal_uses_goal_key_sentinel(service, make_spinup_request):
-    req = make_spinup_request(team_projects=[])
+    req = make_spinup_request(team_projects={})
     p1, p2 = _patch_templates(service)
 
     with p1, p2:

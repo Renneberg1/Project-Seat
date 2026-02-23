@@ -125,6 +125,25 @@
     </div>
 
     <div class="overview-card">
+        <h3>Team Progress</h3>
+        {% if team_reports and team_reports|length > 0 %}
+        {% for r in team_reports %}
+        <div style="margin-bottom: 0.4rem;">
+            <span style="font-weight: 600; font-size: 0.9rem;">{{ r.team_key }}:</span>
+            <span style="font-size: 0.85rem;">{{ r.done_count }}/{{ r.total_issues }} ({{ r.pct_done_issues }}%)</span>
+            <div class="progress-bar-outer progress-bar-sm" style="margin-top: 0.15rem;">
+                <div class="progress-bar-done" style="width: {{ r.pct_done_issues }}%"></div>
+            </div>
+        </div>
+        {% endfor %}
+        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/team-progress" class="btn btn-sm">View All</a></p>
+        {% else %}
+        <p>No teams configured.</p>
+        <a href="/project/{{ project.id }}/team-progress" class="btn btn-sm">Configure</a>
+        {% endif %}
+    </div>
+
+    <div class="overview-card">
         <h3>Transcripts</h3>
         {% if transcript_summary and transcript_summary.transcript_count > 0 %}
         <p class="overview-metric">{{ transcript_summary.transcript_count }} uploaded</p>

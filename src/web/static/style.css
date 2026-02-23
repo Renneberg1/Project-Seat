@@ -848,6 +848,85 @@ th {
     resize: vertical;
 }
 
+/* Team progress bars */
+.progress-bar-outer {
+    height: 12px;
+    background: #e0e0e0;
+    border-radius: 6px;
+    overflow: hidden;
+    display: flex;
+}
+
+.progress-bar-outer.progress-bar-sm {
+    height: 8px;
+}
+
+.progress-bar-done {
+    background: #2e7d32;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.progress-bar-wip {
+    background: #f57c00;
+    height: 100%;
+    transition: width 0.3s ease;
+}
+
+.progress-bar-sp {
+    background: #0288d1;
+    height: 100%;
+    border-radius: 6px;
+    transition: width 0.3s ease;
+}
+
+.progress-label {
+    display: flex;
+    gap: 1rem;
+    font-size: 0.8rem;
+    margin-top: 0.35rem;
+    color: #555;
+}
+
+.progress-legend-done::before { content: ''; display: inline-block; width: 10px; height: 10px; background: #2e7d32; border-radius: 2px; margin-right: 0.25rem; vertical-align: middle; }
+.progress-legend-wip::before  { content: ''; display: inline-block; width: 10px; height: 10px; background: #f57c00; border-radius: 2px; margin-right: 0.25rem; vertical-align: middle; }
+.progress-legend-todo::before { content: ''; display: inline-block; width: 10px; height: 10px; background: #e0e0e0; border-radius: 2px; margin-right: 0.25rem; vertical-align: middle; }
+
+.progress-pct {
+    font-size: 0.8rem;
+    color: #555;
+}
+
+/* Team totals card */
+.team-totals-card {
+    background: #fff;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    padding: 1rem;
+    margin-bottom: 1.5rem;
+}
+
+.team-totals-card h3 {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: #666;
+    margin-bottom: 0.5rem;
+}
+
+.team-totals-metrics {
+    display: flex;
+    gap: 1.5rem;
+    flex-wrap: wrap;
+    margin-bottom: 0.5rem;
+    font-size: 0.9rem;
+}
+
+/* Team progress table */
+.team-progress-table td:nth-child(7),
+.team-progress-table td:nth-child(9) {
+    min-width: 100px;
+}
+
 /* Charter diff (current vs proposed) */
 .charter-diff {
     display: grid;

@@ -97,16 +97,16 @@ class SpinUpService:
         )
 
         # 3) Create fix version in each team project
-        for proj_key in req.team_projects:
+        for proj_key, team_version in req.team_projects.items():
             item_ids.append(
                 self._engine.propose(
                     ApprovalAction.CREATE_JIRA_VERSION,
                     {
                         "project_key": proj_key,
-                        "name": version_name,
+                        "name": team_version,
                         "release_date": req.target_date or None,
                     },
-                    preview=f"Create version '{version_name}' in {proj_key}",
+                    preview=f"Create version '{team_version}' in {proj_key}",
                     context=f"Spin-up step 3: {proj_key} fix version",
                     project_id=project_id,
                 )
@@ -260,8 +260,8 @@ class SpinUpService:
         """Insert a placeholder project row. Returns the project ID."""
         with get_db(self._db_path) as conn:
             cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, status, pi_version) VALUES (?, ?, ?, ?)",
-                ("pending", req.project_name, "spinning_up", req.pi_version or None),
+                "INSERT INTO projects (jira_goal_key, name, status, pi_version, team_projects) VALUES (?, ?, ?, ?, ?)",
+                ("pending", req.project_name, "spinning_up", req.pi_version or None, json.dumps(req.team_projects) if req.team_projects else None),
             )
             conn.commit()
             return cursor.lastrowid

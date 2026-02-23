@@ -14,6 +14,7 @@ from src.services.import_project import (
     DetectedPage,
     ImportPreview,
     ImportService,
+    _detect_team_projects,
     extract_confluence_page_ids,
     guess_charter_xft,
 )
@@ -162,6 +163,51 @@ def test_guess_charter_xft_single_unmatched_page_returns_none():
 
 
 # ---------------------------------------------------------------------------
+# _detect_team_projects: Incoming query — assert return value
+# ---------------------------------------------------------------------------
+
+
+def test_detect_team_projects_extracts_unique_keys_and_versions():
+    initiatives = [
+        {"fields": {"project": {"key": "AIM"}, "fixVersions": [{"name": "HOP Drop 2"}]}},
+        {"fields": {"project": {"key": "AIM"}, "fixVersions": [{"name": "HOP Drop 2"}]}},
+        {"fields": {"project": {"key": "CTCV"}, "fixVersions": [{"name": "HOP Drop 3"}]}},
+    ]
+
+    result = _detect_team_projects(initiatives)
+
+    assert result == {"AIM": "HOP Drop 2", "CTCV": "HOP Drop 3"}
+
+
+def test_detect_team_projects_excludes_prog_and_risk():
+    initiatives = [
+        {"fields": {"project": {"key": "PROG"}, "fixVersions": [{"name": "v1"}]}},
+        {"fields": {"project": {"key": "RISK"}, "fixVersions": [{"name": "v1"}]}},
+        {"fields": {"project": {"key": "AIM"}, "fixVersions": [{"name": "v1"}]}},
+    ]
+
+    result = _detect_team_projects(initiatives)
+
+    assert result == {"AIM": "v1"}
+
+
+def test_detect_team_projects_no_fix_version_returns_empty_string():
+    initiatives = [
+        {"fields": {"project": {"key": "AIM"}, "fixVersions": []}},
+    ]
+
+    result = _detect_team_projects(initiatives)
+
+    assert result == {"AIM": ""}
+
+
+def test_detect_team_projects_empty_list():
+    result = _detect_team_projects([])
+
+    assert result == {}
+
+
+# ---------------------------------------------------------------------------
 # ImportService.save_project: Incoming command — assert side effect
 # ---------------------------------------------------------------------------
 
@@ -271,9 +317,15 @@ async def test_fetch_preview_returns_preview_with_detected_pages(tmp_db):
     }
     service = ImportService(db_path=tmp_db)
 
+    mock_children = [
+        {"fields": {"project": {"key": "AIM"}, "fixVersions": [{"name": "HOP Drop 2"}]}},
+        {"fields": {"project": {"key": "CTCV"}, "fixVersions": [{"name": "HOP Drop 2"}]}},
+    ]
+
     with patch("src.services.import_project.JiraConnector") as MockJira:
         instance = MockJira.return_value
         instance.get_issue = AsyncMock(return_value=mock_issue)
+        instance.search = AsyncMock(return_value=mock_children)
         instance.close = AsyncMock()
         result = await service.fetch_preview("PROG-256")
 
@@ -282,3 +334,4 @@ async def test_fetch_preview_returns_preview_with_detected_pages(tmp_db):
     assert len(result.detected_pages) == 2
     assert result.charter_id == "123"
     assert result.xft_id == "456"
+    assert result.detected_teams == {"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"}

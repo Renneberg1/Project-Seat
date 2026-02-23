@@ -1,0 +1,127 @@
+{% extends "base.html" %}
+
+{% block title %}Teams — {{ project.name }} — Project Seat{% endblock %}
+
+{% block content %}
+<h1>Team Progress</h1>
+<p>{{ project.name }}{% if reports %} — Fix Version: {{ reports[0].version_name }}{% endif %}</p>
+
+{% if not project.team_projects %}
+<div class="empty-state">
+    <h2>No Team Projects Configured</h2>
+    <p>Add the Jira project keys for teams working on this project.</p>
+    <form method="post" action="/project/{{ project.id }}/team-projects/config" style="max-width: 500px; margin: 1rem auto;">
+        <div class="form-group">
+            <label for="team_projects">Team Projects (KEY:VERSION, comma-separated)</label>
+            <input type="text" id="team_projects" name="team_projects"
+                   placeholder="e.g. AIM:HOP Drop 2, CTCV:HOP Drop 2">
+        </div>
+        <button type="submit">Save</button>
+    </form>
+</div>
+
+{% elif reports %}
+
+{% if reports[0].error %}
+<div class="error-banner">Jira unavailable: {{ reports[0].error }}</div>
+{% endif %}
+
+{% if totals and totals.total_issues > 0 %}
+<div class="team-totals-card">
+    <h3>Overall Progress</h3>
+    <div class="team-totals-metrics">
+        <span><strong>{{ totals.done_count }}</strong> / {{ totals.total_issues }} issues done ({{ totals.pct_done_issues }}%)</span>
+        {% if totals.sp_total > 0 %}
+        <span><strong>{{ totals.sp_done|round(1) }}</strong> / {{ totals.sp_total|round(1) }} SP ({{ totals.pct_done_sp }}%)</span>
+        {% endif %}
+        {% if totals.blocker_count > 0 %}
+        <span class="badge badge-reject">{{ totals.blocker_count }} blockers</span>
+        {% endif %}
+    </div>
+    <div class="progress-bar-outer">
+        <div class="progress-bar-done" style="width: {{ totals.pct_done_issues }}%"></div>
+        <div class="progress-bar-wip" style="width: {{ (100 * totals.in_progress_count / totals.total_issues)|round|int if totals.total_issues > 0 else 0 }}%"></div>
+    </div>
+    <div class="progress-label">
+        <span class="progress-legend-done">Done {{ totals.done_count }}</span>
+        <span class="progress-legend-wip">In Progress {{ totals.in_progress_count }}</span>
+        <span class="progress-legend-todo">To Do {{ totals.todo_count }}</span>
+    </div>
+</div>
+{% endif %}
+
+<table class="team-progress-table">
+    <thead>
+        <tr>
+            <th>Team</th>
+            <th>Version</th>
+            <th>Total</th>
+            <th>Done</th>
+            <th>In Progress</th>
+            <th>To Do</th>
+            <th>Blockers</th>
+            <th>Issue Progress</th>
+            <th>SP Done/Total</th>
+            <th>SP Progress</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for r in reports %}
+        <tr{% if r.error %} class="status-failed"{% endif %}>
+            <td><strong>{{ r.team_key }}</strong></td>
+            <td>{{ r.version_name }}</td>
+            <td>{{ r.total_issues }}</td>
+            <td>{{ r.done_count }}</td>
+            <td>{{ r.in_progress_count }}</td>
+            <td>{{ r.todo_count }}</td>
+            <td>{% if r.blocker_count > 0 %}<span class="badge badge-rejected">{{ r.blocker_count }}</span>{% else %}0{% endif %}</td>
+            <td>
+                {% if r.total_issues > 0 %}
+                <div class="progress-bar-outer progress-bar-sm">
+                    <div class="progress-bar-done" style="width: {{ r.pct_done_issues }}%"></div>
+                    <div class="progress-bar-wip" style="width: {{ (100 * r.in_progress_count / r.total_issues)|round|int }}%"></div>
+                </div>
+                <span class="progress-pct">{{ r.pct_done_issues }}%</span>
+                {% else %}&mdash;{% endif %}
+            </td>
+            <td>
+                {% if r.sp_total > 0 %}
+                {{ r.sp_done|round(1) }} / {{ r.sp_total|round(1) }}
+                {% elif r.sp_missing_count > 0 %}
+                <span style="color: #888;">no SP</span>
+                {% else %}&mdash;{% endif %}
+            </td>
+            <td>
+                {% if r.sp_total > 0 %}
+                <div class="progress-bar-outer progress-bar-sm">
+                    <div class="progress-bar-sp" style="width: {{ r.pct_done_sp }}%"></div>
+                </div>
+                <span class="progress-pct">{{ r.pct_done_sp }}%</span>
+                {% else %}&mdash;{% endif %}
+            </td>
+        </tr>
+        {% endfor %}
+    </tbody>
+</table>
+
+{% if totals and totals.sp_missing_count > 0 %}
+<p style="font-size: 0.85em; color: #888;">{{ totals.sp_missing_count }} issue{{ 's' if totals.sp_missing_count != 1 else '' }} missing story point estimates.</p>
+{% endif %}
+
+<details style="margin-top: 1.5rem;">
+    <summary style="cursor: pointer; font-weight: 600; color: #555;">Configure Team Projects</summary>
+    <form method="post" action="/project/{{ project.id }}/team-projects/config" style="max-width: 500px; margin-top: 0.75rem;">
+        <div class="form-group">
+            <label for="team_projects">Team Projects (KEY:VERSION, comma-separated)</label>
+            <input type="text" id="team_projects" name="team_projects"
+                   value="{{ project.team_projects.items() | map('join', ':') | join(', ') }}">
+        </div>
+        <button type="submit" class="btn btn-sm">Save</button>
+    </form>
+</details>
+
+{% else %}
+<p>No issues found for the configured teams.</p>
+{% endif %}
+
+{% endblock %}

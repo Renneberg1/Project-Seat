@@ -108,6 +108,11 @@ def init_db(db_path: str | Path = "seat.db") -> None:
                 conn.execute(f"ALTER TABLE projects ADD COLUMN {col} TEXT")
             except sqlite3.OperationalError:
                 pass  # column already exists
+        # Migration: add team_projects column (JSON-encoded list of Jira project keys)
+        try:
+            conn.execute("ALTER TABLE projects ADD COLUMN team_projects TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         # Migration: add meeting_summary to transcript_cache
         try:
             conn.execute("ALTER TABLE transcript_cache ADD COLUMN meeting_summary TEXT")

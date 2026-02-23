@@ -36,6 +36,7 @@ class ImportPreview:
     detected_pages: list[DetectedPage] = field(default_factory=list)
     charter_id: str | None = None
     xft_id: str | None = None
+    detected_teams: dict[str, str] = field(default_factory=dict)
 
 
 def extract_confluence_page_ids(adf: dict | None) -> list[DetectedPage]:
@@ -102,6 +103,32 @@ def guess_charter_xft(pages: list[DetectedPage]) -> tuple[str | None, str | None
     return charter_id, xft_id
 
 
+def _detect_team_projects(
+    initiatives: list[dict],
+    exclude: set[str] | None = None,
+) -> dict[str, str]:
+    """Extract unique team project keys and their fix version names from child initiatives.
+
+    Returns ``{project_key: version_name}`` where *version_name* is the first
+    fixVersion found on any initiative in that project, or an empty string if none.
+    """
+    if exclude is None:
+        exclude = {"PROG", "RISK"}
+
+    teams: dict[str, str] = {}
+    for issue in initiatives:
+        fields = issue.get("fields", {})
+        proj_key = fields.get("project", {}).get("key", "")
+        if not proj_key or proj_key in exclude:
+            continue
+        if proj_key in teams:
+            continue  # keep first-seen version
+        fix_versions = fields.get("fixVersions") or []
+        version_name = fix_versions[0]["name"] if fix_versions else ""
+        teams[proj_key] = version_name
+    return teams
+
+
 class ImportService:
     """Fetch an existing Jira Goal and import it into the local DB."""
 
@@ -116,6 +143,11 @@ class ImportService:
                 goal_key,
                 fields=["summary", "description"],
             )
+            # Fetch child initiatives to detect team projects
+            child_issues = await jira.search(
+                f'parent = {goal_key} AND project not in (PROG, RISK)',
+                fields=["project", "fixVersions"],
+            )
         finally:
             await jira.close()
 
@@ -124,6 +156,7 @@ class ImportService:
 
         pages = extract_confluence_page_ids(description_adf)
         charter_id, xft_id = guess_charter_xft(pages)
+        detected_teams = _detect_team_projects(child_issues)
 
         return ImportPreview(
             goal_key=goal_key,
@@ -131,6 +164,7 @@ class ImportService:
             detected_pages=pages,
             charter_id=charter_id,
             xft_id=xft_id,
+            detected_teams=detected_teams,
         )
 
     def save_project(
@@ -140,11 +174,14 @@ class ImportService:
         charter_id: str | None = None,
         xft_id: str | None = None,
         pi_version: str | None = None,
+        team_projects: dict[str, str] | None = None,
     ) -> int:
         """Insert the imported project into the local DB. Returns the project ID.
 
         Raises ValueError if a project with the same goal_key already exists.
         """
+        import json
+
         with get_db(self._db_path) as conn:
             existing = conn.execute(
                 "SELECT id FROM projects WHERE jira_goal_key = ?",
@@ -154,9 +191,9 @@ class ImportService:
                 raise ValueError(f"Project with goal key '{goal_key}' already exists (id={existing['id']})")
 
             cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?)",
-                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version),
+                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version, team_projects) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version, json.dumps(team_projects) if team_projects else None),
             )
             conn.commit()
             return cursor.lastrowid

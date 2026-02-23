@@ -36,7 +36,7 @@ async def spinup_submit(
 ) -> HTMLResponse:
     """Parse the form, queue spin-up actions, and show result page."""
     # Parse comma-separated values
-    team_list = [t.strip() for t in team_projects.split(",") if t.strip()]
+    team_list = {t.strip(): project_name for t in team_projects.split(",") if t.strip()}
     label_list = [l.strip() for l in labels.split(",") if l.strip()]
 
     req = SpinUpRequest(
