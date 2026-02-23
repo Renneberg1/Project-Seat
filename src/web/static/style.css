@@ -4,7 +4,7 @@ body {
     font-family: system-ui, -apple-system, sans-serif;
     line-height: 1.6;
     color: #1a1a1a;
-    max-width: 1100px;
+    max-width: 1280px;
     margin: 0 auto;
     padding: 1rem;
 }
@@ -1062,4 +1062,329 @@ button.htmx-request {
 
 .health-review-detail {
     padding: 0.75rem 0;
+}
+
+/* ═══════════════════════════════════════════════════════════
+   Dashboard Redesign — .dash-* classes
+   ═══════════════════════════════════════════════════════════ */
+
+/* Hero bar */
+.dash-hero {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    flex-wrap: wrap;
+    gap: 0.75rem;
+    padding: 1rem 1.25rem;
+    border-bottom: 2px solid #e0e0e0;
+    margin-bottom: 1.5rem;
+}
+
+.dash-hero__title {
+    font-size: 1.5rem;
+    margin: 0;
+}
+
+.dash-hero__meta {
+    display: flex;
+    align-items: center;
+    gap: 0.75rem;
+    flex-wrap: wrap;
+}
+
+.dash-hero__goal {
+    font-size: 0.85rem;
+    color: #666;
+    font-weight: 600;
+}
+
+.dash-hero__countdown {
+    font-size: 0.9rem;
+    font-weight: 600;
+    color: #333;
+}
+
+.dash-hero__countdown--muted {
+    color: #999;
+    font-weight: 400;
+}
+
+.dash-countdown--urgent {
+    color: #c62828;
+}
+
+.dash-countdown--warning {
+    color: #f57c00;
+}
+
+.dash-hero__market {
+    font-size: 0.8rem;
+    color: #888;
+}
+
+/* Metrics grid (4 columns) */
+.dash-metrics {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+/* Metric card */
+.dash-metric-card {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 1.25rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    transition: border-color 0.15s ease, box-shadow 0.15s ease;
+}
+
+.dash-metric-card:hover {
+    border-color: #bbb;
+    box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+}
+
+.dash-metric-card__label {
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    color: #6b7280;
+    margin-bottom: 0.5rem;
+    font-weight: 600;
+}
+
+.dash-metric-card__value {
+    font-size: 1.8rem;
+    font-weight: 700;
+    color: #1a1a1a;
+    line-height: 1.2;
+}
+
+.dash-metric-card__context {
+    font-size: 0.8rem;
+    color: #666;
+    margin-top: 0.15rem;
+}
+
+.dash-chart-wrap {
+    height: 120px;
+    margin-bottom: 0.75rem;
+}
+
+.dash-metric-card__details {
+    margin-top: 0.5rem;
+    font-size: 0.85rem;
+}
+
+.dash-metric-card__details summary {
+    cursor: pointer;
+    color: #0055aa;
+    font-size: 0.8rem;
+}
+
+/* Context color modifiers */
+.dash-context--danger { color: #c62828; font-weight: 600; }
+.dash-context--ok { color: #2e7d32; }
+.dash-muted { color: #999; }
+
+/* Compact table (for risk details, activity) */
+.dash-compact-table {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 0.8rem;
+    margin-top: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.dash-compact-table th,
+.dash-compact-table td {
+    padding: 0.3rem 0.5rem;
+    border: 1px solid #eee;
+    text-align: left;
+}
+
+.dash-compact-table th {
+    background: #f8f8f8;
+    font-weight: 600;
+    font-size: 0.75rem;
+    text-transform: uppercase;
+    color: #666;
+}
+
+/* Compact list (decisions) */
+.dash-compact-list {
+    list-style: none;
+    padding: 0;
+    margin: 0.5rem 0 0 0;
+    font-size: 0.8rem;
+}
+
+.dash-compact-list li {
+    padding: 0.25rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+/* Scope composition bar */
+.dash-composition-bar {
+    display: flex;
+    height: 10px;
+    border-radius: 5px;
+    overflow: hidden;
+    margin: 0.5rem 0;
+    background: #e0e0e0;
+}
+
+.dash-comp-feature { background: #1565c0; }
+.dash-comp-minor   { background: #00897b; }
+.dash-comp-idea    { background: #8e24aa; }
+.dash-comp-defect  { background: #c62828; }
+
+/* Type badge pills */
+.dash-type-badges {
+    display: flex;
+    gap: 0.35rem;
+    flex-wrap: wrap;
+    margin-top: 0.25rem;
+}
+
+.dash-type-pill {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.7rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.dash-type-pill--feature { background: #1565c0; }
+.dash-type-pill--minor   { background: #00897b; }
+.dash-type-pill--idea    { background: #8e24aa; }
+.dash-type-pill--defect  { background: #c62828; }
+
+/* Team breakdown (full-width) */
+.dash-teams {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 1.25rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+    margin-bottom: 1.5rem;
+}
+
+.dash-teams__chart-wrap {
+    margin-bottom: 0.75rem;
+}
+
+.dash-teams__details {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.5rem 1.5rem;
+    font-size: 0.8rem;
+    margin-bottom: 0.5rem;
+}
+
+.dash-team-row {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dash-team-row__key {
+    font-weight: 700;
+    min-width: 3rem;
+}
+
+.dash-team-row__sp {
+    color: #555;
+}
+
+/* Section title */
+.dash-section-title {
+    font-size: 0.85rem;
+    text-transform: uppercase;
+    color: #6b7280;
+    letter-spacing: 0.05em;
+    margin-bottom: 0.75rem;
+    font-weight: 600;
+}
+
+/* Activity grid (3-col) */
+.dash-activity {
+    display: grid;
+    grid-template-columns: 2fr 1fr 1fr;
+    gap: 1.25rem;
+    margin-bottom: 1.5rem;
+}
+
+.dash-activity__main,
+.dash-activity__side {
+    background: #fff;
+    border: 1px solid #e0e0e0;
+    border-radius: 10px;
+    padding: 1.25rem;
+    box-shadow: 0 1px 3px rgba(0, 0, 0, 0.06);
+}
+
+/* Info blocks (label + value pairs in activity side cards) */
+.dash-info-block {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.dash-info-block__label {
+    font-size: 0.8rem;
+    color: #666;
+}
+
+.dash-info-block__value {
+    font-size: 1.1rem;
+    font-weight: 700;
+}
+
+/* Quick links list */
+.dash-link-list {
+    list-style: none;
+    padding: 0;
+    margin: 0;
+}
+
+.dash-link-list li {
+    padding: 0.3rem 0;
+    border-bottom: 1px solid #f0f0f0;
+}
+
+.dash-link-list li:last-child {
+    border-bottom: none;
+}
+
+.dash-link-list a {
+    color: #0055aa;
+    text-decoration: none;
+    font-size: 0.85rem;
+}
+
+.dash-link-list a:hover {
+    text-decoration: underline;
+}
+
+/* ── Responsive: Dashboard ── */
+@media (max-width: 768px) {
+    .dash-metrics {
+        grid-template-columns: repeat(2, 1fr);
+    }
+    .dash-activity {
+        grid-template-columns: 1fr;
+    }
+    .dash-hero {
+        flex-direction: column;
+        align-items: flex-start;
+    }
+}
+
+@media (max-width: 480px) {
+    .dash-metrics {
+        grid-template-columns: 1fr;
+    }
 }

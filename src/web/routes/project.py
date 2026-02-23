@@ -22,6 +22,7 @@ from src.models.dhf import DocumentStatus
 from src.models.release import ReleaseStatus
 from src.services.dashboard import DashboardService
 from src.services.dhf import DHFService
+from src.services.health_review import HealthReviewService
 from src.services.release import ReleaseService
 from src.services.spinup import SpinUpService
 from src.services.team_progress import TeamProgressService, TeamVersionReport
@@ -139,6 +140,36 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     team_service = TeamProgressService()
     team_reports = await team_service.get_team_reports(project)
 
+    # --- New dashboard context ---
+    # Latest health rating (SQLite only, no API call)
+    health_svc = HealthReviewService()
+    reviews = health_svc.list_reviews(id)
+    latest_health_rating = reviews[0]["health_rating"] if reviews else None
+
+    # Overall % done across all teams
+    total_issues = sum(r.total_issues for r in team_reports)
+    total_done = sum(r.done_count for r in team_reports)
+    overall_pct_done = round(100 * total_done / total_issues) if total_issues > 0 else 0
+    total_blockers = sum(r.blocker_count for r in team_reports)
+
+    # Risk breakdown by status
+    risk_by_status: dict[str, int] = {"Open": 0, "Controlled": 0, "Closed": 0}
+    for risk in summary.risks:
+        status = risk.status
+        if status in risk_by_status:
+            risk_by_status[status] += 1
+        else:
+            risk_by_status["Open"] += 1  # default bucket
+
+    # Days to release
+    days_to_release = None
+    if summary.goal and summary.goal.due_date:
+        try:
+            release_date = date.fromisoformat(summary.goal.due_date)
+            days_to_release = (release_date - date.today()).days
+        except ValueError:
+            pass
+
     return _render(request, "project_dashboard.html", {
         "project": project,
         "summary": summary,
@@ -153,6 +184,11 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         "release_total": release_total,
         "transcript_summary": transcript_summary,
         "team_reports": team_reports,
+        "latest_health_rating": latest_health_rating,
+        "overall_pct_done": overall_pct_done,
+        "total_blockers": total_blockers,
+        "risk_by_status": risk_by_status,
+        "days_to_release": days_to_release,
     }, id)
 
 

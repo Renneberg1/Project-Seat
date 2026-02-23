@@ -3,46 +3,61 @@
 {% block title %}{{ project.name }} — Project Seat{% endblock %}
 
 {% block content %}
-<h1>{{ project.name }}</h1>
 
 {% if summary.error %}
 <div class="error-banner">Jira unavailable: {{ summary.error }}</div>
 {% endif %}
 
-<div class="project-overview">
-    <div class="overview-card">
-        <h3>Overview</h3>
-        {% if summary.goal %}
-        <p><strong>{{ summary.goal.key }}</strong> — {{ summary.goal.summary }}</p>
-        <p>Phase: <span class="badge badge-goal-status">{{ project.phase | replace('_', ' ') | title }}</span></p>
-        {% if summary.goal.due_date %}
-        <p>Technical Release: {{ summary.goal.due_date }}</p>
+{# ── HERO BAR ─────────────────────────────────────────────── #}
+<div class="dash-hero">
+    <h1 class="dash-hero__title">{{ project.name }}</h1>
+    <div class="dash-hero__meta">
+        <span class="badge pipeline-stage-{{ project.phase }}">{{ project.phase | replace('_', ' ') | title }}</span>
+        {% if latest_health_rating %}
+        <span class="health-badge health-{{ latest_health_rating | lower }}">{{ latest_health_rating }}</span>
+        {% endif %}
+        {% if summary.goal and summary.goal.key %}
+        <span class="dash-hero__goal">{{ summary.goal.key }}</span>
+        {% endif %}
+        {% if days_to_release is not none %}
+        <span class="dash-hero__countdown {% if days_to_release < 30 %}dash-countdown--urgent{% elif days_to_release < 60 %}dash-countdown--warning{% endif %}">
+            {% if days_to_release > 0 %}{{ days_to_release }}d to release{% elif days_to_release == 0 %}Release today{% else %}{{ days_to_release|abs }}d overdue{% endif %}
+        </span>
+        {% elif summary.goal and summary.goal.due_date %}
+        <span class="dash-hero__countdown">{{ summary.goal.due_date }}</span>
+        {% else %}
+        <span class="dash-hero__countdown dash-hero__countdown--muted">No release date</span>
         {% endif %}
         {% if market_release %}
-        <p>Market Release: {{ market_release }}</p>
-        {% endif %}
-        {% else %}
-        <p>No goal data available.</p>
+        <span class="dash-hero__market">Market: {{ market_release }}</span>
         {% endif %}
     </div>
+</div>
 
-    <div class="overview-card">
-        <h3>Risks</h3>
-        <p class="overview-metric">{{ summary.open_risk_count }} open / {{ summary.risk_count }} total</p>
-        {% if summary.risk_level %}
-        <p>Level: {{ summary.risk_level }} | Threshold: {{ summary.risk_threshold }} | Points: {{ summary.risk_points }}</p>
-        {% endif %}
+{# ── METRIC CARDS (4-col grid) ────────────────────────────── #}
+<div class="dash-metrics">
+
+    {# ── RISK CARD ── #}
+    <div class="dash-metric-card">
+        <div class="dash-metric-card__label">Risks</div>
+        {% if summary.risk_count > 0 %}
+        <div class="dash-chart-wrap">
+            <canvas id="riskDoughnut" height="120"></canvas>
+        </div>
+        <div class="dash-metric-card__value">{{ summary.open_risk_count }} open</div>
+        <div class="dash-metric-card__context {% if summary.risk_points is not none and summary.risk_threshold is not none and summary.risk_points > summary.risk_threshold %}dash-context--danger{% else %}dash-context--ok{% endif %}">
+            {% if summary.risk_points is not none %}{{ summary.risk_points }}/{{ summary.risk_threshold }} threshold{% endif %}
+        </div>
         {% if summary.risks %}
-        <details style="margin-top: 0.5rem;">
-            <summary style="cursor: pointer;">View risks</summary>
-            <table style="margin-top: 0.5rem;">
-                <thead><tr><th>Key</th><th>Summary</th><th>Component</th><th>Risk Points</th><th>Status</th></tr></thead>
+        <details class="dash-metric-card__details">
+            <summary>View {{ summary.risk_count }} risks</summary>
+            <table class="dash-compact-table">
+                <thead><tr><th>Key</th><th>Summary</th><th>Pts</th><th>Status</th></tr></thead>
                 <tbody>
                 {% for risk in summary.risks %}
                 <tr>
                     <td>{{ risk.key }}</td>
                     <td>{{ risk.summary }}</td>
-                    <td>{{ risk.components | join(', ') if risk.components else '' }}</td>
                     <td>{{ risk.risk_points if risk.risk_points is not none else '' }}</td>
                     <td><span class="badge badge-risk-{{ risk.status | lower | replace(' ', '-') }}">{{ risk.status }}</span></td>
                 </tr>
@@ -51,44 +66,71 @@
             </table>
         </details>
         {% endif %}
-    </div>
-
-    <div class="overview-card">
-        <h3>Decisions</h3>
-        <p class="overview-metric">{{ summary.decision_count }}</p>
-        {% if summary.decisions %}
-        <details style="margin-top: 0.5rem;">
-            <summary style="cursor: pointer;">View decisions</summary>
-            <table style="margin-top: 0.5rem;">
-                <thead><tr><th>Key</th><th>Summary</th><th>Timeline Impact</th><th>Status</th></tr></thead>
-                <tbody>
-                {% for dec in summary.decisions %}
-                <tr>
-                    <td>{{ dec.key }}</td>
-                    <td>{{ dec.summary }}</td>
-                    <td>{{ dec.timeline_impact if dec.timeline_impact is not none else '' }}</td>
-                    <td><span class="badge badge-goal-status">{{ dec.status }}</span></td>
-                </tr>
-                {% endfor %}
-                </tbody>
-            </table>
-        </details>
-        {% endif %}
-    </div>
-
-    <div class="overview-card">
-        <h3>Scope (Product Ideas)</h3>
-        {% if pi_summary and pi_summary.total_count > 0 %}
-        <p class="overview-metric">{{ pi_summary.must_have_count }} must-have / {{ pi_summary.total_count }} total</p>
-        <p>{{ pi_summary.open_count }} open, {{ pi_summary.done_count }} done</p>
-        <p>{{ pi_summary.feature_count }} Feature, {{ pi_summary.minor_feature_count }} Minor,
-           {{ pi_summary.idea_count }} Idea, {{ pi_summary.defect_count }} Defect</p>
-        <p style="margin-top: 0.25rem; font-size: 0.85em; color: #666;">Version: {{ project.pi_version }}</p>
         {% else %}
-        <p>No PI version configured.</p>
+        <div class="dash-metric-card__value dash-muted">0</div>
+        <div class="dash-metric-card__context dash-muted">No risks tracked</div>
         {% endif %}
-        <details style="margin-top: 0.5rem;">
-            <summary style="font-size: 0.85em; cursor: pointer;">{{ "Change" if project.pi_version else "Configure" }} PI Version</summary>
+    </div>
+
+    {# ── DHF CARD ── #}
+    <div class="dash-metric-card">
+        <div class="dash-metric-card__label">Documents (DHF)</div>
+        {% if dhf_summary and dhf_summary.total_count > 0 %}
+        <div class="dash-chart-wrap">
+            <canvas id="dhfDoughnut" height="120"></canvas>
+        </div>
+        <div class="dash-metric-card__value">{{ dhf_summary.released_count }}/{{ dhf_summary.total_count }}</div>
+        <div class="dash-metric-card__context">
+            {% if dhf_summary.draft_update_count > 0 %}{{ dhf_summary.draft_update_count }} drafting{% endif %}
+            {% if dhf_summary.in_draft_count > 0 %}{% if dhf_summary.draft_update_count > 0 %}, {% endif %}{{ dhf_summary.in_draft_count }} new{% endif %}
+        </div>
+        {% if active_locked_release and release_total > 0 %}
+        <div class="dash-metric-card__context" style="margin-top: 0.25rem;">
+            <strong>{{ active_locked_release.name }}:</strong> {{ release_published }}/{{ release_total }} published
+        </div>
+        {% endif %}
+        <div style="margin-top: 0.5rem;">
+            <a href="/project/{{ project.id }}/documents{% if active_locked_release %}?release_id={{ active_locked_release.id }}{% endif %}" class="btn btn-sm">View All</a>
+        </div>
+        {% elif dhf_summary and dhf_summary.error %}
+        <div class="error-banner">{{ dhf_summary.error }}</div>
+        {% else %}
+        <div class="dash-metric-card__value dash-muted">—</div>
+        <div class="dash-metric-card__context dash-muted">No DHF configured</div>
+        <a href="/project/{{ project.id }}/documents" class="btn btn-sm" style="margin-top: 0.5rem;">Configure</a>
+        {% endif %}
+    </div>
+
+    {# ── SCOPE CARD (PI) ── #}
+    <div class="dash-metric-card">
+        <div class="dash-metric-card__label">Scope (Product Ideas)</div>
+        {% if pi_summary and pi_summary.total_count > 0 %}
+        <div class="dash-metric-card__value">{{ pi_summary.total_count }} items</div>
+        <div class="dash-metric-card__context">{{ pi_summary.must_have_count }} must-have</div>
+        {# Composition bar #}
+        {% set f_pct = (100 * pi_summary.feature_count / pi_summary.total_count)|round|int %}
+        {% set m_pct = (100 * pi_summary.minor_feature_count / pi_summary.total_count)|round|int %}
+        {% set i_pct = (100 * pi_summary.idea_count / pi_summary.total_count)|round|int %}
+        {% set d_pct = 100 - f_pct - m_pct - i_pct %}
+        <div class="dash-composition-bar">
+            {% if f_pct > 0 %}<div class="dash-comp-feature" style="width: {{ f_pct }}%"></div>{% endif %}
+            {% if m_pct > 0 %}<div class="dash-comp-minor" style="width: {{ m_pct }}%"></div>{% endif %}
+            {% if i_pct > 0 %}<div class="dash-comp-idea" style="width: {{ i_pct }}%"></div>{% endif %}
+            {% if d_pct > 0 %}<div class="dash-comp-defect" style="width: {{ d_pct }}%"></div>{% endif %}
+        </div>
+        <div class="dash-type-badges">
+            {% if pi_summary.feature_count %}<span class="dash-type-pill dash-type-pill--feature">{{ pi_summary.feature_count }} Feature</span>{% endif %}
+            {% if pi_summary.minor_feature_count %}<span class="dash-type-pill dash-type-pill--minor">{{ pi_summary.minor_feature_count }} Minor</span>{% endif %}
+            {% if pi_summary.idea_count %}<span class="dash-type-pill dash-type-pill--idea">{{ pi_summary.idea_count }} Idea</span>{% endif %}
+            {% if pi_summary.defect_count %}<span class="dash-type-pill dash-type-pill--defect">{{ pi_summary.defect_count }} Defect</span>{% endif %}
+        </div>
+        <div class="dash-metric-card__context" style="margin-top: 0.25rem;">{{ pi_summary.open_count }} open, {{ pi_summary.done_count }} done</div>
+        {% else %}
+        <div class="dash-metric-card__value dash-muted">—</div>
+        <div class="dash-metric-card__context dash-muted">No PI version configured</div>
+        {% endif %}
+        <details class="dash-metric-card__details">
+            <summary>{{ "Change" if project.pi_version else "Configure" }} PI Version</summary>
             <form method="post" action="/project/{{ project.id }}/pi/config" style="margin-top: 0.5rem;">
                 <input type="text" name="pi_version" value="{{ project.pi_version or '' }}"
                        placeholder="e.g. D3: CTC comparison with prior" style="width: 100%; margin-bottom: 0.5rem;">
@@ -97,166 +139,134 @@
         </details>
     </div>
 
-    <div class="overview-card">
-        <h3>Documents</h3>
-        {% if dhf_summary and dhf_summary.total_count > 0 %}
-        <div class="dhf-counts">
-            <span class="badge badge-dhf-released">{{ dhf_summary.released_count }} Released</span>
-            <span class="badge badge-dhf-draft_update">{{ dhf_summary.draft_update_count }} Draft Update</span>
-            <span class="badge badge-dhf-in_draft">{{ dhf_summary.in_draft_count }} In Draft</span>
-        </div>
-        {% if active_locked_release and release_total > 0 %}
-        <p style="margin-top: 0.5rem; font-size: 0.85em;">
-            <strong>{{ active_locked_release.name }}:</strong>
-            <span class="badge badge-release-published">{{ release_published }}</span> /
-            {{ release_total }} published
-        </p>
-        {% endif %}
-        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/documents{% if active_locked_release %}?release_id={{ active_locked_release.id }}{% endif %}" class="btn btn-sm">View All</a></p>
-        {% elif dhf_summary and dhf_summary.error %}
-        <div class="error-banner">{{ dhf_summary.error }}</div>
-        {% elif project.dhf_draft_root_id and project.dhf_released_root_id %}
-        <p>No DHF documents found.</p>
-        <a href="/project/{{ project.id }}/documents" class="btn btn-sm">View</a>
-        {% else %}
-        <p>No DHF configured.</p>
-        <a href="/project/{{ project.id }}/documents" class="btn btn-sm">Configure</a>
-        {% endif %}
-    </div>
-
-    <div class="overview-card">
-        <h3>Team Progress</h3>
+    {# ── TEAMS CARD ── #}
+    <div class="dash-metric-card">
+        <div class="dash-metric-card__label">Teams</div>
         {% if team_reports and team_reports|length > 0 %}
-        {% for r in team_reports %}
-        <div style="margin-bottom: 0.4rem;">
-            <span style="font-weight: 600; font-size: 0.9rem;">{{ r.team_key }}:</span>
-            <span style="font-size: 0.85rem;">{{ r.done_count }}/{{ r.total_issues }} ({{ r.pct_done_issues }}%)</span>
-            <div class="progress-bar-outer progress-bar-sm" style="margin-top: 0.15rem;">
-                <div class="progress-bar-done" style="width: {{ r.pct_done_issues }}%"></div>
-            </div>
+        <div class="dash-metric-card__value">{{ overall_pct_done }}%</div>
+        <div class="dash-metric-card__context">{{ team_reports|length }} team{{ 's' if team_reports|length > 1 else '' }} tracked</div>
+        {% if total_blockers > 0 %}
+        <div class="dash-metric-card__context dash-context--danger">{{ total_blockers }} blocker{{ 's' if total_blockers > 1 else '' }}</div>
+        {% endif %}
+        <div style="margin-top: 0.5rem;">
+            <a href="/project/{{ project.id }}/team-progress" class="btn btn-sm">View All</a>
         </div>
-        {% endfor %}
-        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/team-progress" class="btn btn-sm">View All</a></p>
         {% else %}
-        <p>No teams configured.</p>
-        <a href="/project/{{ project.id }}/team-progress" class="btn btn-sm">Configure</a>
+        <div class="dash-metric-card__value dash-muted">—</div>
+        <div class="dash-metric-card__context dash-muted">No teams configured</div>
+        <a href="/project/{{ project.id }}/team-progress" class="btn btn-sm" style="margin-top: 0.5rem;">Configure</a>
         {% endif %}
     </div>
-
-    <div class="overview-card">
-        <h3>Jira Plan</h3>
-        {% if project.jira_plan_url %}
-        <p style="margin-bottom: 0.5rem;">
-            <a href="{{ project.jira_plan_url }}" target="_blank" class="btn btn-sm">Open in Jira</a>
-        </p>
-        <iframe src="{{ project.jira_plan_url }}"
-                style="width: 100%; height: 500px; border: 1px solid #ddd; border-radius: 4px;"
-                loading="lazy"
-                referrerpolicy="no-referrer"
-                sandbox="allow-scripts allow-same-origin allow-popups"
-                onload="this.style.background='transparent'"
-                onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
-        </iframe>
-        <p style="display: none; font-size: 0.85em; color: #666; margin-top: 0.5rem;">
-            Iframe embedding blocked by browser. Use the link above to view the plan.
-        </p>
-        {% else %}
-        <p>No plan configured.</p>
-        {% endif %}
-        <details style="margin-top: 0.5rem;">
-            <summary style="font-size: 0.85em; cursor: pointer;">{{ "Change" if project.jira_plan_url else "Configure" }} Plan URL</summary>
-            <form method="post" action="/project/{{ project.id }}/plan/config" style="margin-top: 0.5rem;">
-                <input type="text" name="jira_plan_url" value="{{ project.jira_plan_url or '' }}"
-                       placeholder="Paste URL or &lt;iframe&gt; embed code from Jira Plans" style="width: 100%; margin-bottom: 0.5rem;">
-                <button type="submit" class="btn btn-sm">Save</button>
-            </form>
-        </details>
-    </div>
-
-    <div class="overview-card">
-        <h3>Transcripts</h3>
-        {% if transcript_summary and transcript_summary.transcript_count > 0 %}
-        <p class="overview-metric">{{ transcript_summary.transcript_count }} uploaded</p>
-        {% if transcript_summary.pending_count > 0 %}
-        <p><span class="badge badge-pending">{{ transcript_summary.pending_count }} pending suggestions</span></p>
-        {% endif %}
-        {% else %}
-        <p>No transcripts yet.</p>
-        {% endif %}
-        <p style="margin-top: 0.5rem;"><a href="/project/{{ project.id }}/transcript/" class="btn btn-sm">Manage</a></p>
-    </div>
-
-    {% if project.confluence_charter_id or project.confluence_xft_id %}
-    <div class="overview-card">
-        <h3>Project Documentation</h3>
-        <div class="card-links">
-            {% if project.confluence_charter_id %}
-            <a href="{{ confluence_page_base }}/{{ project.confluence_charter_id }}/{{ project.name | replace(' ', '+') }}+Charter" target="_blank" class="btn btn-sm">Charter</a>
-            {% endif %}
-            {% if project.confluence_xft_id %}
-            <a href="{{ confluence_page_base }}/{{ project.confluence_xft_id }}/{{ project.name | replace(' ', '+') }}+XFT" target="_blank" class="btn btn-sm">XFT</a>
-            {% endif %}
-        </div>
-    </div>
-    {% endif %}
 
 </div>
 
-<h2>Recent Approvals</h2>
-{% if recent_approvals %}
-<table>
-    <thead>
-        <tr>
-            <th>ID</th>
-            <th>Action</th>
-            <th>Preview</th>
-            <th>Status</th>
-            <th>Resolved</th>
-        </tr>
-    </thead>
-    <tbody>
-        {% for item in recent_approvals %}
-        <tr class="status-{{ item.status.value }}">
-            <td>{{ item.id }}</td>
-            <td>{{ item.action_type.value }}</td>
-            <td>{{ item.preview }}</td>
-            <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
-            <td>{{ item.resolved_at or '' }}</td>
-        </tr>
+{# ── TEAM BREAKDOWN (full-width stacked bars) ────────────── #}
+{% if team_reports and team_reports|length > 0 %}
+<div class="dash-teams">
+    <h3 class="dash-section-title">Team Breakdown</h3>
+    <div class="dash-teams__chart-wrap">
+        <canvas id="teamBreakdownChart" height="{{ 30 + team_reports|length * 40 }}"></canvas>
+    </div>
+    <div class="dash-teams__details">
+        {% for r in team_reports %}
+        <div class="dash-team-row">
+            <span class="dash-team-row__key">{{ r.team_key }}</span>
+            <span class="dash-team-row__sp">SP: {{ r.sp_done|round(1) }}/{{ r.sp_total|round(1) }}</span>
+            {% if r.blocker_count > 0 %}
+            <span class="badge badge-rejected">{{ r.blocker_count }} blocker{{ 's' if r.blocker_count > 1 else '' }}</span>
+            {% endif %}
+        </div>
         {% endfor %}
-    </tbody>
-</table>
-{% if older_approvals %}
-<details style="margin-top: 0.5rem;">
-    <summary style="cursor: pointer; font-size: 0.9em;">Show {{ older_approvals|length }} older items</summary>
-    <table style="margin-top: 0.5rem;">
-        <thead>
-            <tr>
-                <th>ID</th>
-                <th>Action</th>
-                <th>Preview</th>
-                <th>Status</th>
-                <th>Resolved</th>
-            </tr>
-        </thead>
-        <tbody>
-            {% for item in older_approvals %}
+    </div>
+    <div style="margin-top: 0.5rem;">
+        <a href="/project/{{ project.id }}/team-progress" class="btn btn-sm">View All Teams</a>
+    </div>
+</div>
+{% endif %}
+
+{# ── ACTIVITY / LINKS (3-col) ─────────────────────────────── #}
+<div class="dash-activity">
+
+    {# ── Recent Activity ── #}
+    <div class="dash-activity__main">
+        <h3 class="dash-section-title">Recent Activity</h3>
+        {% if recent_approvals %}
+        <table class="dash-compact-table">
+            <thead><tr><th>Action</th><th>Preview</th><th>Status</th><th>Resolved</th></tr></thead>
+            <tbody>
+            {% for item in recent_approvals[-5:] %}
             <tr class="status-{{ item.status.value }}">
-                <td>{{ item.id }}</td>
                 <td>{{ item.action_type.value }}</td>
                 <td>{{ item.preview }}</td>
                 <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
                 <td>{{ item.resolved_at or '' }}</td>
             </tr>
             {% endfor %}
-        </tbody>
-    </table>
-</details>
-{% endif %}
-{% else %}
-<p>No approval activity for this project.</p>
-{% endif %}
+            </tbody>
+        </table>
+        <a href="/project/{{ project.id }}/approvals" class="btn btn-sm">View All Approvals</a>
+        {% else %}
+        <p class="dash-muted">No approval activity.</p>
+        {% endif %}
+    </div>
 
+    {# ── Decisions & Transcripts ── #}
+    <div class="dash-activity__side">
+        <h3 class="dash-section-title">Decisions & Transcripts</h3>
+        <div class="dash-info-block">
+            <span class="dash-info-block__label">Decisions</span>
+            <span class="dash-info-block__value">{{ summary.decision_count }}</span>
+        </div>
+        {% if summary.decisions %}
+        <details class="dash-metric-card__details">
+            <summary>View decisions</summary>
+            <ul class="dash-compact-list">
+            {% for dec in summary.decisions %}
+                <li><strong>{{ dec.key }}</strong> {{ dec.summary }}</li>
+            {% endfor %}
+            </ul>
+        </details>
+        {% endif %}
+        <div class="dash-info-block" style="margin-top: 0.75rem;">
+            <span class="dash-info-block__label">Transcripts</span>
+            <span class="dash-info-block__value">{{ transcript_summary.transcript_count if transcript_summary else 0 }}</span>
+            {% if transcript_summary and transcript_summary.pending_count > 0 %}
+            <span class="badge badge-pending" style="margin-left: 0.5rem;">{{ transcript_summary.pending_count }} pending</span>
+            {% endif %}
+        </div>
+        <a href="/project/{{ project.id }}/transcript/" class="btn btn-sm" style="margin-top: 0.5rem;">Manage Transcripts</a>
+    </div>
+
+    {# ── Quick Links & Config ── #}
+    <div class="dash-activity__side">
+        <h3 class="dash-section-title">Quick Links</h3>
+        <ul class="dash-link-list">
+            {% if project.confluence_charter_id %}
+            <li><a href="{{ confluence_page_base }}/{{ project.confluence_charter_id }}" target="_blank">Charter</a></li>
+            {% endif %}
+            {% if project.confluence_xft_id %}
+            <li><a href="{{ confluence_page_base }}/{{ project.confluence_xft_id }}" target="_blank">XFT</a></li>
+            {% endif %}
+            {% if project.jira_plan_url %}
+            <li><a href="{{ project.jira_plan_url }}" target="_blank">Jira Plan</a></li>
+            {% endif %}
+            <li><a href="/project/{{ project.id }}/health-review/">Health Review</a></li>
+            <li><a href="/project/{{ project.id }}/documents">Documents</a></li>
+            <li><a href="/project/{{ project.id }}/charter/">Charter Update</a></li>
+        </ul>
+        <details class="dash-metric-card__details" style="margin-top: 0.75rem;">
+            <summary>{{ "Change" if project.jira_plan_url else "Configure" }} Plan URL</summary>
+            <form method="post" action="/project/{{ project.id }}/plan/config" style="margin-top: 0.5rem;">
+                <input type="text" name="jira_plan_url" value="{{ project.jira_plan_url or '' }}"
+                       placeholder="Paste URL or iframe embed code" style="width: 100%; margin-bottom: 0.5rem;">
+                <button type="submit" class="btn btn-sm">Save</button>
+            </form>
+        </details>
+    </div>
+
+</div>
+
+{# ── DANGER ZONE (unchanged) ──────────────────────────────── #}
 <details class="danger-zone">
     <summary>Danger Zone</summary>
     <p>Remove this project from Seat. This only deletes local tracking data — Jira and Confluence are not affected.</p>
@@ -267,12 +277,136 @@
     </button>
 </details>
 
+{# ── CHART.JS SCRIPTS ─────────────────────────────────────── #}
 <script>
-document.querySelectorAll('.overview-card').forEach(function(card) {
-    card.addEventListener('click', function(e) {
-        if (e.target.closest('a, button, input, select, textarea')) return;
-        card.classList.toggle('expanded');
-    });
-});
+(function() {
+    /* Center text plugin for doughnut charts */
+    var centerTextPlugin = {
+        id: 'centerText',
+        beforeDraw: function(chart) {
+            if (!chart.config.options.plugins.centerText) return;
+            var text = chart.config.options.plugins.centerText.text;
+            if (!text) return;
+            var ctx = chart.ctx;
+            var centerX = (chart.chartArea.left + chart.chartArea.right) / 2;
+            var centerY = (chart.chartArea.top + chart.chartArea.bottom) / 2;
+            ctx.save();
+            ctx.font = 'bold 14px system-ui, sans-serif';
+            ctx.fillStyle = '#333';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText(text, centerX, centerY);
+            ctx.restore();
+        }
+    };
+    Chart.register(centerTextPlugin);
+
+    var doughnutDefaults = {
+        cutout: '65%',
+        responsive: true,
+        maintainAspectRatio: false,
+        plugins: {
+            legend: { display: false },
+            centerText: { text: '' }
+        }
+    };
+
+    /* ── Risk Doughnut ── */
+    {% if summary.risk_count > 0 %}
+    (function() {
+        var ctx = document.getElementById('riskDoughnut');
+        if (!ctx) return;
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Open', 'Controlled', 'Closed'],
+                datasets: [{
+                    data: [{{ risk_by_status.Open }}, {{ risk_by_status.Controlled }}, {{ risk_by_status.Closed }}],
+                    backgroundColor: ['#c62828', '#1565c0', '#2e7d32'],
+                    borderWidth: 1
+                }]
+            },
+            options: Object.assign({}, doughnutDefaults, {
+                plugins: {
+                    legend: { display: false },
+                    centerText: { text: '{{ summary.risk_count }}' }
+                }
+            })
+        });
+    })();
+    {% endif %}
+
+    /* ── DHF Doughnut ── */
+    {% if dhf_summary and dhf_summary.total_count > 0 %}
+    (function() {
+        var ctx = document.getElementById('dhfDoughnut');
+        if (!ctx) return;
+        new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Released', 'Draft Update', 'In Draft'],
+                datasets: [{
+                    data: [{{ dhf_summary.released_count }}, {{ dhf_summary.draft_update_count }}, {{ dhf_summary.in_draft_count }}],
+                    backgroundColor: ['#2e7d32', '#f57c00', '#1565c0'],
+                    borderWidth: 1
+                }]
+            },
+            options: Object.assign({}, doughnutDefaults, {
+                plugins: {
+                    legend: { display: false },
+                    centerText: { text: '{{ dhf_summary.released_count }}/{{ dhf_summary.total_count }}' }
+                }
+            })
+        });
+    })();
+    {% endif %}
+
+    /* ── Team Breakdown Stacked Bar ── */
+    {% if team_reports and team_reports|length > 0 %}
+    (function() {
+        var ctx = document.getElementById('teamBreakdownChart');
+        if (!ctx) return;
+        new Chart(ctx, {
+            type: 'bar',
+            data: {
+                labels: {{ team_reports | map(attribute='team_key') | list | tojson }},
+                datasets: [
+                    {
+                        label: 'Done',
+                        data: {{ team_reports | map(attribute='done_count') | list | tojson }},
+                        backgroundColor: '#2e7d32'
+                    },
+                    {
+                        label: 'In Progress',
+                        data: {{ team_reports | map(attribute='in_progress_count') | list | tojson }},
+                        backgroundColor: '#f57c00'
+                    },
+                    {
+                        label: 'To Do',
+                        data: {{ team_reports | map(attribute='todo_count') | list | tojson }},
+                        backgroundColor: '#e0e0e0'
+                    }
+                ]
+            },
+            options: {
+                indexAxis: 'y',
+                responsive: true,
+                maintainAspectRatio: false,
+                scales: {
+                    x: { stacked: true, display: false },
+                    y: { stacked: true, grid: { display: false } }
+                },
+                plugins: {
+                    legend: {
+                        display: true,
+                        position: 'bottom',
+                        labels: { boxWidth: 12, font: { size: 11 } }
+                    }
+                }
+            }
+        });
+    })();
+    {% endif %}
+})();
 </script>
 {% endblock %}
