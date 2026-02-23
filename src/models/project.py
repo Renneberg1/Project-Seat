@@ -23,6 +23,7 @@ class Project:
     default_component: str | None = None
     default_label: str | None = None
     team_projects: dict[str, str] = field(default_factory=dict)
+    jira_plan_url: str | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> Project:
@@ -50,6 +51,7 @@ class Project:
             default_component=row["default_component"] if "default_component" in row.keys() else None,
             default_label=row["default_label"] if "default_label" in row.keys() else None,
             team_projects=raw_teams,
+            jira_plan_url=row["jira_plan_url"] if "jira_plan_url" in row.keys() else None,
         )
 
 
@@ -63,3 +65,4 @@ class SpinUpRequest:
     goal_summary: str
     confluence_space_key: str = ""  # Filled from settings at creation time
     pi_version: str = ""
+    jira_plan_url: str = ""

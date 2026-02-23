@@ -50,6 +50,18 @@ async def test_prepare_spinup_creates_local_project(service, tmp_db, make_spinup
     assert row["status"] == "spinning_up"
 
 
+async def test_prepare_spinup_stores_jira_plan_url(service, tmp_db, make_spinup_request):
+    req = make_spinup_request(jira_plan_url="https://test.atlassian.net/jira/plans/1")
+    p1, p2 = _patch_templates(service)
+
+    with p1, p2:
+        await service.prepare_spinup(req)
+
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_plan_url FROM projects WHERE name = 'HOP Drop 4'").fetchone()
+    assert row["jira_plan_url"] == "https://test.atlassian.net/jira/plans/1"
+
+
 async def test_prepare_spinup_queues_correct_item_count(service, make_spinup_request):
     req = make_spinup_request(team_projects={"AIM": "HOP Drop 4", "CTCV": "HOP Drop 4"})
     p1, p2 = _patch_templates(service)

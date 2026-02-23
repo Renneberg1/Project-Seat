@@ -175,6 +175,7 @@ class ImportService:
         xft_id: str | None = None,
         pi_version: str | None = None,
         team_projects: dict[str, str] | None = None,
+        jira_plan_url: str | None = None,
     ) -> int:
         """Insert the imported project into the local DB. Returns the project ID.
 
@@ -191,9 +192,9 @@ class ImportService:
                 raise ValueError(f"Project with goal key '{goal_key}' already exists (id={existing['id']})")
 
             cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version, team_projects) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version, json.dumps(team_projects) if team_projects else None),
+                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version, team_projects, jira_plan_url) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version, json.dumps(team_projects) if team_projects else None, jira_plan_url or None),
             )
             conn.commit()
             return cursor.lastrowid

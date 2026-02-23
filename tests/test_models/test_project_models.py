@@ -123,6 +123,35 @@ def test_spinup_request_custom_space_key():
     assert result.confluence_space_key == "CUSTOM"
 
 
+def test_project_from_row_jira_plan_url_default_none(tmp_db):
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (jira_goal_key, name, status) VALUES (?, ?, ?)",
+            ("PROG-800", "No Plan", "active"),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-800'").fetchone()
+
+    result = Project.from_row(row)
+
+    assert result.jira_plan_url is None
+
+
+def test_project_from_row_jira_plan_url_round_trip(tmp_db):
+    url = "https://test.atlassian.net/jira/plans/1/scenarios/1"
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (jira_goal_key, name, status, jira_plan_url) VALUES (?, ?, ?, ?)",
+            ("PROG-900", "With Plan", "active", url),
+        )
+        conn.commit()
+        row = conn.execute("SELECT * FROM projects WHERE jira_goal_key = 'PROG-900'").fetchone()
+
+    result = Project.from_row(row)
+
+    assert result.jira_plan_url == url
+
+
 def test_project_from_row_backward_compat_list_team_projects(tmp_db):
     """Old-format list team_projects JSON is auto-converted to dict."""
     import json

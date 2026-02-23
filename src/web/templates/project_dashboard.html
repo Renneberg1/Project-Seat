@@ -144,6 +144,36 @@
     </div>
 
     <div class="overview-card">
+        <h3>Jira Plan</h3>
+        {% if project.jira_plan_url %}
+        <p style="margin-bottom: 0.5rem;">
+            <a href="{{ project.jira_plan_url }}" target="_blank" class="btn btn-sm">Open in Jira</a>
+        </p>
+        <iframe src="{{ project.jira_plan_url }}"
+                style="width: 100%; height: 500px; border: 1px solid #ddd; border-radius: 4px;"
+                loading="lazy"
+                referrerpolicy="no-referrer"
+                sandbox="allow-scripts allow-same-origin allow-popups"
+                onload="this.style.background='transparent'"
+                onerror="this.style.display='none'; this.nextElementSibling.style.display='block'">
+        </iframe>
+        <p style="display: none; font-size: 0.85em; color: #666; margin-top: 0.5rem;">
+            Iframe embedding blocked by browser. Use the link above to view the plan.
+        </p>
+        {% else %}
+        <p>No plan configured.</p>
+        {% endif %}
+        <details style="margin-top: 0.5rem;">
+            <summary style="font-size: 0.85em; cursor: pointer;">{{ "Change" if project.jira_plan_url else "Configure" }} Plan URL</summary>
+            <form method="post" action="/project/{{ project.id }}/plan/config" style="margin-top: 0.5rem;">
+                <input type="text" name="jira_plan_url" value="{{ project.jira_plan_url or '' }}"
+                       placeholder="Paste URL or &lt;iframe&gt; embed code from Jira Plans" style="width: 100%; margin-bottom: 0.5rem;">
+                <button type="submit" class="btn btn-sm">Save</button>
+            </form>
+        </details>
+    </div>
+
+    <div class="overview-card">
         <h3>Transcripts</h3>
         {% if transcript_summary and transcript_summary.transcript_count > 0 %}
         <p class="overview-metric">{{ transcript_summary.transcript_count }} uploaded</p>

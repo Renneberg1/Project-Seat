@@ -31,6 +31,12 @@
         </div>
 
         <div class="form-group">
+            <label for="jira_plan_url">Jira Plan URL</label>
+            <input type="text" id="jira_plan_url" name="jira_plan_url" value=""
+                   placeholder="Paste URL or <iframe> embed code from Jira Plans">
+        </div>
+
+        <div class="form-group">
             <label for="team_projects">Team Projects (KEY:VERSION, comma-separated)</label>
             <input type="text" id="team_projects" name="team_projects"
                    value="{% if preview.detected_teams %}{{ preview.detected_teams.items() | map('join', ':') | join(', ') }}{% endif %}"

@@ -33,6 +33,7 @@ async def spinup_submit(
     labels: str = Form(""),
     goal_summary: str = Form(""),
     pi_version: str = Form(""),
+    jira_plan_url: str = Form(""),
 ) -> HTMLResponse:
     """Parse the form, queue spin-up actions, and show result page."""
     # Parse comma-separated values
@@ -48,6 +49,7 @@ async def spinup_submit(
         goal_summary=goal_summary,
         confluence_space_key=app_settings.atlassian.confluence_space_key,
         pi_version=pi_version.strip(),
+        jira_plan_url=jira_plan_url.strip(),
     )
 
     service = SpinUpService()

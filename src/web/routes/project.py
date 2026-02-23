@@ -311,6 +311,56 @@ async def save_pi_config(
     return RedirectResponse(f"/project/{id}/dashboard", status_code=303)
 
 
+@router.post("/{id}/plan/config")
+async def save_plan_config(
+    request: Request,
+    id: int,
+    jira_plan_url: str = Form(""),
+) -> RedirectResponse:
+    """Save Jira Plan URL for a project.
+
+    Accepts either a bare URL or a full ``<iframe src="...">`` snippet
+    (which is what Jira Plans "Share > Embed" copies to the clipboard).
+    """
+    import src.config
+    url = _extract_plan_url(jira_plan_url)
+    with get_db(src.config.settings.db_path) as conn:
+        conn.execute(
+            "UPDATE projects SET jira_plan_url = ? WHERE id = ?",
+            (url or None, id),
+        )
+        conn.commit()
+    return RedirectResponse(f"/project/{id}/dashboard", status_code=303)
+
+
+import re
+
+_IFRAME_SRC_RE = re.compile(r"""<iframe\b[^>]*\bsrc\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE)
+
+
+def _extract_plan_url(raw: str) -> str:
+    """Extract a valid Atlassian plan embed URL from user input.
+
+    Handles three input styles:
+    1. Full ``<iframe src="https://...">`` snippet → extracts the src URL
+    2. Bare URL (``https://company.atlassian.net/...``)
+    3. Empty / invalid → returns ``""``
+    """
+    raw = raw.strip()
+    if not raw:
+        return ""
+
+    # If user pasted an <iframe> tag, pull out the src attribute
+    m = _IFRAME_SRC_RE.search(raw)
+    if m:
+        raw = m.group(1).strip()
+
+    if raw.startswith("https://") and "atlassian.net" in raw:
+        return raw
+
+    return ""
+
+
 @router.post("/{id}/documents/config", response_class=HTMLResponse)
 async def save_dhf_config(
     request: Request,

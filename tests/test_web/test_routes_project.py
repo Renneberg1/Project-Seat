@@ -217,6 +217,78 @@ def test_delete_project_danger_zone_exists_on_dashboard(client, tmp_db):
 
 
 # ---------------------------------------------------------------------------
+# POST /project/{id}/plan/config — save Jira Plan URL: Contract tests
+# ---------------------------------------------------------------------------
+
+
+def test_save_plan_config_stores_url(client, tmp_db):
+    pid = _insert_project(tmp_db, "Alpha", "PROG-1")
+    url = "https://test.atlassian.net/secure/PlanEmbeddedReport.jspa?r=ABC"
+
+    result = client.post(
+        f"/project/{pid}/plan/config",
+        data={"jira_plan_url": url},
+        follow_redirects=False,
+    )
+
+    assert result.status_code == 303
+    assert f"/project/{pid}/dashboard" in result.headers["location"]
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_plan_url FROM projects WHERE id = ?", (pid,)).fetchone()
+    assert row["jira_plan_url"] == url
+
+
+def test_save_plan_config_extracts_url_from_iframe_snippet(client, tmp_db):
+    pid = _insert_project(tmp_db, "Alpha", "PROG-1")
+    iframe = "<iframe src='https://test.atlassian.net/secure/PlanEmbeddedReport.jspa?r=XYZ' width='1024' height='640'></iframe>"
+
+    result = client.post(
+        f"/project/{pid}/plan/config",
+        data={"jira_plan_url": iframe},
+        follow_redirects=False,
+    )
+
+    assert result.status_code == 303
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_plan_url FROM projects WHERE id = ?", (pid,)).fetchone()
+    assert row["jira_plan_url"] == "https://test.atlassian.net/secure/PlanEmbeddedReport.jspa?r=XYZ"
+
+
+def test_save_plan_config_empty_clears_url(client, tmp_db):
+    pid = _insert_project(tmp_db, "Alpha", "PROG-1")
+    # Set a URL first
+    with get_db(tmp_db) as conn:
+        conn.execute("UPDATE projects SET jira_plan_url = ? WHERE id = ?", ("https://test.atlassian.net/jira/plans/1", pid))
+        conn.commit()
+
+    result = client.post(
+        f"/project/{pid}/plan/config",
+        data={"jira_plan_url": ""},
+        follow_redirects=False,
+    )
+
+    assert result.status_code == 303
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_plan_url FROM projects WHERE id = ?", (pid,)).fetchone()
+    assert row["jira_plan_url"] is None
+
+
+def test_save_plan_config_rejects_non_atlassian_url(client, tmp_db):
+    pid = _insert_project(tmp_db, "Alpha", "PROG-1")
+
+    result = client.post(
+        f"/project/{pid}/plan/config",
+        data={"jira_plan_url": "https://evil.com/plans"},
+        follow_redirects=False,
+    )
+
+    assert result.status_code == 303
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_plan_url FROM projects WHERE id = ?", (pid,)).fetchone()
+    assert row["jira_plan_url"] is None
+
+
+# ---------------------------------------------------------------------------
 # GET /project/{id}/features — initiative list: Contract tests
 # ---------------------------------------------------------------------------
 

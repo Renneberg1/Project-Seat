@@ -227,6 +227,17 @@ def test_save_project_inserts_and_returns_id(tmp_db):
     assert row["status"] == "active"
 
 
+def test_save_project_stores_jira_plan_url(tmp_db):
+    service = ImportService(db_path=tmp_db)
+    url = "https://test.atlassian.net/jira/plans/1/scenarios/1"
+
+    result = service.save_project("PROG-800", "Plan Project", jira_plan_url=url)
+
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_plan_url FROM projects WHERE id = ?", (result,)).fetchone()
+    assert row["jira_plan_url"] == url
+
+
 def test_save_project_without_page_ids(tmp_db):
     service = ImportService(db_path=tmp_db)
 
