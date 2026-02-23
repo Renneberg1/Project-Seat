@@ -157,6 +157,17 @@ def init_db(db_path: str | Path = "seat.db") -> None:
                 UNIQUE (project_id, snapshot_date)
             )
         """)
+        # Migration: health_reviews table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS health_reviews (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id    INTEGER NOT NULL,
+                health_rating TEXT NOT NULL,
+                review_json   TEXT NOT NULL DEFAULT '{}',
+                created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+            )
+        """)
         # Migration: charter_suggestions table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS charter_suggestions (

@@ -78,6 +78,9 @@ class GeminiProvider:
         # Extract text from the response
         try:
             candidates = data["candidates"]
+            finish_reason = candidates[0].get("finishReason", "UNKNOWN")
+            if finish_reason not in ("STOP", "UNKNOWN"):
+                logger.warning("Gemini finishReason: %s", finish_reason)
             parts = candidates[0]["content"]["parts"]
             text = parts[0]["text"]
         except (KeyError, IndexError) as exc:

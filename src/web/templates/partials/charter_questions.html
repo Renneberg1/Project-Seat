@@ -5,7 +5,8 @@
 
     <form hx-post="/project/{{ project.id }}/charter/analyze"
           hx-target="#charter-result"
-          hx-indicator="#charter-analyze-spinner">
+          hx-indicator="#charter-analyze-spinner"
+          hx-disabled-elt="find button">
         <input type="hidden" name="user_input" value="{{ user_input }}">
 
         {% for q in questions %}
@@ -35,7 +36,8 @@
     <form hx-post="/project/{{ project.id }}/charter/analyze"
           hx-target="#charter-result"
           hx-indicator="#charter-direct-spinner"
-          hx-trigger="load">
+          hx-trigger="load"
+          hx-disabled-elt="find button">
         <input type="hidden" name="user_input" value="{{ user_input }}">
         <span id="charter-direct-spinner" class="htmx-indicator"> Generating edits...</span>
     </form>

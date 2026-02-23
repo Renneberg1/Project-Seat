@@ -27,7 +27,8 @@
         <button class="btn btn-approve"
                 hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/analyze"
                 hx-target="#analysis-result"
-                hx-indicator="#analyze-spinner">
+                hx-indicator="#analyze-spinner"
+                hx-disabled-elt="this">
             Analyze with LLM
         </button>
         <span id="analyze-spinner" class="htmx-indicator"> Analyzing (this may take a moment)...</span>

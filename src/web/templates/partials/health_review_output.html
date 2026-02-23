@@ -1,0 +1,52 @@
+<div class="health-review-output">
+    <div class="health-rating-card">
+        <h3>
+            Project Health:
+            <span class="health-badge health-{{ review.health_rating|lower }}">{{ review.health_rating }}</span>
+        </h3>
+        <p>{{ review.health_rationale }}</p>
+    </div>
+
+    {% if review.top_concerns %}
+    <h3>Top Concerns</h3>
+    <div class="health-concerns-list">
+        {% for c in review.top_concerns %}
+        <div class="health-concern">
+            <div class="health-concern-header">
+                <strong>{{ c.area }}</strong>
+                <span class="health-severity health-severity-{{ c.severity|lower }}">{{ c.severity }}</span>
+            </div>
+            <p><em>Evidence:</em> {{ c.evidence }}</p>
+            <p><em>Recommendation:</em> {{ c.recommendation }}</p>
+        </div>
+        {% endfor %}
+    </div>
+    {% endif %}
+
+    {% if review.positive_observations %}
+    <h3>Positive Observations</h3>
+    <ul class="health-positives">
+        {% for obs in review.positive_observations %}
+        <li>{{ obs }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if review.questions_for_pm %}
+    <h3>Questions to Investigate</h3>
+    <ul class="health-pm-questions">
+        {% for q in review.questions_for_pm %}
+        <li>{{ q }}</li>
+        {% endfor %}
+    </ul>
+    {% endif %}
+
+    {% if review.suggested_next_actions %}
+    <h3>Suggested Next Actions</h3>
+    <ol class="health-actions">
+        {% for action in review.suggested_next_actions %}
+        <li>{{ action }}</li>
+        {% endfor %}
+    </ol>
+    {% endif %}
+</div>

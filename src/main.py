@@ -20,6 +20,7 @@ from src.web.routes.import_project import router as import_router
 from src.web.routes.spinup import router as spinup_router
 from src.web.routes.transcript import router as transcript_router
 from src.web.routes.charter import router as charter_router
+from src.web.routes.health_review import router as health_review_router
 from src.services.team_snapshot import snapshot_all_projects
 
 _STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
@@ -47,6 +48,7 @@ app.include_router(approval_router)
 app.include_router(import_router)
 app.include_router(transcript_router)
 app.include_router(charter_router)
+app.include_router(health_review_router)
 
 
 @app.get("/")

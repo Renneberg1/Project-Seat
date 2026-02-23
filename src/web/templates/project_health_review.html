@@ -1,0 +1,66 @@
+{% extends "base.html" %}
+{% block title %}Health Review — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Health Review — {{ project.name }}</h1>
+</div>
+
+<div class="charter-update-section">
+    <p>Run an on-demand health check powered by the LLM. It will review all available project data, ask any clarifying questions, then produce a structured assessment.</p>
+
+    <form hx-post="/project/{{ project.id }}/health-review/ask"
+          hx-target="#health-result"
+          hx-indicator="#health-spinner"
+          hx-disabled-elt="find button">
+        <button type="submit">Start Health Review</button>
+        <span id="health-spinner" class="htmx-indicator"> Analyzing project data...</span>
+    </form>
+</div>
+
+<div id="health-result"></div>
+
+{% if past_reviews %}
+<h2>Past Reviews</h2>
+<div class="suggestions-list">
+    {% for review in past_reviews %}
+    <details class="health-review-history-item">
+        <summary>
+            <span class="health-badge health-{{ review.health_rating|lower }}">{{ review.health_rating }}</span>
+            {{ review.created_at }} — {{ review.health_rationale|default('No rationale', true) }}
+        </summary>
+        <div class="health-review-detail">
+            {% if review.top_concerns %}
+            <h4>Top Concerns</h4>
+            {% for c in review.top_concerns %}
+            <div class="health-concern">
+                <strong>{{ c.area }}</strong> <span class="health-severity health-severity-{{ c.severity|lower }}">{{ c.severity }}</span>
+                <p><em>Evidence:</em> {{ c.evidence }}</p>
+                <p><em>Recommendation:</em> {{ c.recommendation }}</p>
+            </div>
+            {% endfor %}
+            {% endif %}
+
+            {% if review.positive_observations %}
+            <h4>Positives</h4>
+            <ul>
+                {% for obs in review.positive_observations %}
+                <li>{{ obs }}</li>
+                {% endfor %}
+            </ul>
+            {% endif %}
+
+            {% if review.suggested_next_actions %}
+            <h4>Next Actions</h4>
+            <ol>
+                {% for action in review.suggested_next_actions %}
+                <li>{{ action }}</li>
+                {% endfor %}
+            </ol>
+            {% endif %}
+        </div>
+    </details>
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

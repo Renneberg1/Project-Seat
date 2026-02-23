@@ -21,7 +21,8 @@
     <button class="btn btn-approve"
             hx-post="/project/{{ project.id }}/transcript/{{ transcript.id }}/analyze"
             hx-target="#suggestions-panel"
-            hx-indicator="#reanalyze-spinner">
+            hx-indicator="#reanalyze-spinner"
+            hx-disabled-elt="this">
         Re-analyze
     </button>
     <span id="reanalyze-spinner" class="htmx-indicator"> Analyzing...</span>

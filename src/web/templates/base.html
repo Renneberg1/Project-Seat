@@ -41,6 +41,8 @@
                class="nav-link {% if '/transcript' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Transcripts</a>
             <a href="/project/{{ selected_project_id }}/charter/"
                class="nav-link {% if '/charter' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Charter</a>
+            <a href="/project/{{ selected_project_id }}/health-review/"
+               class="nav-link {% if '/health-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Health</a>
             <a href="/project/{{ selected_project_id }}/team-progress"
                class="nav-link {% if '/team-progress' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Teams</a>
             <button class="nav-link refresh-btn"

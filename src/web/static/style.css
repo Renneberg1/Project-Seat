@@ -655,8 +655,48 @@ th {
     margin-top: 1rem;
 }
 
-.htmx-indicator { display: none; color: #888; }
-.htmx-request .htmx-indicator { display: inline; }
+/* HTMX loading indicators
+   HTMX injects opacity:0 on .htmx-indicator and opacity:1 via .htmx-request.
+   When hx-indicator="#id" is used, .htmx-request is added to the indicator
+   itself (same element), not a parent — so we need both selectors. */
+.htmx-indicator {
+    display: inline-flex;
+    opacity: 0;
+    color: #555;
+    font-size: 0.9rem;
+    align-items: center;
+    gap: 0.4rem;
+    transition: opacity 0.2s ease-in;
+}
+
+.htmx-request .htmx-indicator,
+.htmx-request.htmx-indicator {
+    opacity: 1;
+}
+
+.htmx-indicator::before {
+    content: '';
+    display: inline-block;
+    width: 14px;
+    height: 14px;
+    border: 2px solid #ccc;
+    border-top-color: #555;
+    border-radius: 50%;
+    animation: htmx-spin 0.8s linear infinite;
+}
+
+@keyframes htmx-spin {
+    to { transform: rotate(360deg); }
+}
+
+/* Disable buttons while HTMX request is in flight */
+.htmx-request button[type="submit"],
+.htmx-request .btn-llm,
+button.htmx-request {
+    opacity: 0.5;
+    pointer-events: none;
+    cursor: wait;
+}
 
 /* Meeting summary */
 .meeting-summary {
@@ -950,4 +990,76 @@ th {
 .charter-diff-proposed {
     background: #e8f5e9;
     border: 1px solid #a5d6a7;
+}
+
+/* Health review */
+.health-badge {
+    display: inline-block;
+    padding: 0.15rem 0.6rem;
+    border-radius: 4px;
+    font-weight: 600;
+    font-size: 0.85rem;
+    color: #fff;
+    text-transform: uppercase;
+}
+
+.health-green { background: #2e7d32; }
+.health-amber { background: #f57c00; }
+.health-red   { background: #c62828; }
+
+.health-rating-card {
+    padding: 1rem;
+    border: 1px solid #ddd;
+    border-radius: 6px;
+    background: #fafafa;
+    margin-bottom: 1.5rem;
+}
+
+.health-concern {
+    padding: 0.75rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    background: #fff;
+    margin-bottom: 0.75rem;
+}
+
+.health-concern-header {
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+    margin-bottom: 0.5rem;
+}
+
+.health-severity {
+    display: inline-block;
+    padding: 0.1rem 0.4rem;
+    border-radius: 3px;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: #fff;
+}
+
+.health-severity-high   { background: #c62828; }
+.health-severity-medium { background: #f57c00; }
+.health-severity-low    { background: #fbc02d; color: #333; }
+
+.health-review-output h3 { margin-top: 1.5rem; }
+
+.health-review-history-item {
+    padding: 0.5rem;
+    border: 1px solid #ddd;
+    border-radius: 4px;
+    margin-bottom: 0.5rem;
+    background: #fff;
+}
+
+.health-review-history-item summary {
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    gap: 0.5rem;
+}
+
+.health-review-detail {
+    padding: 0.75rem 0;
 }

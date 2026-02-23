@@ -241,3 +241,104 @@ class CharterAgent:
             text = text.rsplit("```", 1)[0]
 
         return json.loads(text)
+
+
+# ------------------------------------------------------------------
+# Health Review Agent
+# ------------------------------------------------------------------
+
+class HealthReviewAgent:
+    """Two-step Health Review agent: ask questions, then produce review."""
+
+    def __init__(self, provider: LLMProvider) -> None:
+        self._provider = provider
+
+    async def ask_questions(
+        self,
+        project_context: dict[str, Any],
+    ) -> dict[str, Any]:
+        """Step 1: Identify what can't be determined from data alone.
+
+        Returns parsed JSON with a ``questions`` list.
+        """
+        from src.engine.prompts.health_review import (
+            QUESTIONS_SYSTEM_PROMPT,
+            HEALTH_QUESTIONS_SCHEMA,
+            build_questions_prompt,
+        )
+
+        user_prompt = build_questions_prompt(project_context)
+        return await self._generate_with_retry(
+            QUESTIONS_SYSTEM_PROMPT, user_prompt, HEALTH_QUESTIONS_SCHEMA,
+            max_tokens=16384,
+        )
+
+    async def generate_review(
+        self,
+        project_context: dict[str, Any],
+        qa_pairs: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        """Step 2: Produce a structured health review.
+
+        Returns parsed JSON with health_rating, top_concerns, etc.
+        """
+        from src.engine.prompts.health_review import (
+            REVIEW_SYSTEM_PROMPT,
+            HEALTH_REVIEW_SCHEMA,
+            build_review_prompt,
+        )
+
+        user_prompt = build_review_prompt(project_context, qa_pairs)
+        return await self._generate_with_retry(
+            REVIEW_SYSTEM_PROMPT, user_prompt, HEALTH_REVIEW_SCHEMA,
+        )
+
+    async def _generate_with_retry(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: dict[str, Any],
+        temperature: float = 0.3,
+        max_tokens: int = 16384,
+    ) -> dict[str, Any]:
+        """Generate and parse JSON, retrying once on parse failure."""
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_schema=schema,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        try:
+            return json.loads(self._strip_fences(raw))
+        except json.JSONDecodeError:
+            logger.warning(
+                "Health review LLM returned invalid JSON (len=%d), retrying. Raw: %s",
+                len(raw), raw[:500],
+            )
+
+        correction = (
+            "\n\nIMPORTANT: Your previous response was not valid JSON. "
+            "Please respond with ONLY valid JSON matching the required schema. "
+            "No markdown, no explanation — just the JSON object."
+        )
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt + correction,
+            response_schema=schema,
+            temperature=0.2,
+            max_tokens=max_tokens,
+        )
+
+        return json.loads(self._strip_fences(raw))
+
+    @staticmethod
+    def _strip_fences(text: str) -> str:
+        """Remove markdown code fences from LLM output."""
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        return text.strip()

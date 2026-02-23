@@ -41,7 +41,8 @@
 
     <form hx-post="/project/{{ project.id }}/charter/ask"
           hx-target="#charter-result"
-          hx-indicator="#charter-spinner">
+          hx-indicator="#charter-spinner"
+          hx-disabled-elt="find button">
         <div class="form-group">
             <label for="user_input">Describe your changes</label>
             <textarea id="user_input" name="user_input" rows="6"

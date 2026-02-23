@@ -1,0 +1,43 @@
+{% if questions %}
+<div class="charter-questions">
+    <h3>Clarifying Questions</h3>
+    <p>The LLM identified some things it cannot determine from the data alone. Please answer to improve the review accuracy.</p>
+
+    <form hx-post="/project/{{ project.id }}/health-review/analyze"
+          hx-target="#health-result"
+          hx-indicator="#health-analyze-spinner"
+          hx-disabled-elt="find button">
+
+        {% for q in questions %}
+        <div class="charter-question-item">
+            <label>
+                <strong>{{ q.question }}</strong>
+                <span class="charter-question-section">{{ q.category }}</span>
+                {% if q.why_needed %}
+                <span class="charter-question-why">{{ q.why_needed }}</span>
+                {% endif %}
+            </label>
+            <input type="hidden" name="question_{{ loop.index0 }}" value="{{ q.question }}">
+            <textarea name="answer_{{ loop.index0 }}" rows="2"
+                      placeholder="Your answer..."></textarea>
+        </div>
+        {% endfor %}
+
+        <button type="submit">Submit Answers &amp; Generate Review</button>
+        <span id="health-analyze-spinner" class="htmx-indicator"> Generating health review...</span>
+    </form>
+</div>
+{% else %}
+<div class="charter-questions">
+    <h3>No Questions Needed</h3>
+    <p>The data is comprehensive. Generating review directly...</p>
+
+    <form hx-post="/project/{{ project.id }}/health-review/analyze"
+          hx-target="#health-result"
+          hx-indicator="#health-direct-spinner"
+          hx-trigger="load"
+          hx-disabled-elt="find button">
+        <span id="health-direct-spinner" class="htmx-indicator"> Generating health review...</span>
+    </form>
+</div>
+{% endif %}
