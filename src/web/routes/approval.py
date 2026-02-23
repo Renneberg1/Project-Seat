@@ -20,13 +20,18 @@ async def approval_queue(request: Request) -> HTMLResponse:
     pending = engine.list_pending()
     all_items = engine.list_all()
     history = [i for i in all_items if i.status != ApprovalStatus.PENDING]
+    # Cap at 100, split into last 10 (visible) + 10-100 (expandable)
+    capped_history = history[-100:] if len(history) > 100 else history
+    recent_history = capped_history[-10:] if len(capped_history) > 10 else capped_history
+    older_history = capped_history[:-10] if len(capped_history) > 10 else []
 
     return templates.TemplateResponse(
         request,
         "approval.html",
         {
             "pending": pending,
-            "history": history,
+            "history": recent_history,
+            "older_history": older_history,
             "approval_base_url": "/approval",
             **get_nav_context(request),
         },

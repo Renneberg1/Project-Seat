@@ -99,9 +99,11 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
     pi_summary = service.summarise_product_ideas(pi_ideas)
 
     engine = ApprovalEngine()
-    recent_approvals = engine.list_all(project_id=id)
-    # Show last 10
-    recent_approvals = recent_approvals[-10:] if len(recent_approvals) > 10 else recent_approvals
+    all_approvals = engine.list_all(project_id=id)
+    # Cap at 100, split into last 10 (visible) + 10-100 (expandable)
+    capped = all_approvals[-100:] if len(all_approvals) > 100 else all_approvals
+    recent_approvals = capped[-10:] if len(capped) > 10 else capped
+    older_approvals = capped[:-10] if len(capped) > 10 else []
 
     confluence_page_base = f"https://{app_settings.atlassian.domain}.atlassian.net/wiki/spaces/{app_settings.atlassian.confluence_space_key}/pages"
 
@@ -143,6 +145,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         "dhf_summary": dhf_summary,
         "pi_summary": pi_summary,
         "recent_approvals": recent_approvals,
+        "older_approvals": older_approvals,
         "confluence_page_base": confluence_page_base,
         "market_release": market_release,
         "active_locked_release": active_locked,
@@ -570,11 +573,16 @@ async def project_approvals(request: Request, id: int) -> HTMLResponse:
     pending = engine.list_pending(project_id=id)
     all_items = engine.list_all(project_id=id)
     history = [i for i in all_items if i.status != ApprovalStatus.PENDING]
+    # Cap at 100, split into last 10 (visible) + 10-100 (expandable)
+    capped_history = history[-100:] if len(history) > 100 else history
+    recent_history = capped_history[-10:] if len(capped_history) > 10 else capped_history
+    older_history = capped_history[:-10] if len(capped_history) > 10 else []
 
     return _render(request, "project_approvals.html", {
         "project": project,
         "pending": pending,
-        "history": history,
+        "history": recent_history,
+        "older_history": older_history,
         "approval_base_url": f"/project/{id}/approvals",
     }, id)
 

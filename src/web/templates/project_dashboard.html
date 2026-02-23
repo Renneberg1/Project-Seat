@@ -226,6 +226,33 @@
         {% endfor %}
     </tbody>
 </table>
+{% if older_approvals %}
+<details style="margin-top: 0.5rem;">
+    <summary style="cursor: pointer; font-size: 0.9em;">Show {{ older_approvals|length }} older items</summary>
+    <table style="margin-top: 0.5rem;">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Action</th>
+                <th>Preview</th>
+                <th>Status</th>
+                <th>Resolved</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in older_approvals %}
+            <tr class="status-{{ item.status.value }}">
+                <td>{{ item.id }}</td>
+                <td>{{ item.action_type.value }}</td>
+                <td>{{ item.preview }}</td>
+                <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
+                <td>{{ item.resolved_at or '' }}</td>
+            </tr>
+            {% endfor %}
+        </tbody>
+    </table>
+</details>
+{% endif %}
 {% else %}
 <p>No approval activity for this project.</p>
 {% endif %}
