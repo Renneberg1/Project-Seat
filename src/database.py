@@ -140,6 +140,18 @@ def init_db(db_path: str | Path = "seat.db") -> None:
                 FOREIGN KEY (approval_item_id) REFERENCES approval_queue(id)
             )
         """)
+        # Migration: team_progress_snapshots table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS team_progress_snapshots (
+                id            INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id    INTEGER NOT NULL,
+                snapshot_date TEXT NOT NULL,
+                data_json     TEXT NOT NULL,
+                created_at    TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id),
+                UNIQUE (project_id, snapshot_date)
+            )
+        """)
         # Migration: charter_suggestions table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS charter_suggestions (

@@ -25,6 +25,7 @@ from src.services.dhf import DHFService
 from src.services.release import ReleaseService
 from src.services.spinup import SpinUpService
 from src.services.team_progress import TeamProgressService, TeamVersionReport
+from src.services.team_snapshot import TeamSnapshotService
 from src.services.transcript import TranscriptService
 from src.web.deps import get_nav_context, templates
 
@@ -425,6 +426,21 @@ async def project_team_progress(request: Request, id: int) -> HTMLResponse:
     team_service = TeamProgressService()
     reports = await team_service.get_team_reports(project)
 
+    # Save today's snapshot (idempotent — ensures data even without orchestrator)
+    snapshot_svc = TeamSnapshotService()
+    if reports:
+        snapshot_svc.save_snapshot(project, reports)
+
+    # Fetch historical snapshots for burnup chart
+    snapshots_json = snapshot_svc.get_snapshots(project.id)
+
+    # Fetch project due date for burnup projection line
+    service = DashboardService()
+    summary = await service.get_project_summary(project)
+    project_due_date = None
+    if summary.goal and summary.goal.due_date:
+        project_due_date = summary.goal.due_date  # ISO string e.g. "2026-09-01"
+
     # Compute totals row
     totals = None
     if reports:
@@ -445,6 +461,8 @@ async def project_team_progress(request: Request, id: int) -> HTMLResponse:
         "project": project,
         "reports": reports,
         "totals": totals,
+        "snapshots_json": snapshots_json,
+        "project_due_date": project_due_date,
     }, id)
 
 
