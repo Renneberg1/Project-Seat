@@ -88,6 +88,11 @@ Redesign the project dashboard to be more graphical and information-dense:
 - Jira: project/component listing, bulk operations
 - Confluence: page deletion/archival, attachment upload, label management, space operations
 
+### Jira Plans Embed Improvements
+- Auto-detect plan URL from Jira API (currently requires manual paste)
+- Height/zoom controls on the embedded iframe
+- Fallback screenshot or static image when iframe embedding is blocked
+
 ### Project Model Extensions (remaining)
 The `projects` table could further benefit from:
 - `team_lead` / `pm` / `stakeholders` — people tracking
@@ -124,3 +129,4 @@ The `projects` table could further benefit from:
 - [x] Burnup Chart (Chart.js burnup with scope vs done over time, dashed projection to due date, team filter, velocity override)
 - [x] Confluence Formatting Guidance (LLM prompts include Confluence-specific formatting instructions for better output quality)
 - [x] Risk/Decision Extraction from Arbitrary Text (covered by Transcript Direct Input — textarea accepts any text, not just transcripts)
+- [x] Jira Plans Timeline Embed (iframe embed on dashboard, accepts bare URL or `<iframe>` snippet from Jira Plans Share, stored per project, integrated into import and spin-up flows)

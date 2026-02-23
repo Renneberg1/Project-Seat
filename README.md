@@ -14,6 +14,7 @@ A locally-run project management cockpit for medical device software engineering
 - **Transcript Analysis** — Upload meeting transcripts (.vtt/.txt/.docx), run LLM analysis to extract risks, decisions, XFT updates, and charter updates. Two-step approval gating: review LLM suggestions, then approve actions through the standard approval queue. Supports Gemini and Ollama providers.
 - **Charter Update** — LLM-powered two-step Q&A flow: the LLM asks clarifying questions, then proposes section-level edits to the Confluence Charter page, all gated through the approval queue
 - **Team Progress Tracking** — Per-team version progress with auto-detected team mapping at import, story point breakdowns, and Chart.js burnup charts with projection and velocity override
+- **Jira Plans Timeline** — Embed Jira Plans (Advanced Roadmaps) Gantt chart on the project dashboard via iframe, with direct link to Jira
 
 ### Planned / Upcoming
 
