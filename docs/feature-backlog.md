@@ -28,6 +28,44 @@ Scan a project's Jira hierarchy and flag epics/tasks missing story points or tim
 
 - Prompt template: `src/engine/prompts/estimate_check.py` (stub exists in CLAUDE.md, file missing)
 
+### Project Health Review (Senior PM Second Opinion)
+On-demand LLM-powered project review that acts as a senior PM doing a health check. Ingests all available project data and returns structured feedback with areas of concern and recommendations.
+
+**Data ingested (everything the app knows):**
+- PROG Goal ticket (status, due date, summary, description)
+- Risk register (open/closed counts, severity, components, risk points)
+- Decision log (open/closed, timeline impact)
+- Charter content (sections from Confluence)
+- Jira Plans timeline (plan URL / embed reference)
+- Team burnup data + velocity (from `team_progress_snapshots`)
+- Per-team version progress (done/total/blockers/story points)
+- DHF document status (released vs draft vs in-draft counts, release readiness %)
+- Product Ideas summary (must-have/should-have breakdown, open vs done)
+- Recent transcript analysis summaries (from `transcript_cache.meeting_summary`)
+- Active release scope-freeze status
+
+**Two-step interaction (same pattern as Charter Update):**
+1. **Questions step:** LLM reviews all data and asks the PM clarifying questions it can't answer from the data alone (e.g. stakeholder sentiment, external dependencies, team morale, budget status, regulatory timeline pressures)
+2. **Review step:** With answers folded in, LLM produces a structured review
+
+**Output structure (structured JSON from LLM):**
+- **Overall health rating** (Green / Amber / Red) with one-line rationale
+- **Top concerns** (ranked list, each with: area, severity, evidence from data, recommendation)
+- **Positive observations** (things going well, to reinforce)
+- **Questions for the PM** (things the LLM noticed that warrant investigation)
+- **Suggested next actions** (concrete, actionable items)
+
+**Implementation notes:**
+- New prompt template: `src/engine/prompts/health_review.py`
+- New agent: `HealthReviewAgent` in `src/engine/agent.py` (or separate file) with `ask_questions()` and `generate_review()` methods
+- New service: `src/services/health_review.py` — gathers all project context (reuse + extend `gather_project_context()` from transcript service)
+- New route: `POST /project/{id}/health-review/ask` and `POST /project/{id}/health-review/analyze`
+- New template: `src/web/templates/project_health_review.html` + partials for questions and review output
+- Button on dashboard with HTMX loading spinner (same pattern as transcript analyze / charter ask)
+- Read-only feature — no write actions, no approval queue needed
+- Context budget: ~30-40K tokens (same as transcript analysis, but more diverse data sources)
+- Could optionally persist reviews in a new `health_reviews` table for historical comparison
+
 ---
 
 ## Reporting & Status
