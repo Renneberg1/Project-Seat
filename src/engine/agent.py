@@ -444,3 +444,97 @@ class CeoReviewAgent:
         if text.endswith("```"):
             text = text.rsplit("```", 1)[0]
         return text.strip()
+
+
+# ------------------------------------------------------------------
+# Risk Refine Agent
+# ------------------------------------------------------------------
+
+class RiskRefineAgent:
+    """Iterative risk/decision refinement via Q&A loop."""
+
+    def __init__(self, provider: LLMProvider) -> None:
+        self._provider = provider
+
+    async def refine(
+        self,
+        suggestion_type: str,
+        current_draft: dict[str, str],
+        existing_items: list[dict[str, str]],
+        qa_history: list[dict[str, str]],
+        round_number: int,
+        max_rounds: int = 5,
+    ) -> dict[str, Any]:
+        """Evaluate the draft and either ask questions or mark satisfied.
+
+        Returns parsed JSON with satisfied, quality_assessment, questions, refined_risk.
+        """
+        from src.engine.prompts.risk_refine import (
+            SYSTEM_PROMPT,
+            RISK_REFINE_SCHEMA,
+            build_refine_prompt,
+        )
+
+        user_prompt = build_refine_prompt(
+            suggestion_type=suggestion_type,
+            current_draft=current_draft,
+            existing_items=existing_items,
+            qa_history=qa_history,
+            round_number=round_number,
+            max_rounds=max_rounds,
+        )
+
+        return await self._generate_with_retry(
+            SYSTEM_PROMPT, user_prompt, RISK_REFINE_SCHEMA,
+            temperature=0.3,
+            max_tokens=4096,
+        )
+
+    async def _generate_with_retry(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: dict[str, Any],
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> dict[str, Any]:
+        """Generate and parse JSON, retrying once on parse failure."""
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_schema=schema,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        try:
+            return json.loads(self._strip_fences(raw))
+        except json.JSONDecodeError:
+            logger.warning(
+                "Risk refine LLM returned invalid JSON (len=%d), retrying. Raw: %s",
+                len(raw), raw[:500],
+            )
+
+        correction = (
+            "\n\nIMPORTANT: Your previous response was not valid JSON. "
+            "Please respond with ONLY valid JSON matching the required schema. "
+            "No markdown, no explanation — just the JSON object."
+        )
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt + correction,
+            response_schema=schema,
+            temperature=0.2,
+            max_tokens=max_tokens,
+        )
+
+        return json.loads(self._strip_fences(raw))
+
+    @staticmethod
+    def _strip_fences(text: str) -> str:
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        return text.strip()

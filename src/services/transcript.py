@@ -721,6 +721,246 @@ class TranscriptService:
             "append_content": append_html,
         }
 
+    # ------------------------------------------------------------------
+    # Risk / Decision refinement
+    # ------------------------------------------------------------------
+
+    MAX_REFINE_ROUNDS = 5
+
+    async def start_risk_refinement(
+        self, suggestion_id: int, project: Any
+    ) -> dict[str, Any]:
+        """Start iterative refinement for a risk/decision suggestion.
+
+        Extracts the current draft from the suggestion payload, gathers
+        dedup context, and runs round 1 of the refine agent.
+
+        Returns the LLM result dict (satisfied, quality_assessment, questions, refined_risk).
+        """
+        from src.engine.agent import RiskRefineAgent, get_provider
+
+        sug = self._get_suggestion(suggestion_id)
+        if sug is None:
+            raise ValueError(f"Suggestion {suggestion_id} not found")
+        if sug.suggestion_type not in (SuggestionType.RISK, SuggestionType.DECISION):
+            raise ValueError("Refinement is only available for risk/decision suggestions")
+
+        current_draft = self._extract_risk_draft(sug)
+        context = await self.gather_project_context(project)
+
+        existing_items = (
+            context.existing_risks
+            if sug.suggestion_type == SuggestionType.RISK
+            else context.existing_decisions
+        )
+
+        provider = get_provider(self._settings.llm)
+        agent = RiskRefineAgent(provider)
+        try:
+            result = await agent.refine(
+                suggestion_type=sug.suggestion_type.value,
+                current_draft=current_draft,
+                existing_items=existing_items,
+                qa_history=[],
+                round_number=1,
+                max_rounds=self.MAX_REFINE_ROUNDS,
+            )
+        finally:
+            await provider.close()
+
+        return result
+
+    async def continue_risk_refinement(
+        self,
+        suggestion_id: int,
+        project: Any,
+        risk_draft: dict[str, str],
+        qa_history: list[dict[str, str]],
+        round_number: int,
+    ) -> dict[str, Any]:
+        """Continue refinement with accumulated Q&A state.
+
+        If round_number >= MAX_REFINE_ROUNDS, forces satisfaction with
+        current draft (no LLM call).
+        """
+        from src.engine.agent import RiskRefineAgent, get_provider
+
+        sug = self._get_suggestion(suggestion_id)
+        if sug is None:
+            raise ValueError(f"Suggestion {suggestion_id} not found")
+
+        if round_number >= self.MAX_REFINE_ROUNDS:
+            return {
+                "satisfied": True,
+                "quality_assessment": "Maximum refinement rounds reached. Finalising with current draft.",
+                "questions": [],
+                "refined_risk": risk_draft,
+            }
+
+        context = await self.gather_project_context(project)
+        existing_items = (
+            context.existing_risks
+            if sug.suggestion_type == SuggestionType.RISK
+            else context.existing_decisions
+        )
+
+        provider = get_provider(self._settings.llm)
+        agent = RiskRefineAgent(provider)
+        try:
+            result = await agent.refine(
+                suggestion_type=sug.suggestion_type.value,
+                current_draft=risk_draft,
+                existing_items=existing_items,
+                qa_history=qa_history,
+                round_number=round_number,
+                max_rounds=self.MAX_REFINE_ROUNDS,
+            )
+        finally:
+            await provider.close()
+
+        return result
+
+    def apply_refinement(
+        self,
+        suggestion_id: int,
+        refined_risk: dict[str, Any],
+        context: ProjectContext | None = None,
+    ) -> TranscriptSuggestion | None:
+        """Apply a refined draft back to the suggestion row.
+
+        Rebuilds the Jira payload from the refined fields and updates
+        the suggestion in the DB.
+        """
+        sug = self._get_suggestion(suggestion_id)
+        if sug is None:
+            return None
+
+        # Rebuild payload using the same builder
+        raw_sug = {
+            "type": sug.suggestion_type.value,
+            "title": refined_risk.get("title", sug.title),
+            "background": refined_risk.get("background", ""),
+            "impact_analysis": refined_risk.get("impact_analysis", ""),
+            "mitigation": refined_risk.get("mitigation", ""),
+            "priority": refined_risk.get("priority", "Medium"),
+            "timeline_impact_days": refined_risk.get("timeline_impact_days", 0),
+            "evidence": refined_risk.get("evidence", ""),
+            "confidence": 1.0,
+        }
+
+        if context:
+            payload = self._build_jira_payload(raw_sug, context)
+        else:
+            # Rebuild from existing payload, updating summary + fields
+            payload = json.loads(sug.proposed_payload)
+            from src.engine.prompts.transcript import (
+                build_adf_description,
+                build_adf_decision_description,
+                build_adf_field,
+            )
+
+            is_decision = sug.suggestion_type == SuggestionType.DECISION
+            background = raw_sug["background"]
+            evidence = raw_sug["evidence"]
+
+            if is_decision:
+                description = build_adf_decision_description(
+                    background=background,
+                    decision_text=raw_sug["title"],
+                    evidence=evidence,
+                )
+            else:
+                description = build_adf_description(
+                    background=background,
+                    evidence=evidence,
+                )
+
+            payload["summary"] = raw_sug["title"]
+            fields = payload.setdefault("fields", {})
+            fields["description"] = description
+            fields["priority"] = {"name": raw_sug["priority"]}
+
+            impact = raw_sug.get("impact_analysis", "")
+            if impact:
+                fields["customfield_11166"] = build_adf_field(impact)
+            mitigation = raw_sug.get("mitigation", "")
+            if mitigation:
+                fields["customfield_11342"] = build_adf_field(mitigation)
+            timeline_days = raw_sug.get("timeline_impact_days")
+            if timeline_days:
+                fields["customfield_13267"] = timeline_days
+
+        preview = self._build_preview(raw_sug, sug.suggestion_type)
+
+        with get_db(self._db_path) as conn:
+            conn.execute(
+                """UPDATE transcript_suggestions
+                   SET title = ?, detail = ?, evidence = ?,
+                       proposed_payload = ?, proposed_preview = ?,
+                       confidence = ?
+                   WHERE id = ?""",
+                (
+                    raw_sug["title"],
+                    raw_sug["background"],
+                    raw_sug["evidence"],
+                    json.dumps(payload),
+                    preview,
+                    1.0,
+                    suggestion_id,
+                ),
+            )
+            conn.commit()
+
+        return self._get_suggestion(suggestion_id)
+
+    @staticmethod
+    def _extract_adf_text(adf_doc: dict[str, Any] | None) -> str:
+        """Extract plain text from an ADF document structure."""
+        if not adf_doc or not isinstance(adf_doc, dict):
+            return ""
+        texts: list[str] = []
+        for node in adf_doc.get("content", []):
+            if node.get("type") == "paragraph":
+                for child in node.get("content", []):
+                    if child.get("type") == "text":
+                        text = child.get("text", "")
+                        # Skip section headers (bold-only paragraphs)
+                        marks = child.get("marks", [])
+                        is_heading = any(m.get("type") == "strong" for m in marks)
+                        if not is_heading:
+                            texts.append(text)
+        return " ".join(texts).strip()
+
+    def _extract_risk_draft(self, sug: TranscriptSuggestion) -> dict[str, str]:
+        """Parse a suggestion's payload back into plain-text draft fields."""
+        payload = json.loads(sug.proposed_payload)
+        fields = payload.get("fields", {})
+
+        # Extract description text
+        description_adf = fields.get("description")
+        background = self._extract_adf_text(description_adf) if description_adf else ""
+        if not background:
+            background = sug.detail or ""
+
+        # Extract custom fields
+        impact_analysis = self._extract_adf_text(fields.get("customfield_11166"))
+        mitigation = self._extract_adf_text(fields.get("customfield_11342"))
+
+        priority_obj = fields.get("priority", {})
+        priority = priority_obj.get("name", "Medium") if isinstance(priority_obj, dict) else "Medium"
+
+        timeline_days = fields.get("customfield_13267", 0)
+
+        return {
+            "title": sug.title,
+            "background": background,
+            "impact_analysis": impact_analysis,
+            "mitigation": mitigation,
+            "priority": priority,
+            "timeline_impact_days": str(timeline_days or 0),
+            "evidence": sug.evidence or "",
+        }
+
     def _build_preview(self, suggestion: dict[str, Any], stype: SuggestionType) -> str:
         """Build a human-readable preview string for a suggestion."""
         lines: list[str] = []

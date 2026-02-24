@@ -1129,6 +1129,61 @@ button.htmx-request {
     color: var(--text-primary);
 }
 
+/* Risk refinement panel */
+.risk-refine-panel {
+    margin-top: 0.75rem;
+    padding: 1rem;
+    border: 1px solid var(--hai-royal);
+    border-left: 4px solid var(--hai-royal);
+    border-radius: 6px;
+    background: var(--bg-raised);
+}
+
+.risk-refine-panel h4 {
+    margin: 0 0 0.5rem 0;
+    color: var(--hai-royal);
+}
+
+.risk-refine-satisfied {
+    border-color: var(--status-green);
+    border-left-color: var(--status-green);
+}
+
+.risk-refine-satisfied h4 {
+    color: var(--status-green);
+}
+
+.risk-refine-assessment {
+    font-size: 0.9rem;
+    color: var(--text-secondary);
+    margin-bottom: 0.75rem;
+    font-style: italic;
+}
+
+.risk-refine-draft {
+    margin-bottom: 0.75rem;
+}
+
+.risk-refine-draft-body {
+    padding: 0.5rem;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 4px;
+    font-size: 0.85rem;
+}
+
+.risk-refine-draft-body p {
+    margin: 0.25rem 0;
+}
+
+.btn-refine {
+    background: var(--hai-royal);
+}
+
+.btn-refine:hover {
+    background: var(--hai-navy);
+}
+
 /* Team progress bars */
 .progress-bar-outer {
     height: 12px;

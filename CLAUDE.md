@@ -21,7 +21,7 @@ The application has four layers:
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, per-team version progress tracking with burnup charts, Jira Plans timeline embed.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -74,7 +74,7 @@ project-seat/
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── approval.py          # Approval queue and gating logic
-│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent, HealthReviewAgent)
+│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent, HealthReviewAgent, RiskRefineAgent)
 │   │   ├── charter_storage_utils.py  # Charter XHTML section extraction and replacement
 │   │   ├── orchestrator.py      # Task queue and scheduling (framework implemented, no tasks registered yet)
 │   │   ├── providers/
@@ -87,6 +87,7 @@ project-seat/
 │   │       ├── charter.py           # Charter update: questions + edits prompts, JSON schemas
 │   │       ├── health_review.py     # Health review: questions + review prompts, JSON schemas
 │   │       ├── ceo_review.py        # CEO review: questions + review prompts, JSON schemas
+│   │       ├── risk_refine.py       # Risk/decision refinement: quality criteria, Q&A loop schema
 │   │       └── (planned: release_plan.py, estimate_check.py — see docs/feature-backlog.md)
 │   ├── services/
 │   │   ├── __init__.py
@@ -147,7 +148,8 @@ project-seat/
 │   │   │       ├── health_review_output.html    # Health review structured output
 │   │   │       ├── ceo_review_questions.html   # CEO review clarifying questions form
 │   │   │       ├── ceo_review_preview.html     # CEO review preview with accept/reject
-│   │   │       └── ceo_review_row.html         # Individual past CEO review row
+│   │   │       ├── ceo_review_row.html         # Individual past CEO review row
+│   │   │       └── risk_refine_panel.html      # Risk/decision refinement Q&A panel
 │   │   └── static/              # CSS (JS loaded from CDN: HTMX, Chart.js)
 │   │       └── style.css
 │   └── models/
@@ -176,6 +178,7 @@ project-seat/
     │   ├── test_charter_storage_utils.py  # Charter XHTML parsing + replacement tests
     │   ├── test_charter_agent.py    # CharterAgent questions + edits tests
     │   ├── test_health_review_agent.py  # HealthReviewAgent questions + review tests
+    │   ├── test_risk_refine_agent.py   # RiskRefineAgent refinement loop tests
     │   └── test_orchestrator.py
     ├── test_models/
     │   ├── test_project_models.py
@@ -241,6 +244,7 @@ pytest
 - `CharterAgent` orchestrates Charter updates via two-step LLM interaction: `ask_questions()` identifies gaps, `propose_edits()` returns section replacements — both retry on JSON parse failure
 - `HealthReviewAgent` orchestrates project health reviews via two-step LLM interaction: `ask_questions()` identifies data gaps, `generate_review()` returns structured assessment — read-only, no approval queue needed
 - `CeoReviewAgent` orchestrates CEO status updates via two-step LLM interaction: `ask_questions()` identifies gaps in 2-week data, `generate_review()` returns structured update with health indicator, commentary, escalations, and milestones — publishes to Confluence via approval queue
+- `RiskRefineAgent` iteratively refines transcript-extracted risks/decisions via a single `refine()` method: evaluates against ISO 14971 quality criteria, asks targeted questions, incorporates answers, repeats until satisfied (max 5 rounds)
 - All LLM responses that result in write actions must pass through the Approval Engine first
 - Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
 - Gemini limitation: 2.5 Flash uses "thinking" tokens that count against `maxOutputTokens` — use 16384+ for structured output to avoid truncation
@@ -484,6 +488,37 @@ User enters optional PM notes → clicks "Generate CEO Review"
 - **Confluence append:** Uses existing `append_mode` in approval engine — fetches current page body at execution time and appends XHTML
 - **Auto-discovery:** CEO Review page discovered from Charter ancestors: Charter → ancestors → Program → children → "CEO Review" title match
 - **PM notes:** Free-form textarea for qualitative context (blockers, escalations, team dynamics) passed to both LLM steps
+
+## Risk Refinement Workflow
+
+The risk refinement feature adds iterative Q&A refinement for transcript-extracted risks and decisions, evaluating them against ISO 14971 quality criteria.
+
+### Flow
+
+```
+User clicks "Refine" on a risk/decision suggestion
+  → POST /{tid}/suggestions/{sid}/refine → TranscriptService.start_risk_refinement()
+      → _extract_risk_draft() (parse ADF payload back to plain text fields)
+      → gather_project_context() (existing risks/decisions for dedup)
+      → RiskRefineAgent.refine() (LLM call: evaluate + ask questions)
+  → UI shows quality assessment, current draft preview, question form
+  → User answers → POST /{tid}/suggestions/{sid}/refine/answer
+      → TranscriptService.continue_risk_refinement() (next round)
+      → RiskRefineAgent.refine() (LLM call with accumulated Q&A)
+  → Loop until satisfied or max 5 rounds
+  → User clicks "Apply Refinement" → POST /{tid}/suggestions/{sid}/refine/apply
+      → TranscriptService.apply_refinement() (rebuild Jira payload, update DB)
+  → Suggestion row re-renders with refined content
+  → User can Accept/Reject as usual
+```
+
+### Key Design Decisions
+
+- **Single-method agent:** `RiskRefineAgent.refine()` handles both initial evaluation and follow-up rounds (unlike the two-step Charter/Health agents)
+- **Stateless Q&A:** No new DB tables — state carried via hidden form fields (`risk_draft` JSON, `qa_history` JSON, `round_number`), same pattern as Charter Q&A
+- **ADF round-trip:** `_extract_risk_draft()` parses the Jira ADF payload back to plain text for the LLM; `apply_refinement()` rebuilds ADF from the refined fields
+- **Max 5 rounds:** `continue_risk_refinement()` forces `satisfied=true` at round 5 without an LLM call
+- **Bail-out options:** "Apply Current Draft" applies partial refinement at any point; "Discard" removes the panel without changes
 
 ## Feature Backlog & Technical Debt
 

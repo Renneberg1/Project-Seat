@@ -2,6 +2,8 @@
 
 from __future__ import annotations
 
+import json
+
 from fastapi import APIRouter, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 
@@ -259,4 +261,133 @@ async def accept_all_suggestions(request: Request, id: int, tid: int) -> HTMLRes
             "suggestions": suggestions,
             "meeting_summary": record.meeting_summary if record else "",
         },
+    )
+
+
+# ------------------------------------------------------------------
+# Risk / Decision refinement
+# ------------------------------------------------------------------
+
+@router.post("/{tid}/suggestions/{sid}/refine", response_class=HTMLResponse)
+async def start_refinement(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+    """Start iterative refinement for a risk/decision suggestion."""
+    dashboard = DashboardService()
+    project = dashboard.get_project_by_id(id)
+    if project is None:
+        return HTMLResponse("Project not found", status_code=404)
+
+    service = TranscriptService()
+    try:
+        result = await service.start_risk_refinement(sid, project)
+    except ValueError as exc:
+        return HTMLResponse(
+            f'<div class="error-banner">{exc}</div>',
+            status_code=400,
+        )
+    except Exception as exc:
+        return HTMLResponse(
+            f'<div class="error-banner">Refinement failed: {exc}</div>',
+            status_code=500,
+        )
+
+    sug = service.get_suggestion(sid)
+
+    return templates.TemplateResponse(
+        request,
+        "partials/risk_refine_panel.html",
+        {
+            "project": project,
+            "transcript_id": tid,
+            "suggestion_id": sid,
+            "suggestion_type": sug.suggestion_type.value if sug else "risk",
+            "result": result,
+            "risk_draft": json.dumps(result.get("refined_risk", {})),
+            "qa_history": json.dumps([]),
+            "round_number": 1,
+        },
+    )
+
+
+@router.post("/{tid}/suggestions/{sid}/refine/answer", response_class=HTMLResponse)
+async def refine_answer(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+    """Submit answers to refinement questions and continue the loop."""
+    dashboard = DashboardService()
+    project = dashboard.get_project_by_id(id)
+    if project is None:
+        return HTMLResponse("Project not found", status_code=404)
+
+    form = await request.form()
+
+    risk_draft = json.loads(form.get("risk_draft", "{}"))
+    qa_history = json.loads(form.get("qa_history", "[]"))
+    round_number = int(form.get("round_number", "1"))
+
+    # Collect new Q&A pairs from form
+    idx = 0
+    while True:
+        q_key = f"question_{idx}"
+        a_key = f"answer_{idx}"
+        if q_key not in form:
+            break
+        question = str(form.get(q_key, ""))
+        answer = str(form.get(a_key, ""))
+        if question:
+            qa_history.append({"question": question, "answer": answer})
+        idx += 1
+
+    next_round = round_number + 1
+
+    service = TranscriptService()
+    try:
+        result = await service.continue_risk_refinement(
+            suggestion_id=sid,
+            project=project,
+            risk_draft=risk_draft,
+            qa_history=qa_history,
+            round_number=next_round,
+        )
+    except Exception as exc:
+        return HTMLResponse(
+            f'<div class="error-banner">Refinement failed: {exc}</div>',
+            status_code=500,
+        )
+
+    sug = service.get_suggestion(sid)
+
+    return templates.TemplateResponse(
+        request,
+        "partials/risk_refine_panel.html",
+        {
+            "project": project,
+            "transcript_id": tid,
+            "suggestion_id": sid,
+            "suggestion_type": sug.suggestion_type.value if sug else "risk",
+            "result": result,
+            "risk_draft": json.dumps(result.get("refined_risk", {})),
+            "qa_history": json.dumps(qa_history),
+            "round_number": next_round,
+        },
+    )
+
+
+@router.post("/{tid}/suggestions/{sid}/refine/apply", response_class=HTMLResponse)
+async def apply_refinement(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+    """Apply the refined draft to the suggestion."""
+    dashboard = DashboardService()
+    project = dashboard.get_project_by_id(id)
+    if project is None:
+        return HTMLResponse("Project not found", status_code=404)
+
+    form = await request.form()
+    refined_risk = json.loads(form.get("refined_risk", "{}"))
+
+    service = TranscriptService()
+    sug = service.apply_refinement(sid, refined_risk)
+    if sug is None:
+        return HTMLResponse("Suggestion not found", status_code=404)
+
+    return templates.TemplateResponse(
+        request,
+        "partials/suggestion_row.html",
+        {"sug": sug, "project": project, "transcript_id": tid},
     )

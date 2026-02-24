@@ -329,3 +329,191 @@ class TestSuggestionWorkflow:
         result = service.reject_suggestion(sug_id)
 
         assert result.status == SuggestionStatus.REJECTED
+
+
+# ---------------------------------------------------------------------------
+# Risk refinement tests
+# ---------------------------------------------------------------------------
+
+
+class TestRiskRefinement:
+    """Test extract_risk_draft, apply_refinement, and service-level refinement helpers."""
+
+    @pytest.fixture()
+    def db_path(self, tmp_path):
+        path = str(tmp_path / "test.db")
+        init_db(path)
+        import sqlite3
+        conn = sqlite3.connect(path)
+        conn.execute(
+            "INSERT INTO projects (id, jira_goal_key, name, status, phase, "
+            "confluence_charter_id, confluence_xft_id) "
+            "VALUES (?, ?, ?, ?, ?, ?, ?)",
+            (1, "PROG-100", "Test Project", "active", "planning", "111", "222"),
+        )
+        conn.execute(
+            "INSERT INTO transcript_cache (id, project_id, filename, raw_text) "
+            "VALUES (?, ?, ?, ?)",
+            (1, 1, "meeting.vtt", "Thomas: Risk discussion"),
+        )
+        conn.commit()
+        conn.close()
+        return path
+
+    def _insert_risk_suggestion(self, db_path):
+        import json as _json, sqlite3
+        payload = {
+            "project_key": "RISK",
+            "issue_type_id": "10832",
+            "summary": "Model accuracy regression",
+            "fields": {
+                "parent": {"key": "PROG-100"},
+                "description": {
+                    "type": "doc", "version": 1,
+                    "content": [
+                        {"type": "paragraph", "content": [
+                            {"type": "text", "text": "Background", "marks": [{"type": "strong"}]},
+                        ]},
+                        {"type": "paragraph", "content": [
+                            {"type": "text", "text": "High-res training showed accuracy drop"},
+                        ]},
+                        {"type": "rule"},
+                        {"type": "paragraph", "content": [
+                            {"type": "text", "text": "Evidence from transcript", "marks": [{"type": "strong"}]},
+                        ]},
+                        {"type": "paragraph", "content": [
+                            {"type": "text", "text": "Sarah said accuracy dropped"},
+                        ]},
+                    ],
+                },
+                "priority": {"name": "High"},
+                "customfield_11166": {
+                    "type": "doc", "version": 1,
+                    "content": [
+                        {"type": "paragraph", "content": [
+                            {"type": "text", "text": "Could delay timeline by 5 days"},
+                        ]},
+                    ],
+                },
+                "customfield_11342": {
+                    "type": "doc", "version": 1,
+                    "content": [
+                        {"type": "paragraph", "content": [
+                            {"type": "text", "text": "Run MRMC evaluation"},
+                        ]},
+                    ],
+                },
+                "customfield_13267": 5,
+            },
+        }
+        conn = sqlite3.connect(db_path)
+        cursor = conn.execute(
+            """INSERT INTO transcript_suggestions
+               (transcript_id, project_id, suggestion_type, title, detail,
+                evidence, proposed_payload, proposed_action, proposed_preview,
+                confidence, status)
+               VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
+            (1, 1, "risk", "Model accuracy regression",
+             "High-res training showed accuracy drop",
+             "Sarah said accuracy dropped",
+             _json.dumps(payload), "create_jira_issue",
+             "Type: risk\nTitle: Model accuracy regression",
+             0.8, "pending"),
+        )
+        conn.commit()
+        sug_id = cursor.lastrowid
+        conn.close()
+        return sug_id
+
+    def test_extract_adf_text(self, db_path):
+        service = TranscriptService(db_path=db_path)
+        adf = {
+            "type": "doc", "version": 1,
+            "content": [
+                {"type": "paragraph", "content": [
+                    {"type": "text", "text": "Background", "marks": [{"type": "strong"}]},
+                ]},
+                {"type": "paragraph", "content": [
+                    {"type": "text", "text": "Some actual content"},
+                ]},
+            ],
+        }
+        result = service._extract_adf_text(adf)
+        assert result == "Some actual content"
+
+    def test_extract_adf_text_none_input(self, db_path):
+        service = TranscriptService(db_path=db_path)
+        assert service._extract_adf_text(None) == ""
+        assert service._extract_adf_text({}) == ""
+
+    def test_extract_risk_draft(self, db_path):
+        sug_id = self._insert_risk_suggestion(db_path)
+        service = TranscriptService(db_path=db_path)
+        sug = service.get_suggestion(sug_id)
+
+        draft = service._extract_risk_draft(sug)
+
+        assert draft["title"] == "Model accuracy regression"
+        assert "accuracy drop" in draft["background"]
+        assert "delay timeline" in draft["impact_analysis"]
+        assert "MRMC" in draft["mitigation"]
+        assert draft["priority"] == "High"
+        assert draft["timeline_impact_days"] == "5"
+        assert "Sarah" in draft["evidence"]
+
+    def test_apply_refinement_updates_suggestion(self, db_path):
+        sug_id = self._insert_risk_suggestion(db_path)
+        service = TranscriptService(db_path=db_path)
+
+        refined = {
+            "title": "Refined Risk Title",
+            "background": "Refined background with more detail",
+            "impact_analysis": "Severity: High, Probability: Medium",
+            "mitigation": "Step 1: Do X. Step 2: Do Y.",
+            "priority": "High",
+            "timeline_impact_days": 10,
+            "evidence": "Sarah: 'accuracy dropped by 5%'",
+        }
+
+        result = service.apply_refinement(sug_id, refined)
+
+        assert result is not None
+        assert result.title == "Refined Risk Title"
+        assert result.detail == "Refined background with more detail"
+        assert result.evidence == "Sarah: 'accuracy dropped by 5%'"
+        assert result.confidence == 1.0
+        assert "Refined Risk Title" in result.proposed_preview
+
+        # Verify payload was rebuilt
+        import json as _json
+        payload = _json.loads(result.proposed_payload)
+        assert payload["summary"] == "Refined Risk Title"
+        assert payload["fields"]["priority"]["name"] == "High"
+
+    def test_apply_refinement_nonexistent_returns_none(self, db_path):
+        service = TranscriptService(db_path=db_path)
+        result = service.apply_refinement(999, {"title": "X"})
+        assert result is None
+
+    async def test_continue_risk_refinement_max_rounds_forces_satisfied(self, db_path):
+        sug_id = self._insert_risk_suggestion(db_path)
+        service = TranscriptService(db_path=db_path)
+
+        from src.models.project import Project
+        project = Project(
+            id=1, jira_goal_key="PROG-100", name="Test Project",
+            confluence_charter_id="111", confluence_xft_id="222",
+            status="active", phase="planning", created_at="2026-01-01",
+        )
+
+        draft = {"title": "Final draft", "background": "bg"}
+        result = await service.continue_risk_refinement(
+            suggestion_id=sug_id,
+            project=project,
+            risk_draft=draft,
+            qa_history=[],
+            round_number=5,  # MAX_REFINE_ROUNDS
+        )
+
+        assert result["satisfied"] is True
+        assert result["refined_risk"] == draft

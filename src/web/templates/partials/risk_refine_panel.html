@@ -1,0 +1,106 @@
+{% if result.satisfied %}
+<div class="risk-refine-panel risk-refine-satisfied">
+    <h4>Refinement Complete</h4>
+    <p class="risk-refine-assessment">{{ result.quality_assessment }}</p>
+
+    <details class="risk-refine-draft" open>
+        <summary>Refined Draft</summary>
+        <div class="risk-refine-draft-body">
+            <p><strong>Title:</strong> {{ result.refined_risk.title }}</p>
+            <p><strong>Background:</strong> {{ result.refined_risk.background }}</p>
+            <p><strong>Impact Analysis:</strong> {{ result.refined_risk.impact_analysis }}</p>
+            <p><strong>Mitigation:</strong> {{ result.refined_risk.mitigation }}</p>
+            <p><strong>Priority:</strong> {{ result.refined_risk.priority }}</p>
+            <p><strong>Timeline Impact:</strong> {{ result.refined_risk.timeline_impact_days }} days</p>
+            <p><strong>Evidence:</strong> <em>"{{ result.refined_risk.evidence }}"</em></p>
+        </div>
+    </details>
+
+    <div class="suggestion-actions">
+        <form style="display:inline"
+              hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ suggestion_id }}/refine/apply"
+              hx-target="#suggestion-{{ suggestion_id }}"
+              hx-swap="outerHTML">
+            <input type="hidden" name="refined_risk" value='{{ risk_draft }}'>
+            <button type="submit" class="btn btn-approve btn-sm">Apply Refinement</button>
+        </form>
+        <button class="btn btn-reject btn-sm"
+                onclick="this.closest('.risk-refine-panel').remove()">Discard</button>
+    </div>
+</div>
+{% else %}
+<div class="risk-refine-panel">
+    <h4>Refining {{ suggestion_type | replace("_", " ") | title }} — Round {{ round_number }}/5</h4>
+    <p class="risk-refine-assessment">{{ result.quality_assessment }}</p>
+
+    <details class="risk-refine-draft">
+        <summary>Current Draft</summary>
+        <div class="risk-refine-draft-body">
+            <p><strong>Title:</strong> {{ result.refined_risk.title }}</p>
+            <p><strong>Background:</strong> {{ result.refined_risk.background }}</p>
+            <p><strong>Impact Analysis:</strong> {{ result.refined_risk.impact_analysis }}</p>
+            <p><strong>Mitigation:</strong> {{ result.refined_risk.mitigation }}</p>
+            <p><strong>Priority:</strong> {{ result.refined_risk.priority }}</p>
+            <p><strong>Timeline Impact:</strong> {{ result.refined_risk.timeline_impact_days }} days</p>
+            <p><strong>Evidence:</strong> <em>"{{ result.refined_risk.evidence }}"</em></p>
+        </div>
+    </details>
+
+    {% if result.questions %}
+    <form hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ suggestion_id }}/refine/answer"
+          hx-target="#refine-area-{{ suggestion_id }}"
+          hx-swap="innerHTML"
+          hx-indicator="#refine-spinner-{{ suggestion_id }}"
+          hx-disabled-elt="find button">
+        <input type="hidden" name="risk_draft" value='{{ risk_draft }}'>
+        <input type="hidden" name="qa_history" value='{{ qa_history }}'>
+        <input type="hidden" name="round_number" value="{{ round_number }}">
+
+        {% for q in result.questions %}
+        <div class="charter-question-item">
+            <label>
+                <strong>{{ q.question }}</strong>
+                <span class="charter-question-section">Field: {{ q.field | replace("_", " ") | title }}</span>
+                {% if q.why_needed %}
+                <span class="charter-question-why">{{ q.why_needed }}</span>
+                {% endif %}
+            </label>
+            <input type="hidden" name="question_{{ loop.index0 }}" value="{{ q.question }}">
+            <textarea name="answer_{{ loop.index0 }}" rows="2"
+                      placeholder="Your answer..."></textarea>
+        </div>
+        {% endfor %}
+
+        <div class="suggestion-actions">
+            <button type="submit" class="btn btn-refine btn-sm">Submit Answers</button>
+            <span id="refine-spinner-{{ suggestion_id }}" class="htmx-indicator"> Refining...</span>
+        </div>
+    </form>
+    {% else %}
+    {# No questions but not satisfied — auto-submit to next round #}
+    <form hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ suggestion_id }}/refine/answer"
+          hx-target="#refine-area-{{ suggestion_id }}"
+          hx-swap="innerHTML"
+          hx-trigger="load"
+          hx-indicator="#refine-spinner-{{ suggestion_id }}"
+          hx-disabled-elt="find button">
+        <input type="hidden" name="risk_draft" value='{{ risk_draft }}'>
+        <input type="hidden" name="qa_history" value='{{ qa_history }}'>
+        <input type="hidden" name="round_number" value="{{ round_number }}">
+        <span id="refine-spinner-{{ suggestion_id }}" class="htmx-indicator"> Refining...</span>
+    </form>
+    {% endif %}
+
+    <div class="suggestion-actions" style="margin-top: 0.5rem;">
+        <form style="display:inline"
+              hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ suggestion_id }}/refine/apply"
+              hx-target="#suggestion-{{ suggestion_id }}"
+              hx-swap="outerHTML">
+            <input type="hidden" name="refined_risk" value='{{ risk_draft }}'>
+            <button type="submit" class="btn btn-sm" style="background: var(--status-orange);">Apply Current Draft</button>
+        </form>
+        <button class="btn btn-reject btn-sm"
+                onclick="this.closest('.risk-refine-panel').remove()">Discard</button>
+    </div>
+</div>
+{% endif %}

@@ -96,7 +96,12 @@ TRANSCRIPT_ANALYSIS_SCHEMA: dict[str, Any] = {
                         "description": "For xft/charter: content to publish on the Confluence page. Write clearly and professionally — this will be published as-is to a document visible to the project team. Use separate paragraphs (newlines) for distinct points. Empty string if not applicable.",
                     },
                 },
-                "required": ["type", "title", "evidence", "confidence"],
+                "required": [
+                    "type", "title", "background", "impact_analysis",
+                    "mitigation", "evidence", "priority",
+                    "timeline_impact_days", "confidence",
+                    "confluence_section_title", "confluence_content",
+                ],
             },
         },
     },

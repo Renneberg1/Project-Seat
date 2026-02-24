@@ -19,6 +19,7 @@ A locally-run project management cockpit for medical device software engineering
 - **Dashboard Redesign** — Information-dense layout with hero bar (phase/health/countdown), Chart.js doughnut charts (risks, DHF docs), scope composition bar, team breakdown stacked bars, 3-column activity/links section. Responsive at 768px and 480px breakpoints.
 - **Dark Mode** — Toggle between light and dark themes. Defaults to OS preference, persists choice in localStorage. All colors driven by CSS custom properties with dark palette derived from brand navy. Chart.js charts rebuild on theme change.
 - **CEO Review Output** — Generate fortnightly CEO-level status updates with a last-2-weeks lens. Deterministic data tables (new risks/decisions, team progress, DHF docs) combined with LLM-generated commentary, published to the program's CEO Review Confluence page via the approval queue.
+- **Iterative Risk/Decision Refinement** — Refine LLM-extracted risks and decisions through a multi-round Q&A loop. The LLM evaluates each draft against ISO 14971 quality criteria, asks targeted questions to fill gaps, and iterates until satisfied (max 5 rounds). Users can bail out early with "Apply Current Draft" or discard at any time.
 
 ### Planned / Upcoming
 

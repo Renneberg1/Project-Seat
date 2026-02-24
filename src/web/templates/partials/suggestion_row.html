@@ -27,11 +27,21 @@
                 hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ sug.id }}/accept"
                 hx-target="#suggestion-{{ sug.id }}"
                 hx-swap="outerHTML">Accept</button>
+        {% if sug.suggestion_type.value in ("risk", "decision") %}
+        <button class="btn btn-refine btn-sm"
+                hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ sug.id }}/refine"
+                hx-target="#refine-area-{{ sug.id }}"
+                hx-swap="innerHTML"
+                hx-indicator="#refine-spinner-{{ sug.id }}"
+                hx-disabled-elt="this">Refine</button>
+        <span id="refine-spinner-{{ sug.id }}" class="htmx-indicator"> Evaluating...</span>
+        {% endif %}
         <button class="btn btn-reject btn-sm"
                 hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/suggestions/{{ sug.id }}/reject"
                 hx-target="#suggestion-{{ sug.id }}"
                 hx-swap="outerHTML">Reject</button>
     </div>
+    <div id="refine-area-{{ sug.id }}"></div>
     {% elif sug.status.value == "queued" and sug.approval_item_id %}
     <div class="suggestion-actions">
         <a href="/project/{{ project.id }}/approvals" class="btn btn-sm">View in Approval Queue</a>
