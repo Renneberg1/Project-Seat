@@ -202,7 +202,7 @@ async def accept_suggestion(request: Request, id: int, tid: int, sid: int) -> HT
 
     service = TranscriptService()
     try:
-        sug = service.accept_suggestion(sid, project)
+        sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
         return HTMLResponse(
             f'<div class="error-banner">{exc}</div>',
@@ -245,7 +245,7 @@ async def accept_all_suggestions(request: Request, id: int, tid: int) -> HTMLRes
         return HTMLResponse("Project not found", status_code=404)
 
     service = TranscriptService()
-    service.accept_all_suggestions(tid, project)
+    await service.accept_all_suggestions(tid, project)
 
     suggestions = service.list_suggestions(tid)
     record = service.get_transcript(tid)

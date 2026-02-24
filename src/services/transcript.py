@@ -11,7 +11,9 @@ from typing import Any
 
 from src.config import Settings, settings as default_settings
 from src.connectors.base import ConnectorError
+from src.connectors.jira import JiraConnector
 from src.database import get_db
+from src.engine.mentions import resolve_adf_doc_mentions, resolve_confluence_mentions
 from src.models.transcript import (
     ParsedTranscript,
     ProjectContext,
@@ -498,13 +500,14 @@ class TranscriptService:
     # Accept / Reject
     # ------------------------------------------------------------------
 
-    def accept_suggestion(
+    async def accept_suggestion(
         self, suggestion_id: int, project: Any
     ) -> TranscriptSuggestion | None:
         """Accept a suggestion and queue it in the approval engine.
 
         Refreshes payload fields from current project data so that fixes
         to goal key or Confluence page IDs take effect without re-analysis.
+        Resolves @mentions in payloads to native Atlassian markup.
         """
         from src.engine.approval import ApprovalEngine
         from src.models.approval import ApprovalAction
@@ -525,6 +528,25 @@ class TranscriptService:
             payload.setdefault("fields", {})["parent"] = {"key": project.jira_goal_key}
             payload["fields"]["fixVersions"] = [{"name": project.name}]
 
+            # Resolve @mentions in ADF fields
+            jira = JiraConnector()
+            try:
+                fields = payload.get("fields", {})
+                if fields.get("description"):
+                    fields["description"] = await resolve_adf_doc_mentions(
+                        fields["description"], jira
+                    )
+                if fields.get("customfield_11166"):
+                    fields["customfield_11166"] = await resolve_adf_doc_mentions(
+                        fields["customfield_11166"], jira
+                    )
+                if fields.get("customfield_11342"):
+                    fields["customfield_11342"] = await resolve_adf_doc_mentions(
+                        fields["customfield_11342"], jira
+                    )
+            finally:
+                await jira.close()
+
         elif sug.proposed_action == "update_confluence_page":
             # Determine correct page ID from suggestion type
             if sug.suggestion_type == SuggestionType.XFT_UPDATE:
@@ -537,6 +559,17 @@ class TranscriptService:
                     "Set Charter/XFT page IDs first."
                 )
             payload["page_id"] = page_id
+
+            # Resolve @mentions in Confluence append content
+            append_content = payload.get("append_content", "")
+            if append_content:
+                jira = JiraConnector()
+                try:
+                    payload["append_content"] = await resolve_confluence_mentions(
+                        append_content, jira
+                    )
+                finally:
+                    await jira.close()
 
         action_map = {
             "create_jira_issue": ApprovalAction.CREATE_JIRA_ISSUE,
@@ -574,7 +607,7 @@ class TranscriptService:
             conn.commit()
         return self._get_suggestion(suggestion_id)
 
-    def accept_all_suggestions(
+    async def accept_all_suggestions(
         self, transcript_id: int, project: Any
     ) -> list[int]:
         """Accept all pending suggestions for a transcript. Returns approval item IDs."""
@@ -582,7 +615,7 @@ class TranscriptService:
         item_ids: list[int] = []
         for sug in suggestions:
             if sug.status == SuggestionStatus.PENDING:
-                result = self.accept_suggestion(sug.id, project)
+                result = await self.accept_suggestion(sug.id, project)
                 if result and result.approval_item_id:
                     item_ids.append(result.approval_item_id)
         return item_ids

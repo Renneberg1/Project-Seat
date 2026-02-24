@@ -147,7 +147,7 @@ async def accept_charter_suggestion(
 
     service = CharterService()
     try:
-        sug = service.accept_suggestion(sid, project)
+        sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
         return HTMLResponse(
             f'<div class="error-banner">{exc}</div>',
@@ -194,7 +194,7 @@ async def accept_all_charter_suggestions(
         return HTMLResponse("Project not found", status_code=404)
 
     service = CharterService()
-    service.accept_all_suggestions(project)
+    await service.accept_all_suggestions(project)
 
     suggestions = service.list_suggestions(id)
     return templates.TemplateResponse(request, "partials/charter_suggestions.html", {

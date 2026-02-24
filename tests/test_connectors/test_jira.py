@@ -170,6 +170,47 @@ async def test_add_issue_link_sends_correct_structure(jira):
 
 
 # ---------------------------------------------------------------------------
+# search_users: Incoming query — assert return value
+# ---------------------------------------------------------------------------
+
+
+async def test_search_users_returns_list(jira, make_response):
+    sample = [
+        {"accountId": "abc123", "displayName": "Tom Renneberg"},
+        {"accountId": "def456", "displayName": "Thomas R"},
+    ]
+    mock_resp = make_response(json_data=sample)
+    mock = AsyncMock(return_value=mock_resp)
+
+    with patch.object(jira, "_request", mock):
+        result = await jira.search_users("Tom")
+
+    mock.assert_called_once_with(
+        "GET", "/user/search", params={"query": "Tom", "maxResults": 5},
+    )
+    assert len(result) == 2
+    assert result[0]["accountId"] == "abc123"
+
+
+async def test_search_users_custom_max_results(jira):
+    import httpx
+    # Build a response with an empty JSON array directly (make_response treats [] as falsy)
+    mock_resp = httpx.Response(
+        status_code=200, content=b"[]",
+        request=httpx.Request("GET", "https://fake.atlassian.net"),
+    )
+    mock = AsyncMock(return_value=mock_resp)
+
+    with patch.object(jira, "_request", mock):
+        result = await jira.search_users("Nobody", max_results=1)
+
+    mock.assert_called_once_with(
+        "GET", "/user/search", params={"query": "Nobody", "maxResults": 1},
+    )
+    assert result == []
+
+
+# ---------------------------------------------------------------------------
 # field_id: Incoming query — assert return value
 # ---------------------------------------------------------------------------
 

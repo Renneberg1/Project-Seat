@@ -10,6 +10,8 @@ from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
 
+from src.connectors.jira import JiraConnector
+from src.engine.mentions import resolve_confluence_mentions
 from src.services.ceo_review import CeoReviewService
 from src.services.dashboard import DashboardService
 from src.web.deps import get_nav_context, templates
@@ -133,8 +135,13 @@ async def ceo_review_analyze(request: Request, id: int) -> HTMLResponse:
             status_code=500,
         )
 
-    # Render Confluence XHTML and persist
+    # Render Confluence XHTML and resolve @mentions
     xhtml = service.render_confluence_xhtml(review)
+    jira = JiraConnector()
+    try:
+        xhtml = await resolve_confluence_mentions(xhtml, jira)
+    finally:
+        await jira.close()
     review_id = service.save_review(project.id, review, xhtml)
     review["id"] = review_id
 

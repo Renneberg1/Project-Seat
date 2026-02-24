@@ -127,6 +127,9 @@ RULES:
 3. Escalations should only be raised for issues needing CEO/leadership attention.
 4. Next milestones should be concrete, time-bound where possible.
 5. Respond with valid JSON only — no markdown, no explanation.
+6. If the PM notes reference people with @Name syntax (e.g. @Alice Smith), \
+preserve the @ prefix exactly in your output. You may also use @Name when \
+referencing specific individuals.
 """
 
 CEO_REVIEW_SCHEMA: dict[str, Any] = {

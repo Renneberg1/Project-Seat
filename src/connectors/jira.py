@@ -121,6 +121,25 @@ class JiraConnector(BaseConnector):
         await self.post("/issueLink", json_body=body)
 
     # ------------------------------------------------------------------
+    # User search
+    # ------------------------------------------------------------------
+
+    async def search_users(
+        self, query: str, max_results: int = 5
+    ) -> list[dict[str, Any]]:
+        """Search for Atlassian users by display name.
+
+        The ``/user/search`` endpoint returns a plain JSON array (not a
+        paginated wrapper), so we call ``_request`` directly.
+        """
+        resp = await self._request(
+            "GET",
+            "/user/search",
+            params={"query": query, "maxResults": max_results},
+        )
+        return resp.json()
+
+    # ------------------------------------------------------------------
     # Field helpers
     # ------------------------------------------------------------------
 

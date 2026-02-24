@@ -33,7 +33,9 @@ published directly to a Confluence page visible to the entire project team and s
 Write with clarity, professional tone, and good structure. Use separate paragraphs \
 (separated by newlines) for distinct points. Avoid casual language, abbreviations, or \
 incomplete sentences. Content should read as polished documentation, not rough meeting notes.
-10. Respond with valid JSON only — no markdown, no explanation.
+10. If a speaker's full name can be determined from the transcript, reference them with \
+@FirstName LastName syntax in evidence, background, and confluence_content fields.
+11. Respond with valid JSON only — no markdown, no explanation.
 """
 
 # JSON schema for structured LLM output

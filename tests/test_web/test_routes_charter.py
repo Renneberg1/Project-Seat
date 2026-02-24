@@ -171,7 +171,7 @@ def test_accept_suggestion_returns_updated_row(client, tmp_db):
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
-        instance.accept_suggestion.return_value = mock_sug
+        instance.accept_suggestion = AsyncMock(return_value=mock_sug)
 
         result = client.post("/project/1/charter/suggestions/1/accept")
 

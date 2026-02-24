@@ -260,12 +260,19 @@ class TestSuggestionWorkflow:
             status="active", phase="planning", created_at="2026-01-01",
         )
 
-    def test_accept_suggestion_queues_approval_item(self, db_path):
+    async def test_accept_suggestion_queues_approval_item(self, db_path):
+        from unittest.mock import AsyncMock, patch
         sug_id = self._insert_suggestion(db_path)
         service = TranscriptService(db_path=db_path)
         project = self._make_project()
 
-        result = service.accept_suggestion(sug_id, project)
+        with patch("src.services.transcript.resolve_adf_doc_mentions", new_callable=AsyncMock) as mock_adf, \
+             patch("src.services.transcript.resolve_confluence_mentions", new_callable=AsyncMock) as mock_conf, \
+             patch("src.services.transcript.JiraConnector") as MockJira:
+            mock_adf.side_effect = lambda doc, jira: doc
+            mock_conf.side_effect = lambda text, jira: text
+            MockJira.return_value.close = AsyncMock()
+            result = await service.accept_suggestion(sug_id, project)
 
         assert result is not None
         assert result.status == SuggestionStatus.QUEUED
@@ -276,14 +283,14 @@ class TestSuggestionWorkflow:
         item = engine.get(result.approval_item_id)
         assert item is not None
 
-    def test_accept_suggestion_pending_goal_key_raises(self, db_path):
+    async def test_accept_suggestion_pending_goal_key_raises(self, db_path):
         sug_id = self._insert_suggestion(db_path)
         service = TranscriptService(db_path=db_path)
         project = self._make_project()
         project.jira_goal_key = "pending"
 
         with pytest.raises(ValueError, match="Goal key"):
-            service.accept_suggestion(sug_id, project)
+            await service.accept_suggestion(sug_id, project)
 
     def test_reject_suggestion_updates_status(self, db_path):
         sug_id = self._insert_suggestion(db_path)
@@ -294,13 +301,20 @@ class TestSuggestionWorkflow:
         assert result is not None
         assert result.status == SuggestionStatus.REJECTED
 
-    def test_accept_all_suggestions_queues_all(self, db_path):
+    async def test_accept_all_suggestions_queues_all(self, db_path):
+        from unittest.mock import AsyncMock, patch
         self._insert_suggestion(db_path, title="Risk A")
         self._insert_suggestion(db_path, title="Risk B")
         service = TranscriptService(db_path=db_path)
         project = self._make_project()
 
-        item_ids = service.accept_all_suggestions(1, project)
+        with patch("src.services.transcript.resolve_adf_doc_mentions", new_callable=AsyncMock) as mock_adf, \
+             patch("src.services.transcript.resolve_confluence_mentions", new_callable=AsyncMock) as mock_conf, \
+             patch("src.services.transcript.JiraConnector") as MockJira:
+            mock_adf.side_effect = lambda doc, jira: doc
+            mock_conf.side_effect = lambda text, jira: text
+            MockJira.return_value.close = AsyncMock()
+            item_ids = await service.accept_all_suggestions(1, project)
 
         assert len(item_ids) == 2
         # All suggestions should be queued

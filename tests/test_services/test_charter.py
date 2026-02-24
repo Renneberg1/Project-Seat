@@ -200,12 +200,16 @@ class TestAnalyzeCharterUpdate:
 
 class TestSuggestionWorkflow:
 
-    def test_accept_suggestion_creates_approval_item(self, db_path):
+    async def test_accept_suggestion_creates_approval_item(self, db_path):
         sug_id = _insert_suggestion(db_path)
         service = CharterService(db_path=db_path)
         project = _make_project()
 
-        result = service.accept_suggestion(sug_id, project)
+        with patch("src.services.charter.resolve_confluence_mentions", new_callable=AsyncMock) as mock_resolve, \
+             patch("src.services.charter.JiraConnector") as MockJira:
+            mock_resolve.side_effect = lambda text, jira: text  # no-op
+            MockJira.return_value.close = AsyncMock()
+            result = await service.accept_suggestion(sug_id, project)
 
         assert result is not None
         assert result.status == CharterSuggestionStatus.QUEUED
@@ -219,14 +223,14 @@ class TestSuggestionWorkflow:
         assert payload["section_replace_mode"] is True
         assert payload["section_name"] == "Commercial Objective"
 
-    def test_accept_no_charter_id_raises(self, db_path):
+    async def test_accept_no_charter_id_raises(self, db_path):
         sug_id = _insert_suggestion(db_path)
         service = CharterService(db_path=db_path)
         project = _make_project()
         project.confluence_charter_id = None
 
         with pytest.raises(ValueError, match="no Charter page"):
-            service.accept_suggestion(sug_id, project)
+            await service.accept_suggestion(sug_id, project)
 
     def test_reject_suggestion_updates_status(self, db_path):
         sug_id = _insert_suggestion(db_path)
@@ -237,13 +241,17 @@ class TestSuggestionWorkflow:
         assert result is not None
         assert result.status == CharterSuggestionStatus.REJECTED
 
-    def test_accept_all_queues_all_pending(self, db_path):
+    async def test_accept_all_queues_all_pending(self, db_path):
         _insert_suggestion(db_path, section_name="Date")
         _insert_suggestion(db_path, section_name="Status")
         service = CharterService(db_path=db_path)
         project = _make_project()
 
-        item_ids = service.accept_all_suggestions(project)
+        with patch("src.services.charter.resolve_confluence_mentions", new_callable=AsyncMock) as mock_resolve, \
+             patch("src.services.charter.JiraConnector") as MockJira:
+            mock_resolve.side_effect = lambda text, jira: text
+            MockJira.return_value.close = AsyncMock()
+            item_ids = await service.accept_all_suggestions(project)
 
         assert len(item_ids) == 2
         suggestions = service.list_suggestions(project.id)

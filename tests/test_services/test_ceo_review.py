@@ -28,7 +28,7 @@ def tmp_db(tmp_path):
         conn.execute(
             "INSERT INTO projects (jira_goal_key, name, status, phase, team_projects, confluence_ceo_review_id) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            ("PROG-1", "Test Project", "active", "development", json.dumps({"AIM": "Drop 1"}), "99999"),
+            ("PROG-1", "Test Project", "active", "development", json.dumps([["AIM", "Drop 1"]]), "99999"),
         )
         conn.commit()
     return db_path
@@ -452,11 +452,15 @@ class TestRoutes:
         }
 
         with patch("src.web.routes.ceo_review.DashboardService") as MockDash, \
-             patch("src.web.routes.ceo_review.CeoReviewService") as MockSvc:
+             patch("src.web.routes.ceo_review.CeoReviewService") as MockSvc, \
+             patch("src.web.routes.ceo_review.resolve_confluence_mentions", new_callable=AsyncMock) as mock_resolve, \
+             patch("src.web.routes.ceo_review.JiraConnector") as MockJira:
             MockDash.return_value.get_project_by_id.return_value = project
             MockSvc.return_value.generate_review = AsyncMock(return_value=review)
             MockSvc.return_value.render_confluence_xhtml.return_value = "<h1>test</h1>"
             MockSvc.return_value.save_review.return_value = 1
+            mock_resolve.side_effect = lambda text, jira: text
+            MockJira.return_value.close = AsyncMock()
 
             resp = client.post(
                 f"/project/{project.id}/ceo-review/analyze",

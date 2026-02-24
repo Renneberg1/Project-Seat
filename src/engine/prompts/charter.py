@@ -130,7 +130,9 @@ stakeholders, leadership, and the project team. Write with clarity, precision, a
 professional tone appropriate for a formal project document. Structure content into clear \
 paragraphs (separated by newlines). Avoid jargon unless it is standard medical device or \
 project management terminology.
-8. Respond with valid JSON only — no markdown, no explanation.
+8. If the user's input references people with @Name syntax (e.g. @Alice Smith), \
+preserve the @ prefix in your proposed text.
+9. Respond with valid JSON only — no markdown, no explanation.
 """
 
 CHARTER_EDITS_SCHEMA: dict[str, Any] = {

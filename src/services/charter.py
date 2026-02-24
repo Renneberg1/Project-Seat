@@ -7,7 +7,9 @@ import logging
 from typing import Any
 
 from src.config import Settings, settings as default_settings
+from src.connectors.jira import JiraConnector
 from src.database import get_db
+from src.engine.mentions import resolve_confluence_mentions
 from src.models.charter import CharterSuggestion, CharterSuggestionStatus
 
 logger = logging.getLogger(__name__)
@@ -191,12 +193,13 @@ class CharterService:
     def get_suggestion(self, suggestion_id: int) -> CharterSuggestion | None:
         return self._get_suggestion(suggestion_id)
 
-    def accept_suggestion(
+    async def accept_suggestion(
         self, suggestion_id: int, project: Any
     ) -> CharterSuggestion | None:
         """Accept a suggestion and queue it for approval.
 
         Refreshes the page_id from current project data to prevent stale references.
+        Resolves @mentions in proposed text to Confluence XHTML markup.
         """
         from src.engine.approval import ApprovalEngine
         from src.models.approval import ApprovalAction
@@ -213,6 +216,22 @@ class CharterService:
                 "Cannot accept: project has no Charter page configured."
             )
         payload["page_id"] = project.confluence_charter_id
+
+        # Resolve @mentions in the proposed content
+        new_content = payload.get("new_content", "")
+        jira = JiraConnector()
+        try:
+            resolved = await resolve_confluence_mentions(new_content, jira)
+        finally:
+            await jira.close()
+
+        if resolved != new_content:
+            # Content now contains XHTML mention markup — wrap in <p> tags
+            from html import escape as _html_escape
+            paragraphs = [line.strip() for line in resolved.split("\n") if line.strip()]
+            body_html = "".join(f"<p>{p}</p>" for p in paragraphs) if paragraphs else f"<p>{resolved}</p>"
+            payload["new_content"] = body_html
+            payload["raw_xhtml"] = True
 
         engine = ApprovalEngine(db_path=self._db_path)
         item_id = engine.propose(
@@ -242,7 +261,7 @@ class CharterService:
             conn.commit()
         return self._get_suggestion(suggestion_id)
 
-    def accept_all_suggestions(
+    async def accept_all_suggestions(
         self, project: Any
     ) -> list[int]:
         """Accept all pending charter suggestions for a project. Returns approval item IDs."""
@@ -250,7 +269,7 @@ class CharterService:
         item_ids: list[int] = []
         for sug in suggestions:
             if sug.status == CharterSuggestionStatus.PENDING:
-                result = self.accept_suggestion(sug.id, project)
+                result = await self.accept_suggestion(sug.id, project)
                 if result and result.approval_item_id:
                     item_ids.append(result.approval_item_id)
         return item_ids
