@@ -312,7 +312,7 @@
         <div class="form-group">
             <label for="team_projects">Team Projects (KEY:VERSION, comma-separated)</label>
             <input type="text" id="team_projects" name="team_projects"
-                   value="{{ project.team_projects.items() | map('join', ':') | join(', ') }}">
+                   value="{{ project.team_projects | map('join', ':') | join(', ') }}">
         </div>
         <button type="submit" class="btn btn-sm">Save</button>
     </form>

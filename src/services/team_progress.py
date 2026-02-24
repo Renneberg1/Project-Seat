@@ -18,6 +18,7 @@ _SEARCH_FIELDS = [
     "issuetype",
     "project",
     "priority",
+    "fixVersions",
     "customfield_10016",  # Story point estimate (next-gen)
     "customfield_10026",  # Story Points (classic)
 ]
@@ -36,8 +37,13 @@ class TeamVersionReport:
     blocker_count: int
     sp_total: float
     sp_done: float
+    sp_in_progress: float
     sp_missing_count: int
     error: str | None = None
+
+    @property
+    def sp_todo(self) -> float:
+        return max(0.0, self.sp_total - self.sp_done - self.sp_in_progress)
 
     @property
     def pct_done_issues(self) -> int:
@@ -77,6 +83,7 @@ def _aggregate(team_key: str, version_name: str, raw_issues: list[dict]) -> Team
     blockers = 0
     sp_total = 0.0
     sp_done = 0.0
+    sp_in_progress = 0.0
     sp_missing = 0
 
     for issue in raw_issues:
@@ -104,6 +111,8 @@ def _aggregate(team_key: str, version_name: str, raw_issues: list[dict]) -> Team
             sp_total += sp
             if status_cat == "Done":
                 sp_done += sp
+            elif status_cat == "In Progress":
+                sp_in_progress += sp
         else:
             sp_missing += 1
 
@@ -117,6 +126,7 @@ def _aggregate(team_key: str, version_name: str, raw_issues: list[dict]) -> Team
         blocker_count=blockers,
         sp_total=sp_total,
         sp_done=sp_done,
+        sp_in_progress=sp_in_progress,
         sp_missing_count=sp_missing,
     )
 
@@ -144,10 +154,10 @@ class TeamProgressService:
                     version_name=ver,
                     total_issues=0, done_count=0, in_progress_count=0,
                     todo_count=0, blocker_count=0,
-                    sp_total=0, sp_done=0, sp_missing_count=0,
+                    sp_total=0, sp_done=0, sp_in_progress=0, sp_missing_count=0,
                     error=str(exc),
                 )
-                for tk, ver in project.team_projects.items()
+                for tk, ver in project.team_projects
             ]
 
         cache.set(cache_key, reports, ttl=60)
@@ -157,28 +167,32 @@ class TeamProgressService:
         """Execute JQL queries grouped by version name and aggregate per team."""
         # Group teams by version name so we issue one query per unique version
         version_to_teams: dict[str, list[str]] = {}
-        for tk, ver in project.team_projects.items():
+        for tk, ver in project.team_projects:
             version_to_teams.setdefault(ver, []).append(tk)
 
         all_issues: list[dict] = []
         jira = JiraConnector()
         try:
             for version_name, team_keys in version_to_teams.items():
-                keys_csv = ", ".join(team_keys)
+                keys_csv = ", ".join(set(team_keys))
                 jql = f'project in ({keys_csv}) AND fixVersion = "{version_name}"'
                 issues = await jira.search(jql, fields=_SEARCH_FIELDS)
                 all_issues.extend(issues)
         finally:
             await jira.close()
 
-        # Group by project key
-        by_team: dict[str, list[dict]] = {tk: [] for tk in project.team_projects}
+        # Group by (project_key, version) — same key may appear with different versions
+        by_entry: dict[tuple[str, str], list[dict]] = {
+            (tk, ver): [] for tk, ver in project.team_projects
+        }
         for issue in all_issues:
             pk = issue.get("fields", {}).get("project", {}).get("key", "")
-            if pk in by_team:
-                by_team[pk].append(issue)
+            fvs = {fv["name"] for fv in (issue.get("fields", {}).get("fixVersions") or [])}
+            for tk, ver in project.team_projects:
+                if pk == tk and ver in fvs:
+                    by_entry[(tk, ver)].append(issue)
 
         return [
-            _aggregate(tk, ver, by_team[tk])
-            for tk, ver in project.team_projects.items()
+            _aggregate(tk, ver, by_entry[(tk, ver)])
+            for tk, ver in project.team_projects
         ]

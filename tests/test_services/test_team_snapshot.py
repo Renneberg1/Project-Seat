@@ -22,7 +22,7 @@ def _make_project(**overrides):
         id=1, jira_goal_key="PROG-100", name="HOP Drop 2",
         confluence_charter_id=None, confluence_xft_id=None,
         status="active", phase="planning", created_at="2026-01-01",
-        team_projects={"AIM": "HOP Drop 2"},
+        team_projects=[["AIM", "HOP Drop 2"]],
     )
     defaults.update(overrides)
     return Project(**defaults)
@@ -33,7 +33,7 @@ def _make_report(team_key="AIM", sp_total=20.0, sp_done=10.0, **overrides):
         team_key=team_key, version_name="HOP Drop 2",
         total_issues=10, done_count=5, in_progress_count=3,
         todo_count=2, blocker_count=0,
-        sp_total=sp_total, sp_done=sp_done, sp_missing_count=1,
+        sp_total=sp_total, sp_done=sp_done, sp_in_progress=0.0, sp_missing_count=1,
     )
     defaults.update(overrides)
     return TeamVersionReport(**defaults)
@@ -138,8 +138,8 @@ def test_get_snapshots_days_limit(tmp_db):
 
 async def test_snapshot_all_projects(tmp_db):
     """snapshot_all_projects iterates active projects and saves snapshots."""
-    project_active = _make_project(id=1, status="active", team_projects={"AIM": "v1"})
-    project_no_teams = _make_project(id=2, status="active", team_projects={})
+    project_active = _make_project(id=1, status="active", team_projects=[["AIM", "v1"]])
+    project_no_teams = _make_project(id=2, status="active", team_projects=[])
     reports = [_make_report()]
 
     with patch("src.services.dashboard.DashboardService") as MockDash, \

@@ -176,7 +176,7 @@ def test_detect_team_projects_extracts_unique_keys_and_versions():
 
     result = _detect_team_projects(initiatives)
 
-    assert result == {"AIM": "HOP Drop 2", "CTCV": "HOP Drop 3"}
+    assert result == [["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 3"]]
 
 
 def test_detect_team_projects_excludes_prog_and_risk():
@@ -188,7 +188,7 @@ def test_detect_team_projects_excludes_prog_and_risk():
 
     result = _detect_team_projects(initiatives)
 
-    assert result == {"AIM": "v1"}
+    assert result == [["AIM", "v1"]]
 
 
 def test_detect_team_projects_no_fix_version_returns_empty_string():
@@ -198,13 +198,13 @@ def test_detect_team_projects_no_fix_version_returns_empty_string():
 
     result = _detect_team_projects(initiatives)
 
-    assert result == {"AIM": ""}
+    assert result == [["AIM", ""]]
 
 
 def test_detect_team_projects_empty_list():
     result = _detect_team_projects([])
 
-    assert result == {}
+    assert result == []
 
 
 # ---------------------------------------------------------------------------
@@ -345,4 +345,4 @@ async def test_fetch_preview_returns_preview_with_detected_pages(tmp_db):
     assert len(result.detected_pages) == 2
     assert result.charter_id == "123"
     assert result.xft_id == "456"
-    assert result.detected_teams == {"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"}
+    assert result.detected_teams == [["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"]]

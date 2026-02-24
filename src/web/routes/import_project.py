@@ -60,16 +60,17 @@ async def import_save(
     """Save the imported project to the local DB and redirect to its dashboard."""
     service = ImportService()
     # Parse KEY:VERSION pairs (e.g. "AIM:HOP Drop 2, CTCV:HOP Drop 2")
-    team_dict: dict[str, str] = {}
+    # Allows duplicate keys with different versions.
+    team_list: list[list[str]] = []
     for entry in team_projects.split(","):
         entry = entry.strip()
         if not entry:
             continue
         if ":" in entry:
             key, version = entry.split(":", 1)
-            team_dict[key.strip().upper()] = version.strip()
+            team_list.append([key.strip().upper(), version.strip()])
         else:
-            team_dict[entry.upper()] = name.strip()
+            team_list.append([entry.upper(), name.strip()])
     try:
         project_id = service.save_project(
             goal_key=goal_key.strip(),
@@ -77,7 +78,7 @@ async def import_save(
             charter_id=charter_id.strip() or None,
             xft_id=xft_id.strip() or None,
             pi_version=pi_version.strip() or None,
-            team_projects=team_dict or None,
+            team_projects=team_list or None,
             jira_plan_url=jira_plan_url.strip() or None,
             ceo_review_id=ceo_review_id.strip() or None,
         )

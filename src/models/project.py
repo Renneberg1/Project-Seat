@@ -22,20 +22,26 @@ class Project:
     pi_version: str | None = None
     default_component: str | None = None
     default_label: str | None = None
-    team_projects: dict[str, str] = field(default_factory=dict)
+    team_projects: list[list[str]] = field(default_factory=list)
     jira_plan_url: str | None = None
     confluence_ceo_review_id: str | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> Project:
-        # Parse team_projects JSON — backward-compat: list → dict keyed by project name
-        raw_teams: dict[str, str] = {}
+        # Parse team_projects JSON — supports 3 formats:
+        #   list[list[str]]  → new canonical format, use as-is
+        #   dict[str, str]   → legacy dict, convert to [[k, v], ...]
+        #   list[str]        → oldest format (keys only), convert to [[k, name], ...]
+        raw_teams: list[list[str]] = []
         if "team_projects" in row.keys() and row["team_projects"]:
             parsed = json.loads(row["team_projects"])
-            if isinstance(parsed, list):
-                raw_teams = {k: row["name"] for k in parsed}
+            if isinstance(parsed, list) and parsed:
+                if isinstance(parsed[0], list):
+                    raw_teams = parsed
+                else:
+                    raw_teams = [[k, row["name"]] for k in parsed]
             elif isinstance(parsed, dict):
-                raw_teams = parsed
+                raw_teams = [[k, v] for k, v in parsed.items()]
 
         return cls(
             id=row["id"],
@@ -61,7 +67,7 @@ class Project:
 class SpinUpRequest:
     project_name: str
     program: str
-    team_projects: dict[str, str]
+    team_projects: list[list[str]]
     target_date: str
     labels: list[str]
     goal_summary: str

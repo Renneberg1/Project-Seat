@@ -63,7 +63,7 @@
         <legend>Teams &amp; Versions</legend>
         <div class="form-group">
             <label for="team_projects">Team Projects <span class="text-muted">(one per line: KEY=VersionName)</span></label>
-            <textarea id="team_projects" name="team_projects" rows="5" placeholder="AIM=Drop 1&#10;CTCV=Release 2.0">{% for key, val in project.team_projects.items() %}{{ key }}={{ val }}
+            <textarea id="team_projects" name="team_projects" rows="5" placeholder="AIM=Drop 1&#10;CTCV=Release 2.0">{% for pair in project.team_projects %}{{ pair[0] }}={{ pair[1] }}
 {% endfor %}</textarea>
         </div>
         <div class="form-group">

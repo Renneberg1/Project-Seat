@@ -97,7 +97,7 @@ class SpinUpService:
         )
 
         # 3) Create fix version in each team project
-        for proj_key, team_version in req.team_projects.items():
+        for proj_key, team_version in req.team_projects:
             item_ids.append(
                 self._engine.propose(
                     ApprovalAction.CREATE_JIRA_VERSION,

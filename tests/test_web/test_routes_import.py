@@ -115,14 +115,14 @@ def test_import_save_redirects_to_dashboard(client, tmp_db):
 
     assert result.status_code == 303
     assert "/project/42/dashboard" in result.headers["location"]
-    # Verify team_projects was parsed as dict
+    # Verify team_projects was parsed as list of pairs
     MockSvc.return_value.save_project.assert_called_once_with(
         goal_key="PROG-256",
         name="HOP Drop 2",
         charter_id="100",
         xft_id="200",
         pi_version=None,
-        team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"},
+        team_projects=[["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"]],
         jira_plan_url=None,
         ceo_review_id=None,
     )

@@ -153,7 +153,7 @@ def test_project_from_row_jira_plan_url_round_trip(tmp_db):
 
 
 def test_project_from_row_backward_compat_list_team_projects(tmp_db):
-    """Old-format list team_projects JSON is auto-converted to dict."""
+    """Old-format list team_projects JSON is auto-converted to list of pairs."""
     import json
     with get_db(tmp_db) as conn:
         conn.execute(
@@ -165,11 +165,11 @@ def test_project_from_row_backward_compat_list_team_projects(tmp_db):
 
     result = Project.from_row(row)
 
-    assert result.team_projects == {"AIM": "Legacy", "CTCV": "Legacy"}
+    assert result.team_projects == [["AIM", "Legacy"], ["CTCV", "Legacy"]]
 
 
 def test_project_from_row_dict_team_projects(tmp_db):
-    """New-format dict team_projects JSON is preserved as-is."""
+    """Legacy dict team_projects JSON is converted to list of pairs."""
     import json
     with get_db(tmp_db) as conn:
         conn.execute(
@@ -181,4 +181,4 @@ def test_project_from_row_dict_team_projects(tmp_db):
 
     result = Project.from_row(row)
 
-    assert result.team_projects == {"AIM": "HOP Drop 2", "CTCV": "HOP Drop 3"}
+    assert result.team_projects == [["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 3"]]

@@ -19,7 +19,7 @@ def tmp_db(tmp_path):
         conn.execute(
             "INSERT INTO projects (jira_goal_key, name, status, phase, team_projects, confluence_ceo_review_id) "
             "VALUES (?, ?, ?, ?, ?, ?)",
-            ("PROG-1", "Test Project", "active", "development", json.dumps({"AIM": "Drop 1"}), "99999"),
+            ("PROG-1", "Test Project", "active", "development", json.dumps([["AIM", "Drop 1"]]), "99999"),
         )
         conn.commit()
     return db_path
@@ -95,7 +95,7 @@ class TestSettingsPage:
         assert row["dhf_draft_root_id"] == "444"
         assert row["pi_version"] == "PI 25.1"
         teams = json.loads(row["team_projects"])
-        assert teams == {"AIM": "Drop 2", "CTCV": "Release 3"}
+        assert teams == [["AIM", "Drop 2"], ["CTCV", "Release 3"]]
 
     def test_save_clears_optional_fields(self, client, tmp_db, project):
         """Empty optional fields should be set to NULL."""

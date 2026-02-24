@@ -58,6 +58,7 @@ class BaseConnector:
                     "Content-Type": "application/json",
                 },
                 timeout=30.0,
+                verify=False,
             )
         return self._client
 

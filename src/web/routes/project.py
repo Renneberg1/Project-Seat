@@ -133,6 +133,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
                 snapshot, current_versions, locked_selected,
             )
             release_published = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
+    release_pending = release_total - release_published
 
     transcript_service = TranscriptService()
     transcript_summary = transcript_service.get_transcript_summary(id)
@@ -181,6 +182,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         "market_release": market_release,
         "active_locked_release": active_locked,
         "release_published": release_published,
+        "release_pending": release_pending,
         "release_total": release_total,
         "transcript_summary": transcript_summary,
         "team_reports": team_reports,
@@ -543,6 +545,7 @@ async def project_team_progress(request: Request, id: int) -> HTMLResponse:
             blocker_count=sum(r.blocker_count for r in reports),
             sp_total=sum(r.sp_total for r in reports),
             sp_done=sum(r.sp_done for r in reports),
+            sp_in_progress=sum(r.sp_in_progress for r in reports),
             sp_missing_count=sum(r.sp_missing_count for r in reports),
         )
 
@@ -565,7 +568,8 @@ async def save_team_projects_config(
     import json
     import src.config
     # Parse KEY:VERSION pairs (e.g. "AIM:HOP Drop 2, CTCV:HOP Drop 2")
-    team_dict: dict[str, str] = {}
+    # Allows duplicate keys with different versions.
+    team_list: list[list[str]] = []
     # We need the project name for default version fallback
     service_dash = DashboardService()
     project_obj = service_dash.get_project_by_id(id)
@@ -576,13 +580,13 @@ async def save_team_projects_config(
             continue
         if ":" in entry:
             key, version = entry.split(":", 1)
-            team_dict[key.strip().upper()] = version.strip()
+            team_list.append([key.strip().upper(), version.strip()])
         else:
-            team_dict[entry.upper()] = default_version
+            team_list.append([entry.upper(), default_version])
     with get_db(src.config.settings.db_path) as conn:
         conn.execute(
             "UPDATE projects SET team_projects = ? WHERE id = ?",
-            (json.dumps(team_dict) if team_dict else None, id),
+            (json.dumps(team_list) if team_list else None, id),
         )
         conn.commit()
     # Invalidate any cached team progress for this project

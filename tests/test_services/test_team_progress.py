@@ -27,7 +27,7 @@ def _make_project(**overrides) -> Project:
         id=1, jira_goal_key="PROG-100", name="HOP Drop 2",
         confluence_charter_id=None, confluence_xft_id=None,
         status="active", phase="planning", created_at="2026-01-01",
-        team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"},
+        team_projects=[["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"]],
     )
     defaults.update(overrides)
     return Project(**defaults)
@@ -40,7 +40,9 @@ def _make_issue(
     priority: str = "Medium",
     sp_next_gen: float | None = None,
     sp_classic: float | None = None,
+    fix_versions: list[str] | None = None,
 ) -> dict:
+    fv = [{"name": v} for v in (fix_versions or [])]
     return {
         "key": f"{project_key}-1",
         "fields": {
@@ -53,6 +55,7 @@ def _make_issue(
             "priority": {"name": priority},
             "customfield_10016": sp_next_gen,
             "customfield_10026": sp_classic,
+            "fixVersions": fv,
         },
     }
 
@@ -175,18 +178,18 @@ class TestTeamProgressService:
 
     @pytest.mark.asyncio
     async def test_returns_empty_when_no_team_projects(self):
-        project = _make_project(team_projects={})
+        project = _make_project(team_projects=[])
         service = TeamProgressService()
         result = await service.get_team_reports(project)
         assert result == []
 
     @pytest.mark.asyncio
     async def test_groups_by_team(self):
-        project = _make_project(team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"})
+        project = _make_project(team_projects=[["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"]])
         mock_issues = [
-            _make_issue(project_key="AIM", status_category="Done", sp_next_gen=3),
-            _make_issue(project_key="AIM", status_category="In Progress", sp_next_gen=2),
-            _make_issue(project_key="CTCV", status_category="To Do", sp_next_gen=5),
+            _make_issue(project_key="AIM", status_category="Done", sp_next_gen=3, fix_versions=["HOP Drop 2"]),
+            _make_issue(project_key="AIM", status_category="In Progress", sp_next_gen=2, fix_versions=["HOP Drop 2"]),
+            _make_issue(project_key="CTCV", status_category="To Do", sp_next_gen=5, fix_versions=["HOP Drop 2"]),
         ]
 
         with patch("src.services.team_progress.JiraConnector") as MockJira:
@@ -211,7 +214,7 @@ class TestTeamProgressService:
 
     @pytest.mark.asyncio
     async def test_handles_connector_error(self):
-        project = _make_project(team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"})
+        project = _make_project(team_projects=[["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"]])
 
         with patch("src.services.team_progress.JiraConnector") as MockJira:
             instance = MockJira.return_value
@@ -229,8 +232,8 @@ class TestTeamProgressService:
 
     @pytest.mark.asyncio
     async def test_uses_cache(self):
-        project = _make_project(team_projects={"AIM": "HOP Drop 2"})
-        mock_issues = [_make_issue(project_key="AIM", status_category="Done")]
+        project = _make_project(team_projects=[["AIM", "HOP Drop 2"]])
+        mock_issues = [_make_issue(project_key="AIM", status_category="Done", fix_versions=["HOP Drop 2"])]
 
         with patch("src.services.team_progress.JiraConnector") as MockJira:
             instance = MockJira.return_value
@@ -248,11 +251,11 @@ class TestTeamProgressService:
     @pytest.mark.asyncio
     async def test_totals_computation(self):
         """Verify that summing reports across teams produces correct totals."""
-        project = _make_project(team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"})
+        project = _make_project(team_projects=[["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"]])
         mock_issues = [
-            _make_issue(project_key="AIM", status_category="Done", sp_next_gen=3),
-            _make_issue(project_key="CTCV", status_category="Done", sp_next_gen=5),
-            _make_issue(project_key="CTCV", status_category="In Progress", sp_next_gen=2),
+            _make_issue(project_key="AIM", status_category="Done", sp_next_gen=3, fix_versions=["HOP Drop 2"]),
+            _make_issue(project_key="CTCV", status_category="Done", sp_next_gen=5, fix_versions=["HOP Drop 2"]),
+            _make_issue(project_key="CTCV", status_category="In Progress", sp_next_gen=2, fix_versions=["HOP Drop 2"]),
         ]
 
         with patch("src.services.team_progress.JiraConnector") as MockJira:
@@ -276,10 +279,10 @@ class TestTeamProgressService:
     @pytest.mark.asyncio
     async def test_different_version_names_per_team(self):
         """Teams with different version names issue separate JQL queries."""
-        project = _make_project(team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 3"})
+        project = _make_project(team_projects=[["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 3"]])
 
-        aim_issues = [_make_issue(project_key="AIM", status_category="Done", sp_next_gen=3)]
-        ctcv_issues = [_make_issue(project_key="CTCV", status_category="In Progress", sp_next_gen=5)]
+        aim_issues = [_make_issue(project_key="AIM", status_category="Done", sp_next_gen=3, fix_versions=["HOP Drop 2"])]
+        ctcv_issues = [_make_issue(project_key="CTCV", status_category="In Progress", sp_next_gen=5, fix_versions=["HOP Drop 3"])]
 
         with patch("src.services.team_progress.JiraConnector") as MockJira:
             instance = MockJira.return_value

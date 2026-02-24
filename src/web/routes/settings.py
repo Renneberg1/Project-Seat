@@ -56,18 +56,20 @@ async def settings_save(request: Request, id: int) -> HTMLResponse:
     dhf_draft_root_id = str(form.get("dhf_draft_root_id", "")).strip() or None
     dhf_released_root_id = str(form.get("dhf_released_root_id", "")).strip() or None
     pi_version = str(form.get("pi_version", "")).strip() or None
-    jira_plan_url = str(form.get("jira_plan_url", "")).strip() or None
+    from src.web.routes.project import _extract_plan_url
+    jira_plan_url = _extract_plan_url(str(form.get("jira_plan_url", ""))) or None
 
     # Parse team_projects: each line is "KEY=VersionName"
+    # Allows duplicate keys with different versions.
     team_projects_raw = str(form.get("team_projects", "")).strip()
-    team_projects: dict[str, str] = {}
+    team_projects: list[list[str]] = []
     for line in team_projects_raw.splitlines():
         line = line.strip()
         if "=" in line:
             key, _, val = line.partition("=")
             key, val = key.strip(), val.strip()
             if key:
-                team_projects[key] = val
+                team_projects.append([key, val])
 
     with get_db(app_settings.db_path) as conn:
         conn.execute(

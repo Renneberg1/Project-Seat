@@ -21,7 +21,7 @@ def _make_project(**overrides):
         id=1, jira_goal_key="PROG-100", name="HOP Drop 2",
         confluence_charter_id=None, confluence_xft_id=None,
         status="active", phase="planning", created_at="2026-01-01",
-        team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"},
+        team_projects=[["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"]],
     )
     defaults.update(overrides)
     return Project(**defaults)
@@ -32,7 +32,7 @@ def _make_report(team_key="AIM", **overrides):
         team_key=team_key, version_name="HOP Drop 2",
         total_issues=10, done_count=5, in_progress_count=3,
         todo_count=2, blocker_count=0,
-        sp_total=20.0, sp_done=10.0, sp_missing_count=1,
+        sp_total=20.0, sp_done=10.0, sp_in_progress=6.0, sp_missing_count=1,
     )
     defaults.update(overrides)
     return TeamVersionReport(**defaults)
@@ -90,7 +90,7 @@ def test_team_progress_200_with_teams(client, tmp_db):
 
 
 def test_team_progress_200_without_teams(client, tmp_db):
-    project = _make_project(team_projects={})
+    project = _make_project(team_projects=[])
 
     with patch("src.web.routes.project.DashboardService") as MockDash, \
          patch("src.web.routes.project.TeamProgressService") as MockTeam, \
@@ -136,7 +136,7 @@ def test_save_config_redirects(client, tmp_db):
     # Verify the DB was updated with dict format
     with get_db(tmp_db) as conn:
         row = conn.execute("SELECT team_projects FROM projects WHERE id = 1").fetchone()
-    assert json.loads(row["team_projects"]) == {"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2", "YAM": "HOP Drop 2"}
+    assert json.loads(row["team_projects"]) == [["AIM", "HOP Drop 2"], ["CTCV", "HOP Drop 2"], ["YAM", "HOP Drop 2"]]
 
 
 def test_team_progress_burnup_chart_shown_with_data(client, tmp_db):

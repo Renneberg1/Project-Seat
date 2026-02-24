@@ -96,7 +96,7 @@ def make_project():
         dhf_released_root_id: str | None = None,
         default_component: str | None = None,
         default_label: str | None = None,
-        team_projects: dict[str, str] | None = None,
+        team_projects: list[list[str]] | None = None,
         **overrides,
     ) -> Project:
         kwargs = dict(
@@ -112,7 +112,7 @@ def make_project():
             dhf_released_root_id=dhf_released_root_id,
             default_component=default_component,
             default_label=default_label,
-            team_projects=team_projects if team_projects is not None else {},
+            team_projects=team_projects if team_projects is not None else [],
         )
         kwargs.update(overrides)
         return Project(**kwargs)
@@ -166,7 +166,7 @@ def make_spinup_request():
     def _make(
         project_name: str = "HOP Drop 4",
         program: str = "HOP",
-        team_projects: dict[str, str] | None = None,
+        team_projects: list[list[str]] | None = None,
         target_date: str = "2026-09-01",
         labels: list[str] | None = None,
         goal_summary: str = "Fourth HOP drop",
@@ -176,7 +176,7 @@ def make_spinup_request():
         kwargs = dict(
             project_name=project_name,
             program=program,
-            team_projects=team_projects if team_projects is not None else {"AIM": "HOP Drop 4", "CTCV": "HOP Drop 4"},
+            team_projects=team_projects if team_projects is not None else [["AIM", "HOP Drop 4"], ["CTCV", "HOP Drop 4"]],
             target_date=target_date,
             labels=labels or ["release-4"],
             goal_summary=goal_summary,

@@ -79,14 +79,19 @@
         <div class="dash-chart-wrap">
             <canvas id="dhfDoughnut" height="120"></canvas>
         </div>
+        {% if active_locked_release and release_total > 0 %}
+        {# Locked-scope view: Published vs Pending #}
+        <div class="dash-metric-card__value">{{ release_published }}/{{ release_total }}</div>
+        <div class="dash-metric-card__context">{{ active_locked_release.name }}</div>
+        <div class="dash-metric-card__context text-secondary" style="margin-top: 0.25rem;">
+            {{ dhf_summary.released_count }}/{{ dhf_summary.total_count }} released overall
+        </div>
+        {% else %}
+        {# No locked release: overall DHF view #}
         <div class="dash-metric-card__value">{{ dhf_summary.released_count }}/{{ dhf_summary.total_count }}</div>
         <div class="dash-metric-card__context">
             {% if dhf_summary.draft_update_count > 0 %}{{ dhf_summary.draft_update_count }} drafting{% endif %}
             {% if dhf_summary.in_draft_count > 0 %}{% if dhf_summary.draft_update_count > 0 %}, {% endif %}{{ dhf_summary.in_draft_count }} new{% endif %}
-        </div>
-        {% if active_locked_release and release_total > 0 %}
-        <div class="dash-metric-card__context" style="margin-top: 0.25rem;">
-            <strong>{{ active_locked_release.name }}:</strong> {{ release_published }}/{{ release_total }} published
         </div>
         {% endif %}
         <div style="margin-top: 0.5rem;">
@@ -184,31 +189,8 @@
 </div>
 {% endif %}
 
-{# ── ACTIVITY / LINKS (3-col) ─────────────────────────────── #}
+{# ── CONTEXT & LINKS (2-col) ──────────────────────────────── #}
 <div class="dash-activity">
-
-    {# ── Recent Activity ── #}
-    <div class="dash-activity__main">
-        <h3 class="dash-section-title">Recent Activity</h3>
-        {% if recent_approvals %}
-        <table class="dash-compact-table">
-            <thead><tr><th>Action</th><th>Preview</th><th>Status</th><th>Resolved</th></tr></thead>
-            <tbody>
-            {% for item in recent_approvals[-5:] %}
-            <tr class="status-{{ item.status.value }}">
-                <td>{{ item.action_type.value }}</td>
-                <td>{{ item.preview }}</td>
-                <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
-                <td>{{ item.resolved_at or '' }}</td>
-            </tr>
-            {% endfor %}
-            </tbody>
-        </table>
-        <a href="/project/{{ project.id }}/approvals" class="btn btn-sm">View All Approvals</a>
-        {% else %}
-        <p class="dash-muted">No approval activity.</p>
-        {% endif %}
-    </div>
 
     {# ── Decisions & Transcripts ── #}
     <div class="dash-activity__side">
@@ -247,23 +229,60 @@
             {% if project.confluence_xft_id %}
             <li><a href="{{ confluence_page_base }}/{{ project.confluence_xft_id }}" target="_blank">XFT</a></li>
             {% endif %}
-            {% if project.jira_plan_url %}
+            {% if project.jira_plan_url and project.jira_plan_url.startswith('https://') %}
             <li><a href="{{ project.jira_plan_url }}" target="_blank">Jira Plan</a></li>
             {% endif %}
             <li><a href="/project/{{ project.id }}/health-review/">Health Review</a></li>
             <li><a href="/project/{{ project.id }}/documents">Documents</a></li>
             <li><a href="/project/{{ project.id }}/charter/">Charter Update</a></li>
         </ul>
-        <details class="dash-metric-card__details" style="margin-top: 0.75rem;">
-            <summary>{{ "Change" if project.jira_plan_url else "Configure" }} Plan URL</summary>
-            <form method="post" action="/project/{{ project.id }}/plan/config" style="margin-top: 0.5rem;">
-                <input type="text" name="jira_plan_url" value="{{ project.jira_plan_url or '' }}"
-                       placeholder="Paste URL or iframe embed code" style="width: 100%; margin-bottom: 0.5rem;">
-                <button type="submit" class="btn btn-sm">Save</button>
-            </form>
-        </details>
     </div>
 
+</div>
+
+{# ── RECENT ACTIVITY (collapsible) ───────────────────────── #}
+<details class="dash-expand-section">
+    <summary class="dash-section-title">Recent Activity{% if recent_approvals %} ({{ recent_approvals|length }}){% endif %}</summary>
+    <div class="dash-expand-section__body">
+        {% if recent_approvals %}
+        <table class="dash-compact-table">
+            <thead><tr><th>Action</th><th>Preview</th><th>Status</th><th>Resolved</th></tr></thead>
+            <tbody>
+            {% for item in recent_approvals[-5:] %}
+            <tr class="status-{{ item.status.value }}">
+                <td>{{ item.action_type.value }}</td>
+                <td>{{ item.preview }}</td>
+                <td><span class="badge badge-{{ item.status.value }}">{{ item.status.value }}</span></td>
+                <td>{{ item.resolved_at or '' }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        <a href="/project/{{ project.id }}/approvals" class="btn btn-sm" style="margin-top: 0.5rem;">View All Approvals</a>
+        {% else %}
+        <p class="dash-muted">No approval activity.</p>
+        {% endif %}
+    </div>
+</details>
+
+{# ── JIRA PLAN (iframe embed) ────────────────────────────── #}
+<div class="dash-plan">
+    <h3 class="dash-section-title">Jira Plan</h3>
+    {% if project.jira_plan_url and project.jira_plan_url.startswith('https://') %}
+    <div class="dash-plan__frame-wrap">
+        <iframe src="{{ project.jira_plan_url }}" width="100%" height="900" frameborder="0" allowfullscreen loading="lazy"></iframe>
+    </div>
+    {% else %}
+    <p class="dash-muted">No Plan URL configured.</p>
+    {% endif %}
+    <details class="dash-metric-card__details" style="margin-top: 0.75rem;">
+        <summary>{{ "Change" if project.jira_plan_url else "Configure" }} Plan URL</summary>
+        <form method="post" action="/project/{{ project.id }}/plan/config" style="margin-top: 0.5rem;">
+            <input type="text" name="jira_plan_url" value="{{ project.jira_plan_url or '' }}"
+                   placeholder="Paste URL or iframe embed code" style="width: 100%; margin-bottom: 0.5rem;">
+            <button type="submit" class="btn btn-sm">Save</button>
+        </form>
+    </details>
 </div>
 
 {# ── DANGER ZONE (unchanged) ──────────────────────────────── #}
@@ -355,6 +374,26 @@
         var ctx = document.getElementById('dhfDoughnut');
         if (!ctx) return;
         if (dhfChart) dhfChart.destroy();
+        {% if active_locked_release and release_total > 0 %}
+        dhfChart = new Chart(ctx, {
+            type: 'doughnut',
+            data: {
+                labels: ['Published', 'Pending'],
+                datasets: [{
+                    data: [{{ release_published }}, {{ release_pending }}],
+                    backgroundColor: [getThemeColor('--status-green'), getThemeColor('--status-orange')],
+                    borderColor: getThemeColor('--bg-surface'),
+                    borderWidth: 2
+                }]
+            },
+            options: Object.assign({}, doughnutDefaults(), {
+                plugins: {
+                    legend: { display: false },
+                    centerText: { text: '{{ release_published }}/{{ release_total }}' }
+                }
+            })
+        });
+        {% else %}
         dhfChart = new Chart(ctx, {
             type: 'doughnut',
             data: {
@@ -373,6 +412,7 @@
                 }
             })
         });
+        {% endif %}
     }
     buildDhfChart();
     {% endif %}
@@ -390,17 +430,17 @@
                 datasets: [
                     {
                         label: 'Done',
-                        data: {{ team_reports | map(attribute='done_count') | list | tojson }},
+                        data: {{ team_reports | map(attribute='sp_done') | list | tojson }},
                         backgroundColor: getThemeColor('--status-green')
                     },
                     {
                         label: 'In Progress',
-                        data: {{ team_reports | map(attribute='in_progress_count') | list | tojson }},
+                        data: {{ team_reports | map(attribute='sp_in_progress') | list | tojson }},
                         backgroundColor: getThemeColor('--status-orange')
                     },
                     {
                         label: 'To Do',
-                        data: {{ team_reports | map(attribute='todo_count') | list | tojson }},
+                        data: {{ team_reports | map(attribute='sp_todo') | list | tojson }},
                         backgroundColor: getThemeColor('--chart-todo')
                     }
                 ]

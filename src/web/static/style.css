@@ -1554,10 +1554,10 @@ button.htmx-request {
     font-weight: 500;
 }
 
-/* Activity grid (3-col) */
+/* Context & links grid (2-col) */
 .dash-activity {
     display: grid;
-    grid-template-columns: 2fr 1fr 1fr;
+    grid-template-columns: 1fr 1fr;
     gap: 1.25rem;
     margin-bottom: 1.5rem;
 }
@@ -1569,6 +1569,43 @@ button.htmx-request {
     border-radius: 10px;
     padding: 1.25rem;
     box-shadow: var(--shadow-sm);
+}
+
+/* Collapsible expand section */
+.dash-expand-section {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    padding: 1rem 1.25rem;
+    margin-bottom: 1.5rem;
+    box-shadow: var(--shadow-sm);
+}
+
+.dash-expand-section > summary {
+    cursor: pointer;
+    margin-bottom: 0;
+}
+
+.dash-expand-section[open] > summary {
+    margin-bottom: 0.75rem;
+}
+
+/* Jira Plan embed section */
+.dash-plan {
+    margin-bottom: 1.5rem;
+}
+
+.dash-plan__frame-wrap {
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-radius: 10px;
+    overflow: hidden;
+    box-shadow: var(--shadow-sm);
+}
+
+.dash-plan__frame-wrap iframe {
+    display: block;
+    border: none;
 }
 
 /* Info blocks (label + value pairs in activity side cards) */

@@ -49,7 +49,7 @@
         <div class="form-group">
             <label for="team_projects">Team Projects (KEY:VERSION, comma-separated)</label>
             <input type="text" id="team_projects" name="team_projects"
-                   value="{% if preview.detected_teams %}{{ preview.detected_teams.items() | map('join', ':') | join(', ') }}{% endif %}"
+                   value="{% if preview.detected_teams %}{{ preview.detected_teams | map('join', ':') | join(', ') }}{% endif %}"
                    placeholder="e.g. AIM:HOP Drop 2, CTCV:HOP Drop 2">
             {% if preview.detected_teams %}
             <small class="text-secondary">Auto-detected {{ preview.detected_teams | length }} team(s) from child initiatives</small>
