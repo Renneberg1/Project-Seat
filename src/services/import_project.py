@@ -36,7 +36,7 @@ class ImportPreview:
     detected_pages: list[DetectedPage] = field(default_factory=list)
     charter_id: str | None = None
     xft_id: str | None = None
-    detected_teams: dict[str, str] = field(default_factory=dict)
+    detected_teams: list[list[str]] = field(default_factory=list)
     ceo_review_id: str | None = None
 
 
@@ -107,26 +107,28 @@ def guess_charter_xft(pages: list[DetectedPage]) -> tuple[str | None, str | None
 def _detect_team_projects(
     initiatives: list[dict],
     exclude: set[str] | None = None,
-) -> dict[str, str]:
-    """Extract unique team project keys and their fix version names from child initiatives.
+) -> list[list[str]]:
+    """Extract unique (project_key, version_name) pairs from child initiatives.
 
-    Returns ``{project_key: version_name}`` where *version_name* is the first
-    fixVersion found on any initiative in that project, or an empty string if none.
+    Returns ``[[project_key, version_name], ...]``.  A project key may appear
+    multiple times with different versions.  Duplicates are suppressed.
     """
     if exclude is None:
         exclude = {"PROG", "RISK"}
 
-    teams: dict[str, str] = {}
+    seen: set[tuple[str, str]] = set()
+    teams: list[list[str]] = []
     for issue in initiatives:
         fields = issue.get("fields", {})
         proj_key = fields.get("project", {}).get("key", "")
         if not proj_key or proj_key in exclude:
             continue
-        if proj_key in teams:
-            continue  # keep first-seen version
         fix_versions = fields.get("fixVersions") or []
         version_name = fix_versions[0]["name"] if fix_versions else ""
-        teams[proj_key] = version_name
+        pair = (proj_key, version_name)
+        if pair not in seen:
+            seen.add(pair)
+            teams.append([proj_key, version_name])
     return teams
 
 
@@ -213,7 +215,7 @@ class ImportService:
         charter_id: str | None = None,
         xft_id: str | None = None,
         pi_version: str | None = None,
-        team_projects: dict[str, str] | None = None,
+        team_projects: list[list[str]] | None = None,
         jira_plan_url: str | None = None,
         ceo_review_id: str | None = None,
     ) -> int:
@@ -242,10 +244,19 @@ class ImportService:
     def delete_project(self, project_id: int) -> None:
         """Remove a project and all related data from the local DB.
 
-        Cascades to: approval_queue, approval_log, transcript_cache.
+        Cascades to: release_documents, releases, transcript_suggestions,
+        charter_suggestions, team_progress_snapshots, health_reviews,
+        ceo_reviews, approval_queue, approval_log, transcript_cache.
         Does NOT touch Jira or Confluence.
         """
         with get_db(self._db_path) as conn:
+            conn.execute("DELETE FROM release_documents WHERE release_id IN (SELECT id FROM releases WHERE project_id = ?)", (project_id,))
+            conn.execute("DELETE FROM releases WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM transcript_suggestions WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM charter_suggestions WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM team_progress_snapshots WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM health_reviews WHERE project_id = ?", (project_id,))
+            conn.execute("DELETE FROM ceo_reviews WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM approval_queue WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM approval_log WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM transcript_cache WHERE project_id = ?", (project_id,))

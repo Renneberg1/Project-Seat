@@ -100,17 +100,9 @@ class CeoReviewService:
                 jira = JiraConnector(settings=self._settings)
                 try:
                     # Build version filter from team_projects
-                    version_names = set(project.team_projects.values())
-                    if not version_names:
-                        return []
-                    version_filter = " OR ".join(
-                        f'fixVersion = "{v}"' for v in version_names if v
-                    )
-                    if not version_filter:
-                        return []
                     jql = (
                         f'project = RISK AND issuetype = Risk '
-                        f'AND ({version_filter}) AND created >= -2w'
+                        f'AND parent = {project.jira_goal_key} AND created >= -2w'
                     )
                     issues = await jira.search(
                         jql,
@@ -128,17 +120,9 @@ class CeoReviewService:
             try:
                 jira = JiraConnector(settings=self._settings)
                 try:
-                    version_names = set(project.team_projects.values())
-                    if not version_names:
-                        return []
-                    version_filter = " OR ".join(
-                        f'fixVersion = "{v}"' for v in version_names if v
-                    )
-                    if not version_filter:
-                        return []
                     jql = (
                         f'project = RISK AND issuetype = "Project Issue" '
-                        f'AND ({version_filter}) AND created >= -2w'
+                        f'AND parent = {project.jira_goal_key} AND created >= -2w'
                     )
                     issues = await jira.search(
                         jql,

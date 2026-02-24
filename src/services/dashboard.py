@@ -90,13 +90,13 @@ class DashboardService:
                     "customfield_13265", "customfield_13264", "customfield_13266",
                 ]),
                 jira.search(
-                    f'project = RISK AND issuetype = Risk AND fixVersion = "{project.name}"',
+                    f'project = RISK AND issuetype = Risk AND parent = {project.jira_goal_key}',
                     fields=["summary", "status", "issuetype", "project", "labels",
                             "fixVersions", "duedate", "parent", "description", "components",
                             "customfield_13264"],
                 ),
                 jira.search(
-                    f'project = RISK AND issuetype = "Project Issue" AND fixVersion = "{project.name}"',
+                    f'project = RISK AND issuetype = "Project Issue" AND parent = {project.jira_goal_key}',
                     fields=["summary", "status", "issuetype", "project", "labels",
                             "fixVersions", "duedate", "parent", "description",
                             "customfield_13267", "components"],

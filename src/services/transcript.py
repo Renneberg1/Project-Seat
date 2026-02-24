@@ -264,7 +264,7 @@ class TranscriptService:
         async def _fetch_risks() -> list[dict[str, str]]:
             try:
                 raw = await jira.search(
-                    f'project = RISK AND issuetype = Risk AND fixVersion = "{project.name}"',
+                    f'project = RISK AND issuetype = Risk AND parent = {project.jira_goal_key}',
                     fields=["summary", "status"],
                 )
                 return [
@@ -281,7 +281,7 @@ class TranscriptService:
         async def _fetch_decisions() -> list[dict[str, str]]:
             try:
                 raw = await jira.search(
-                    f'project = RISK AND issuetype = "Project Issue" AND fixVersion = "{project.name}"',
+                    f'project = RISK AND issuetype = "Project Issue" AND parent = {project.jira_goal_key}',
                     fields=["summary", "status"],
                 )
                 return [
