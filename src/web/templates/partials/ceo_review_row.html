@@ -12,24 +12,31 @@
         {{ review.created_at }}
     </summary>
     <div class="health-review-detail">
-        {% if review.review_json.get('decisions_commentary') if review.review_json.get is defined else false %}
-        <h4>Decisions</h4>
-        <p>{{ review.review_json.decisions_commentary }}</p>
+        {# New schema: summary + bullets #}
+        {% set summary = review.review_json.get('summary', '') if review.review_json.get is defined else '' %}
+        {% if summary %}
+        <p><strong>{{ summary }}</strong></p>
         {% endif %}
 
-        {% if review.review_json.get('risks_commentary') if review.review_json.get is defined else false %}
-        <h4>Risks</h4>
-        <p>{{ review.review_json.risks_commentary }}</p>
+        {% set bullets = review.review_json.get('bullets', []) if review.review_json.get is defined else [] %}
+        {% if bullets %}
+        <ul>
+            {% for b in bullets %}
+            <li>{{ b }}</li>
+            {% endfor %}
+        </ul>
         {% endif %}
 
-        {% if review.review_json.get('development_commentary') if review.review_json.get is defined else false %}
-        <h4>Development</h4>
-        <p>{{ review.review_json.development_commentary }}</p>
-        {% endif %}
-
-        {% if review.review_json.get('documentation_commentary') if review.review_json.get is defined else false %}
-        <h4>Documentation</h4>
-        <p>{{ review.review_json.documentation_commentary }}</p>
+        {# Legacy schema support (old reviews with separate commentary fields) #}
+        {% set dec = review.review_json.get('decisions_commentary', '') if review.review_json.get is defined else '' %}
+        {% set risks_c = review.review_json.get('risks_commentary', '') if review.review_json.get is defined else '' %}
+        {% set dev = review.review_json.get('development_commentary', '') if review.review_json.get is defined else '' %}
+        {% set docs = review.review_json.get('documentation_commentary', '') if review.review_json.get is defined else '' %}
+        {% if dec or risks_c or dev or docs %}
+        {% if dec %}<p><strong>Decisions:</strong> {{ dec }}</p>{% endif %}
+        {% if risks_c %}<p><strong>Risks:</strong> {{ risks_c }}</p>{% endif %}
+        {% if dev %}<p><strong>Development:</strong> {{ dev }}</p>{% endif %}
+        {% if docs %}<p><strong>Documentation:</strong> {{ docs }}</p>{% endif %}
         {% endif %}
 
         {% set escalations = review.review_json.get('escalations', []) if review.review_json.get is defined else [] %}
@@ -48,6 +55,16 @@
         <ul>
             {% for m in milestones %}
             <li>{{ m }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% set deep_dives = review.review_json.get('deep_dive_topics', []) if review.review_json.get is defined else [] %}
+        {% if deep_dives %}
+        <h4>Suggested for Separate Discussion</h4>
+        <ul>
+            {% for dd in deep_dives %}
+            <li><strong>{{ dd.topic }}</strong> — {{ dd.reason }}</li>
             {% endfor %}
         </ul>
         {% endif %}

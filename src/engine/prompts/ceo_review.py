@@ -119,15 +119,22 @@ status update for a medical device software engineering project. Focus on what \
 changed in the last 2 weeks.
 
 Metrics are pre-computed and accurate — reference them but do not alter numbers. \
-Write concise, executive-level commentary. Be factual and evidence-based.
+Be extremely concise. The entire update must fit in ~10 lines when rendered.
 
 RULES:
 1. health_indicator must be exactly "On Track", "At Risk", or "Off Track".
-2. Each commentary field should be 2-4 sentences summarising the key points.
-3. Escalations should only be raised for issues needing CEO/leadership attention.
-4. Next milestones should be concrete, time-bound where possible.
-5. Respond with valid JSON only — no markdown, no explanation.
-6. If the PM notes reference people with @Name syntax (e.g. @Alice Smith), \
+2. summary is 1-2 sentences covering the most important change or theme.
+3. Each bullet should be ONE short sentence — no more.
+4. Include at most 6 bullets total across all areas. Omit areas with nothing \
+noteworthy. Combine related points. Less is more.
+5. If a topic needs more than one sentence to explain (e.g. a major scope change, \
+a new critical risk, or an important decision), do NOT try to squeeze it into the \
+update. Instead, add it to deep_dive_topics so the PM can raise it separately in \
+a dedicated forum.
+6. Escalations should only be raised for issues needing CEO/leadership attention.
+7. Next milestones: at most 2, concrete, time-bound where possible.
+8. Respond with valid JSON only — no markdown, no explanation.
+9. If the PM notes reference people with @Name syntax (e.g. @Alice Smith), \
 preserve the @ prefix exactly in your output. You may also use @Name when \
 referencing specific individuals.
 """
@@ -139,21 +146,17 @@ CEO_REVIEW_SCHEMA: dict[str, Any] = {
             "type": "string",
             "description": "Overall status: On Track, At Risk, or Off Track",
         },
-        "decisions_commentary": {
+        "summary": {
             "type": "string",
-            "description": "Summarise new decisions and their implications (2-4 sentences)",
+            "description": "1-2 sentence headline summarising the most important theme or change",
         },
-        "risks_commentary": {
-            "type": "string",
-            "description": "Summarise new risks, severity patterns, and mitigations (2-4 sentences)",
-        },
-        "development_commentary": {
-            "type": "string",
-            "description": "Summarise dev progress, velocity, blockers, achievements (2-4 sentences)",
-        },
-        "documentation_commentary": {
-            "type": "string",
-            "description": "Summarise doc progress, recently published/updated docs (2-4 sentences)",
+        "bullets": {
+            "type": "array",
+            "description": "Short update bullets (max 6). Each is one sentence covering any area: dev, docs, risks, decisions, etc.",
+            "items": {
+                "type": "string",
+                "description": "One concise bullet point (single sentence)",
+            },
         },
         "escalations": {
             "type": "array",
@@ -178,20 +181,38 @@ CEO_REVIEW_SCHEMA: dict[str, Any] = {
         },
         "next_milestones": {
             "type": "array",
+            "description": "At most 2 concrete upcoming milestones",
             "items": {
                 "type": "string",
                 "description": "A concrete upcoming milestone",
             },
         },
+        "deep_dive_topics": {
+            "type": "array",
+            "description": "Topics too complex for a one-liner that the PM should raise separately (e.g. major scope changes, critical new risks, significant decisions)",
+            "items": {
+                "type": "object",
+                "properties": {
+                    "topic": {
+                        "type": "string",
+                        "description": "Brief title of the topic",
+                    },
+                    "reason": {
+                        "type": "string",
+                        "description": "Why this needs a separate discussion rather than a bullet",
+                    },
+                },
+                "required": ["topic", "reason"],
+            },
+        },
     },
     "required": [
         "health_indicator",
-        "decisions_commentary",
-        "risks_commentary",
-        "development_commentary",
-        "documentation_commentary",
+        "summary",
+        "bullets",
         "escalations",
         "next_milestones",
+        "deep_dive_topics",
     ],
 }
 
@@ -228,10 +249,10 @@ def build_review_prompt(
 
     parts.append("---")
     parts.append(
-        "Produce a CEO-level status update. Return a JSON object with "
-        "health_indicator, decisions_commentary, risks_commentary, "
-        "development_commentary, documentation_commentary, escalations, "
-        "and next_milestones."
+        "Produce a concise CEO-level status update (~10 lines max). Return a JSON "
+        "object with health_indicator, summary, bullets (max 6 one-sentence items), "
+        "escalations, next_milestones (max 2), and deep_dive_topics (anything too "
+        "complex for a single bullet)."
     )
 
     return "\n".join(parts)

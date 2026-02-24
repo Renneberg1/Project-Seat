@@ -368,32 +368,14 @@ class CeoReviewService:
             f'</ac:structured-macro> {project_name} \u2014 {today}'
         )
 
-        # Development commentary
-        dev = review_data.get("development_commentary", "")
-        if dev:
-            items.append(escape(dev))
+        # Summary line
+        summary = review_data.get("summary", "")
+        if summary:
+            items.append(f"<strong>{escape(summary)}</strong>")
 
-        # Documentation commentary
-        doc = review_data.get("documentation_commentary", "")
-        if doc:
-            items.append(escape(doc))
-
-        # Risks summary
-        open_count = metrics.get("open_risk_count", 0)
-        total_count = metrics.get("total_risk_count", 0)
-        risks_commentary = review_data.get("risks_commentary", "")
-        risk_line = f"Risks: {open_count}/{total_count} open."
-        if risks_commentary:
-            risk_line += f" {escape(risks_commentary)}"
-        items.append(risk_line)
-
-        # Decisions summary
-        new_decisions = metrics.get("new_decisions", [])
-        decisions_commentary = review_data.get("decisions_commentary", "")
-        dec_line = f"New decisions: {len(new_decisions)}."
-        if decisions_commentary:
-            dec_line += f" {escape(decisions_commentary)}"
-        items.append(dec_line)
+        # Bullets
+        for bullet in review_data.get("bullets", []):
+            items.append(escape(bullet))
 
         # Escalations (only if present)
         escalations = review_data.get("escalations", [])

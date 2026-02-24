@@ -186,12 +186,14 @@ class TestRenderXhtml:
     def test_basic_render(self, service):
         review = {
             "health_indicator": "On Track",
-            "decisions_commentary": "Two key decisions made.",
-            "risks_commentary": "No critical risks.",
-            "development_commentary": "Good velocity.",
-            "documentation_commentary": "DHF progressing.",
+            "summary": "Steady progress across all teams this sprint.",
+            "bullets": [
+                "Dev velocity up 20% from last sprint.",
+                "DHF completion at 75%.",
+            ],
             "escalations": [],
             "next_milestones": ["Release candidate by March 1"],
+            "deep_dive_topics": [],
             "metrics": {
                 "project_name": "Test Project",
                 "new_decisions": [{"key": "RISK-1", "summary": "Use OAuth", "status": "Decided"}],
@@ -217,23 +219,19 @@ class TestRenderXhtml:
         assert "Test Project" in xhtml
         assert "On Track" in xhtml
         assert "Green" in xhtml
-        assert "Good velocity." in xhtml
-        assert "DHF progressing." in xhtml
-        assert "3/10 open" in xhtml
-        assert "No critical risks." in xhtml
-        assert "New decisions: 1." in xhtml
-        assert "Two key decisions made." in xhtml
+        assert "Steady progress across all teams this sprint." in xhtml
+        assert "Dev velocity up 20% from last sprint." in xhtml
+        assert "DHF completion at 75%." in xhtml
         assert "Release candidate by March 1" in xhtml
 
     def test_off_track_colour(self, service):
         review = {
             "health_indicator": "Off Track",
-            "decisions_commentary": "",
-            "risks_commentary": "",
-            "development_commentary": "",
-            "documentation_commentary": "",
+            "summary": "",
+            "bullets": [],
             "escalations": [{"issue": "Budget", "impact": "High", "ask": "More funds"}],
             "next_milestones": [],
+            "deep_dive_topics": [],
             "metrics": {
                 "project_name": "X",
                 "new_decisions": [],
@@ -362,12 +360,11 @@ class TestCeoReviewAgent:
         mock_provider = AsyncMock()
         mock_provider.generate.return_value = json.dumps({
             "health_indicator": "On Track",
-            "decisions_commentary": "Good decisions.",
-            "risks_commentary": "Risks under control.",
-            "development_commentary": "On schedule.",
-            "documentation_commentary": "Progressing.",
+            "summary": "Steady sprint with good velocity.",
+            "bullets": ["Dev on schedule.", "Risks under control."],
             "escalations": [],
             "next_milestones": ["Release by March 15"],
+            "deep_dive_topics": [],
         })
 
         agent = CeoReviewAgent(mock_provider)
@@ -378,6 +375,8 @@ class TestCeoReviewAgent:
         )
 
         assert result["health_indicator"] == "On Track"
+        assert result["summary"] == "Steady sprint with good velocity."
+        assert len(result["bullets"]) == 2
         assert "next_milestones" in result
 
 
@@ -439,12 +438,11 @@ class TestRoutes:
     def test_analyze_returns_preview(self, client, tmp_db, project):
         review = {
             "health_indicator": "On Track",
-            "decisions_commentary": "Good.",
-            "risks_commentary": "Fine.",
-            "development_commentary": "Ok.",
-            "documentation_commentary": "Done.",
+            "summary": "Steady progress across all teams.",
+            "bullets": ["Dev on track.", "Docs complete."],
             "escalations": [],
             "next_milestones": ["Ship"],
+            "deep_dive_topics": [],
             "metrics": {"project_name": "Test", "new_decisions": [], "new_risks": [],
                         "team_progress": [], "sp_burned_2w": 0, "scope_change_2w": 0,
                         "dhf_total": 0, "dhf_released": 0, "dhf_completion_pct": 0,
