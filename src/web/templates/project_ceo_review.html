@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}CEO Review — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>CEO Review — {{ project.name }}</h1>
+</div>
+
+{% if not project.confluence_ceo_review_id %}
+<div class="warning-banner">
+    No CEO Review page found. You can still generate a review, but publishing to Confluence will not be available. Set the page ID in <a href="/project/{{ project.id }}/settings/">Project Settings</a>.
+</div>
+{% endif %}
+
+<div class="charter-update-section">
+    <p>Generate a fortnightly CEO-level status update. The LLM will review project data from the last 2 weeks, ask any clarifying questions, then produce a structured update ready for the CEO Review page.</p>
+
+    <form hx-post="/project/{{ project.id }}/ceo-review/ask"
+          hx-target="#ceo-result"
+          hx-indicator="#ceo-spinner"
+          hx-disabled-elt="find button">
+
+        <label for="pm_notes"><strong>PM Notes</strong> (optional — add context about blockers, escalations, or qualitative observations):</label>
+        <textarea id="pm_notes" name="pm_notes" rows="4"
+                  placeholder="e.g. Team velocity dropped due to holiday period. Design review with notified body scheduled for next week..."></textarea>
+
+        <button type="submit">Generate CEO Review</button>
+        <span id="ceo-spinner" class="htmx-indicator"> Analyzing project data...</span>
+    </form>
+</div>
+
+<div id="ceo-result"></div>
+
+{% if past_reviews %}
+<h2>Past Reviews</h2>
+<div class="suggestions-list">
+    {% for review in past_reviews %}
+    {% include "partials/ceo_review_row.html" %}
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

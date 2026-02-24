@@ -37,6 +37,7 @@ class ImportPreview:
     charter_id: str | None = None
     xft_id: str | None = None
     detected_teams: dict[str, str] = field(default_factory=dict)
+    ceo_review_id: str | None = None
 
 
 def extract_confluence_page_ids(adf: dict | None) -> list[DetectedPage]:
@@ -158,6 +159,11 @@ class ImportService:
         charter_id, xft_id = guess_charter_xft(pages)
         detected_teams = _detect_team_projects(child_issues)
 
+        # Try to discover CEO Review page from Charter ancestors
+        ceo_review_id = None
+        if charter_id:
+            ceo_review_id = await self._discover_ceo_review_page(charter_id)
+
         return ImportPreview(
             goal_key=goal_key,
             goal_summary=summary,
@@ -165,7 +171,40 @@ class ImportService:
             charter_id=charter_id,
             xft_id=xft_id,
             detected_teams=detected_teams,
+            ceo_review_id=ceo_review_id,
         )
+
+    async def _discover_ceo_review_page(self, charter_id: str) -> str | None:
+        """Walk Charter ancestors to find sibling 'CEO Review' page."""
+        from src.connectors.confluence import ConfluenceConnector
+
+        confluence = ConfluenceConnector()
+        try:
+            page = await confluence.get_page(charter_id, expand=["ancestors"])
+            ancestors = page.get("ancestors", [])
+            if not ancestors:
+                return None
+
+            # Program page is typically the grandparent of Charter
+            program_id = None
+            if len(ancestors) >= 2:
+                program_id = str(ancestors[-2]["id"])
+            elif len(ancestors) >= 1:
+                program_id = str(ancestors[-1]["id"])
+
+            if not program_id:
+                return None
+
+            children = await confluence.get_child_pages_v2(program_id)
+            for child in children:
+                if "CEO Review" in child.get("title", ""):
+                    return str(child["id"])
+            return None
+        except Exception as exc:
+            logger.warning("Import: failed to discover CEO Review page: %s", exc)
+            return None
+        finally:
+            await confluence.close()
 
     def save_project(
         self,
@@ -176,6 +215,7 @@ class ImportService:
         pi_version: str | None = None,
         team_projects: dict[str, str] | None = None,
         jira_plan_url: str | None = None,
+        ceo_review_id: str | None = None,
     ) -> int:
         """Insert the imported project into the local DB. Returns the project ID.
 
@@ -192,9 +232,9 @@ class ImportService:
                 raise ValueError(f"Project with goal key '{goal_key}' already exists (id={existing['id']})")
 
             cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version, team_projects, jira_plan_url) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version, json.dumps(team_projects) if team_projects else None, jira_plan_url or None),
+                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version, team_projects, jira_plan_url, confluence_ceo_review_id) "
+                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
+                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version, json.dumps(team_projects) if team_projects else None, jira_plan_url or None, ceo_review_id or None),
             )
             conn.commit()
             return cursor.lastrowid

@@ -24,6 +24,7 @@ class Project:
     default_label: str | None = None
     team_projects: dict[str, str] = field(default_factory=dict)
     jira_plan_url: str | None = None
+    confluence_ceo_review_id: str | None = None
 
     @classmethod
     def from_row(cls, row: Any) -> Project:
@@ -52,6 +53,7 @@ class Project:
             default_label=row["default_label"] if "default_label" in row.keys() else None,
             team_projects=raw_teams,
             jira_plan_url=row["jira_plan_url"] if "jira_plan_url" in row.keys() else None,
+            confluence_ceo_review_id=row["confluence_ceo_review_id"] if "confluence_ceo_review_id" in row.keys() else None,
         )
 
 

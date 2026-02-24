@@ -239,3 +239,112 @@ def test_build_goal_description_returns_adf_with_inline_cards(service):
     assert len(content) == 2  # charter + XFT paragraphs
     first_para = content[0]["content"]
     assert any(c.get("type") == "inlineCard" for c in first_para)
+
+
+# ---------------------------------------------------------------------------
+# _sync_project_ids: Updates project table after execution
+# ---------------------------------------------------------------------------
+
+
+def test_sync_goal_key_to_project(service, tmp_db):
+    """Goal key should be written back to the projects table after execution."""
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (id, jira_goal_key, name, status) VALUES (?, ?, ?, ?)",
+            (300, "pending", "Sync Test", "spinning_up"),
+        )
+        conn.commit()
+
+    from src.models.approval import ApprovalItem, ApprovalStatus
+
+    item = ApprovalItem(
+        id=1, project_id=300,
+        action_type=ApprovalAction.CREATE_JIRA_ISSUE,
+        payload='{}', preview="", context="",
+        status=ApprovalStatus.EXECUTED,
+        result=json.dumps({"key": "PROG-42"}),
+        created_at="2026-01-01", resolved_at="2026-01-01",
+    )
+    service._sync_project_ids(item)
+
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_goal_key FROM projects WHERE id = 300").fetchone()
+    assert row["jira_goal_key"] == "PROG-42"
+
+
+def test_sync_charter_page_id(service, tmp_db):
+    """Charter page ID should be written back to the projects table."""
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (id, jira_goal_key, name, status) VALUES (?, ?, ?, ?)",
+            (301, "PROG-1", "Charter Sync", "spinning_up"),
+        )
+        conn.commit()
+
+    from src.models.approval import ApprovalItem, ApprovalStatus
+
+    item = ApprovalItem(
+        id=2, project_id=301,
+        action_type=ApprovalAction.CREATE_CONFLUENCE_PAGE,
+        payload='{}', preview="", context="",
+        status=ApprovalStatus.EXECUTED,
+        result=json.dumps({"id": "77777", "title": "HOP Drop 4 Charter"}),
+        created_at="2026-01-01", resolved_at="2026-01-01",
+    )
+    service._sync_project_ids(item)
+
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT confluence_charter_id FROM projects WHERE id = 301").fetchone()
+    assert row["confluence_charter_id"] == "77777"
+
+
+def test_sync_xft_page_id(service, tmp_db):
+    """XFT page ID should be written back to the projects table."""
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (id, jira_goal_key, name, status) VALUES (?, ?, ?, ?)",
+            (302, "PROG-1", "XFT Sync", "spinning_up"),
+        )
+        conn.commit()
+
+    from src.models.approval import ApprovalItem, ApprovalStatus
+
+    item = ApprovalItem(
+        id=3, project_id=302,
+        action_type=ApprovalAction.CREATE_CONFLUENCE_PAGE,
+        payload='{}', preview="", context="",
+        status=ApprovalStatus.EXECUTED,
+        result=json.dumps({"id": "88888", "title": "HOP Drop 4 XFT"}),
+        created_at="2026-01-01", resolved_at="2026-01-01",
+    )
+    service._sync_project_ids(item)
+
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT confluence_xft_id FROM projects WHERE id = 302").fetchone()
+    assert row["confluence_xft_id"] == "88888"
+
+
+def test_sync_ignores_non_prog_jira_issue(service, tmp_db):
+    """Non-PROG issues (e.g. RISK) should not overwrite jira_goal_key."""
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (id, jira_goal_key, name, status) VALUES (?, ?, ?, ?)",
+            (303, "PROG-1", "No Overwrite", "active"),
+        )
+        conn.commit()
+
+    from src.models.approval import ApprovalItem, ApprovalStatus
+
+    item = ApprovalItem(
+        id=4, project_id=303,
+        action_type=ApprovalAction.CREATE_JIRA_ISSUE,
+        payload='{}', preview="", context="",
+        status=ApprovalStatus.EXECUTED,
+        result=json.dumps({"key": "RISK-99"}),
+        created_at="2026-01-01", resolved_at="2026-01-01",
+    )
+    service._sync_project_ids(item)
+
+    with get_db(tmp_db) as conn:
+        row = conn.execute("SELECT jira_goal_key FROM projects WHERE id = 303").fetchone()
+    assert row["jira_goal_key"] == "PROG-1"  # unchanged

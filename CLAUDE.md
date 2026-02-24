@@ -16,12 +16,12 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update, Health Review.
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update, Health Review, CEO Review.
 2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output), Orchestrator (task scheduling framework, wired into lifespan).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, per-team version progress tracking with burnup charts, Jira Plans timeline embed.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, per-team version progress tracking with burnup charts, Jira Plans timeline embed.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -86,6 +86,7 @@ project-seat/
 │   │       ├── transcript.py        # Transcript analysis: system prompt, JSON schema, ADF helpers
 │   │       ├── charter.py           # Charter update: questions + edits prompts, JSON schemas
 │   │       ├── health_review.py     # Health review: questions + review prompts, JSON schemas
+│   │       ├── ceo_review.py        # CEO review: questions + review prompts, JSON schemas
 │   │       └── (planned: release_plan.py, estimate_check.py — see docs/feature-backlog.md)
 │   ├── services/
 │   │   ├── __init__.py
@@ -97,6 +98,7 @@ project-seat/
 │   │   ├── transcript.py        # Transcript parsing, LLM analysis, suggestion management
 │   │   ├── charter.py           # Charter section fetch, LLM Q&A, edit proposals, suggestion management
 │   │   ├── health_review.py     # Health review: context gathering, LLM Q&A, review persistence
+│   │   ├── ceo_review.py        # CEO review: data gathering, LLM Q&A, XHTML render, publish
 │   │   ├── team_progress.py     # Per-team version progress tracking (JQL-based)
 │   │   └── team_snapshot.py     # Daily team progress snapshots for burnup charts
 │   ├── web/
@@ -110,7 +112,8 @@ project-seat/
 │   │   │   ├── spinup.py
 │   │   │   ├── transcript.py       # Upload, analyze, accept/reject suggestions
 │   │   │   ├── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
-│   │   │   └── health_review.py    # Health review page, LLM Q&A, review output
+│   │   │   ├── health_review.py    # Health review page, LLM Q&A, review output
+│   │   │   └── ceo_review.py      # CEO review page, LLM Q&A, preview, accept/reject
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
 │   │   │   ├── phases.html
@@ -128,6 +131,7 @@ project-seat/
 │   │   │   ├── charter.html                     # Charter sections view + LLM update form
 │   │   │   ├── project_team_progress.html       # Per-team version progress + burnup chart
 │   │   │   ├── project_health_review.html      # Health review page + past reviews
+│   │   │   ├── project_ceo_review.html         # CEO review page + PM notes + past reviews
 │   │   │   └── partials/
 │   │   │       ├── approval_pending.html
 │   │   │       ├── approval_row.html
@@ -140,7 +144,10 @@ project-seat/
 │   │   │       ├── charter_suggestions.html     # Charter edit proposals with Accept All
 │   │   │       ├── charter_suggestion_row.html  # Individual charter edit accept/reject
 │   │   │       ├── health_review_questions.html # Health review clarifying questions form
-│   │   │       └── health_review_output.html    # Health review structured output
+│   │   │       ├── health_review_output.html    # Health review structured output
+│   │   │       ├── ceo_review_questions.html   # CEO review clarifying questions form
+│   │   │       ├── ceo_review_preview.html     # CEO review preview with accept/reject
+│   │   │       └── ceo_review_row.html         # Individual past CEO review row
 │   │   └── static/              # CSS (JS loaded from CDN: HTMX, Chart.js)
 │   │       └── style.css
 │   └── models/
@@ -152,7 +159,8 @@ project-seat/
 │       ├── dhf.py               # DHF document models
 │       ├── release.py           # Release and scope-freeze models
 │       ├── transcript.py        # Transcript, suggestion, and project context models
-│       └── charter.py           # Charter suggestion status and dataclass
+│       ├── charter.py           # Charter suggestion status and dataclass
+│       └── ceo_review.py       # CEO review status and dataclass
 └── tests/
     ├── __init__.py
     ├── conftest.py              # Shared fixtures
@@ -184,6 +192,7 @@ project-seat/
     │   ├── test_transcript.py       # Parser + service tests
     │   ├── test_charter.py          # Charter service + suggestion workflow tests
     │   ├── test_health_review.py    # Health review service tests
+    │   ├── test_ceo_review.py       # CEO review service + agent + route tests
     │   ├── test_team_progress.py    # Team progress service tests
     │   └── test_team_snapshot.py    # Snapshot service tests
     └── test_web/
@@ -231,6 +240,7 @@ pytest
 - `TranscriptAgent` orchestrates transcript analysis: builds prompt, calls provider with JSON schema, retries on parse failure
 - `CharterAgent` orchestrates Charter updates via two-step LLM interaction: `ask_questions()` identifies gaps, `propose_edits()` returns section replacements — both retry on JSON parse failure
 - `HealthReviewAgent` orchestrates project health reviews via two-step LLM interaction: `ask_questions()` identifies data gaps, `generate_review()` returns structured assessment — read-only, no approval queue needed
+- `CeoReviewAgent` orchestrates CEO status updates via two-step LLM interaction: `ask_questions()` identifies gaps in 2-week data, `generate_review()` returns structured update with health indicator, commentary, escalations, and milestones — publishes to Confluence via approval queue
 - All LLM responses that result in write actions must pass through the Approval Engine first
 - Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
 - Gemini limitation: 2.5 Flash uses "thinking" tokens that count against `maxOutputTokens` — use 16384+ for structured output to avoid truncation
@@ -256,7 +266,7 @@ pytest
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
 - Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
-- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`, `health_reviews`
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`, `health_reviews`, `ceo_reviews`
 
 ### Testing
 - Use pytest
@@ -434,6 +444,46 @@ User clicks "Start Health Review"
 - **Comprehensive context:** Ingests all available project data (9 parallel fetches with graceful error handling per source)
 - **Persisted reviews:** Stored in `health_reviews` table for historical comparison, displayed on the Health Review page
 - **High token budget:** Uses `maxOutputTokens: 16384` because Gemini 2.5 Flash thinking tokens count against the output budget
+
+## CEO Review Workflow
+
+The CEO Review is the fourth LLM-powered feature. It uses the same two-step Q&A pattern as Health Review, but with a **last-2-weeks lens** and **Confluence publishing** via the approval queue.
+
+### Flow
+
+```
+User enters optional PM notes → clicks "Generate CEO Review"
+  → POST /ceo-review/ask → CeoReviewService.generate_questions()
+      → gather_ceo_context() (9 parallel fetches: summary, initiatives, team reports,
+        snapshots (14d), DHF docs, releases, new risks (2w), new decisions (2w), meetings)
+      → compute_metrics() (deterministic: filter DHF by 2w, burnup delta, team progress)
+      → CeoReviewAgent.ask_questions() (LLM call #1: identify gaps)
+  → UI shows clarifying questions (or auto-submits if none needed)
+  → User answers → POST /ceo-review/analyze → CeoReviewService.generate_review()
+      → CeoReviewAgent.generate_review() (LLM call #2: structured update)
+  → render_confluence_xhtml() → save_review() in ceo_reviews table
+  → User reviews preview (data tables + LLM commentary)
+  → Accept → accept_review() → ApprovalEngine.propose(UPDATE_CONFLUENCE_PAGE, append_mode=true)
+  → User approves in Approval Queue → appended to CEO Review Confluence page
+```
+
+### Output Structure
+
+- **health_indicator**: On Track / At Risk / Off Track
+- **decisions_commentary**: Summary of new decisions
+- **risks_commentary**: Summary of new risks and patterns
+- **development_commentary**: Dev progress, velocity, blockers
+- **documentation_commentary**: DHF progress, recently updated docs
+- **escalations**: Issues needing leadership attention (issue, impact, ask)
+- **next_milestones**: Upcoming concrete milestones
+
+### Key Design Decisions
+
+- **Hybrid output:** Deterministic data tables (new risks/decisions, team progress, DHF) combined with LLM-generated commentary — numbers are pre-computed, LLM writes narrative only
+- **Last-2-weeks focus:** JQL `created >= -2w` for new risks/decisions, burnup snapshots limited to 14 days, DHF filtered by `last_modified`
+- **Confluence append:** Uses existing `append_mode` in approval engine — fetches current page body at execution time and appends XHTML
+- **Auto-discovery:** CEO Review page discovered from Charter ancestors: Charter → ancestors → Program → children → "CEO Review" title match
+- **PM notes:** Free-form textarea for qualitative context (blockers, escalations, team dynamics) passed to both LLM steps
 
 ## Feature Backlog & Technical Debt
 

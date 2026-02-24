@@ -1,0 +1,55 @@
+<details class="health-review-history-item">
+    <summary>
+        {% set indicator = review.review_json.get('health_indicator', 'At Risk') if review.review_json.get is defined else 'At Risk' %}
+        {% if indicator == 'On Track' %}
+        <span class="health-badge health-green">{{ indicator }}</span>
+        {% elif indicator == 'Off Track' %}
+        <span class="health-badge health-red">{{ indicator }}</span>
+        {% else %}
+        <span class="health-badge health-amber">{{ indicator }}</span>
+        {% endif %}
+        <span class="ceo-review-status badge-{{ review.status.value }}">{{ review.status.value }}</span>
+        {{ review.created_at }}
+    </summary>
+    <div class="health-review-detail">
+        {% if review.review_json.get('decisions_commentary') if review.review_json.get is defined else false %}
+        <h4>Decisions</h4>
+        <p>{{ review.review_json.decisions_commentary }}</p>
+        {% endif %}
+
+        {% if review.review_json.get('risks_commentary') if review.review_json.get is defined else false %}
+        <h4>Risks</h4>
+        <p>{{ review.review_json.risks_commentary }}</p>
+        {% endif %}
+
+        {% if review.review_json.get('development_commentary') if review.review_json.get is defined else false %}
+        <h4>Development</h4>
+        <p>{{ review.review_json.development_commentary }}</p>
+        {% endif %}
+
+        {% if review.review_json.get('documentation_commentary') if review.review_json.get is defined else false %}
+        <h4>Documentation</h4>
+        <p>{{ review.review_json.documentation_commentary }}</p>
+        {% endif %}
+
+        {% set escalations = review.review_json.get('escalations', []) if review.review_json.get is defined else [] %}
+        {% if escalations %}
+        <h4>Escalations</h4>
+        <ul>
+            {% for e in escalations %}
+            <li><strong>{{ e.issue }}</strong> — {{ e.impact }} (Ask: {{ e.ask }})</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% set milestones = review.review_json.get('next_milestones', []) if review.review_json.get is defined else [] %}
+        {% if milestones %}
+        <h4>Next Milestones</h4>
+        <ul>
+            {% for m in milestones %}
+            <li>{{ m }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</details>

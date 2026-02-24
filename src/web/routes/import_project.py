@@ -55,6 +55,7 @@ async def import_save(
     pi_version: str = Form(""),
     team_projects: str = Form(""),
     jira_plan_url: str = Form(""),
+    ceo_review_id: str = Form(""),
 ) -> RedirectResponse:
     """Save the imported project to the local DB and redirect to its dashboard."""
     service = ImportService()
@@ -78,6 +79,7 @@ async def import_save(
             pi_version=pi_version.strip() or None,
             team_projects=team_dict or None,
             jira_plan_url=jira_plan_url.strip() or None,
+            ceo_review_id=ceo_review_id.strip() or None,
         )
     except ValueError as exc:
         return templates.TemplateResponse(

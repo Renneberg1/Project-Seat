@@ -151,3 +151,17 @@ class TestReplaceSectionContent:
         sections = extract_sections(modified)
         obj = next(s for s in sections if s["name"] == "Commercial Objective")
         assert obj["content"] == new_text
+
+    def test_raw_xhtml_inserts_verbatim(self, charter_body):
+        """raw_xhtml=True should insert HTML without escaping or <p> wrapping."""
+        raw_content = '<ul><li>Item one</li><li>Item &amp; two</li></ul>'
+        modified = replace_section_content(
+            charter_body,
+            "Commercial Objective",
+            raw_content,
+            raw_xhtml=True,
+        )
+        # Raw HTML should appear verbatim in the output
+        assert raw_content in modified
+        # Should NOT be wrapped in extra <p> tags
+        assert f"<p>{raw_content}</p>" not in modified

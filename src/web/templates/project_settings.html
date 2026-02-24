@@ -1,0 +1,88 @@
+{% extends "base.html" %}
+{% block title %}Settings — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Project Settings</h1>
+</div>
+
+{% if saved is defined and saved %}
+<div class="success-banner">Settings saved.</div>
+{% endif %}
+
+<form method="post" action="/project/{{ project.id }}/settings/" class="settings-form">
+    <fieldset>
+        <legend>General</legend>
+        <div class="form-group">
+            <label for="name">Project Name</label>
+            <input type="text" id="name" name="name" value="{{ project.name }}">
+        </div>
+        <div class="form-group">
+            <label for="jira_goal_key">Jira Goal Key</label>
+            <input type="text" id="jira_goal_key" name="jira_goal_key" value="{{ project.jira_goal_key }}" placeholder="e.g. PROG-123">
+        </div>
+        <div class="form-group">
+            <label for="phase">Phase</label>
+            <select id="phase" name="phase">
+                {% for p in ["planning", "development", "dhf_update", "verification", "validation", "release"] %}
+                <option value="{{ p }}" {% if project.phase == p %}selected{% endif %}>{{ p|replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Confluence Pages</legend>
+        <div class="form-group">
+            <label for="confluence_charter_id">Charter Page ID</label>
+            <input type="text" id="confluence_charter_id" name="confluence_charter_id" value="{{ project.confluence_charter_id or '' }}" placeholder="e.g. 3559363918">
+        </div>
+        <div class="form-group">
+            <label for="confluence_xft_id">XFT Page ID</label>
+            <input type="text" id="confluence_xft_id" name="confluence_xft_id" value="{{ project.confluence_xft_id or '' }}" placeholder="e.g. 3559363934">
+        </div>
+        <div class="form-group">
+            <label for="confluence_ceo_review_id">CEO Review Page ID</label>
+            <input type="text" id="confluence_ceo_review_id" name="confluence_ceo_review_id" value="{{ project.confluence_ceo_review_id or '' }}" placeholder="Auto-discovered or enter manually">
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>DHF Document Tracking</legend>
+        <div class="form-group">
+            <label for="dhf_draft_root_id">Draft Root Page ID</label>
+            <input type="text" id="dhf_draft_root_id" name="dhf_draft_root_id" value="{{ project.dhf_draft_root_id or '' }}" placeholder="Confluence page ID for draft DHF space">
+        </div>
+        <div class="form-group">
+            <label for="dhf_released_root_id">Released Root Page ID</label>
+            <input type="text" id="dhf_released_root_id" name="dhf_released_root_id" value="{{ project.dhf_released_root_id or '' }}" placeholder="Confluence page ID for released DHF space">
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Teams &amp; Versions</legend>
+        <div class="form-group">
+            <label for="team_projects">Team Projects <span class="text-muted">(one per line: KEY=VersionName)</span></label>
+            <textarea id="team_projects" name="team_projects" rows="5" placeholder="AIM=Drop 1&#10;CTCV=Release 2.0">{% for key, val in project.team_projects.items() %}{{ key }}={{ val }}
+{% endfor %}</textarea>
+        </div>
+        <div class="form-group">
+            <label for="pi_version">PI Version</label>
+            <input type="text" id="pi_version" name="pi_version" value="{{ project.pi_version or '' }}" placeholder="e.g. PI 24.3">
+        </div>
+    </fieldset>
+
+    <fieldset>
+        <legend>Links</legend>
+        <div class="form-group">
+            <label for="jira_plan_url">Jira Plans Timeline URL</label>
+            <input type="text" id="jira_plan_url" name="jira_plan_url" value="{{ project.jira_plan_url or '' }}" placeholder="https://yourcompany.atlassian.net/jira/plans/...">
+        </div>
+    </fieldset>
+
+    <div class="settings-actions">
+        <button type="submit">Save Settings</button>
+        <a href="/project/{{ project.id }}/dashboard" class="btn-secondary">Cancel</a>
+    </div>
+</form>
+{% endblock %}

@@ -190,7 +190,52 @@ class SpinUpService:
                 )
                 conn.commit()
 
-        return await self._engine.approve_and_execute(item_id)
+        result_item = await self._engine.approve_and_execute(item_id)
+
+        # Write newly created IDs back to the projects table
+        if result_item.project_id and result_item.status == ApprovalStatus.EXECUTED:
+            self._sync_project_ids(result_item)
+
+        return result_item
+
+    def _sync_project_ids(self, item: ApprovalItem) -> None:
+        """Update the projects table with IDs from a successfully executed item."""
+        if not item.result:
+            return
+        result = json.loads(item.result)
+
+        if item.action_type == ApprovalAction.CREATE_JIRA_ISSUE:
+            key = result.get("key", "")
+            if key.startswith(PROG_PROJECT_KEY):
+                with get_db(self._db_path) as conn:
+                    conn.execute(
+                        "UPDATE projects SET jira_goal_key = ? WHERE id = ?",
+                        (key, item.project_id),
+                    )
+                    conn.commit()
+                logger.info("Synced Goal key %s to project %d", key, item.project_id)
+
+        elif item.action_type == ApprovalAction.CREATE_CONFLUENCE_PAGE:
+            page_id = str(result.get("id", ""))
+            title = result.get("title", "")
+            if not page_id:
+                return
+            if "Charter" in title and "XFT" not in title:
+                with get_db(self._db_path) as conn:
+                    conn.execute(
+                        "UPDATE projects SET confluence_charter_id = ? WHERE id = ?",
+                        (page_id, item.project_id),
+                    )
+                    conn.commit()
+                logger.info("Synced Charter page %s to project %d", page_id, item.project_id)
+            elif "XFT" in title:
+                with get_db(self._db_path) as conn:
+                    conn.execute(
+                        "UPDATE projects SET confluence_xft_id = ? WHERE id = ?",
+                        (page_id, item.project_id),
+                    )
+                    conn.commit()
+                logger.info("Synced XFT page %s to project %d", page_id, item.project_id)
 
     # ------------------------------------------------------------------
     # Sentinel resolution

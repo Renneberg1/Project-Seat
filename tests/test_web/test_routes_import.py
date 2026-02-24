@@ -124,6 +124,7 @@ def test_import_save_redirects_to_dashboard(client, tmp_db):
         pi_version=None,
         team_projects={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"},
         jira_plan_url=None,
+        ceo_review_id=None,
     )
 
 
@@ -164,4 +165,5 @@ def test_import_save_empty_page_ids_saved_as_none(client, tmp_db):
         pi_version=None,
         team_projects=None,
         jira_plan_url=None,
+        ceo_review_id=None,
     )

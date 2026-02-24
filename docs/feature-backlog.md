@@ -32,20 +32,6 @@ Scan a project's Jira hierarchy and flag epics/tasks missing story points or tim
 
 ## Reporting & Status
 
-### CEO Review Output
-Generate formatted project status updates suitable for CEO review meetings. Aggregates:
-- Project phase and timeline status
-- Key risks (open count, top 3 by priority)
-- Key decisions made since last review
-- DHF document completion percentage
-- Release readiness (scope freeze status, doc publication %)
-- Blockers and escalations
-
-Output options:
-- Confluence page update (append to CEO Review page under the program)
-- Downloadable summary (PDF or markdown)
-- Could be LLM-enhanced to generate narrative summaries from raw data
-
 ### Regular Project Status Reports
 Automated periodic status report generation per project. Pulls live data from Jira + Confluence and formats into a standard template:
 - Sprint progress (velocity, burndown)
@@ -124,3 +110,4 @@ The `projects` table could further benefit from:
 - [x] Project Health Review (on-demand LLM health check: two-step Q&A flow, gathers all project data, structured review with Green/Amber/Red rating, concerns, positives, next actions, persisted in `health_reviews` table)
 - [x] Dashboard UI Redesign (hero bar with phase/health/countdown, 4 metric cards with Chart.js doughnuts for risks and DHF, scope composition bar with type pills, team % card, full-width team breakdown stacked bars, 3-column activity/links section, responsive at 768px/480px, body widened to 1280px)
 - [x] Dark Mode (CSS custom properties for all colors, `data-theme` toggle with localStorage + OS preference, dark palette derived from brand navy, Chart.js chart rebuild on theme change, sun/moon toggle button, FOUC prevention)
+- [x] CEO Review Output (fortnightly CEO-level status updates with last-2-weeks lens, hybrid deterministic data tables + LLM commentary, two-step Q&A flow, Confluence append via approval queue, auto-discovery of CEO Review page from Charter ancestors)

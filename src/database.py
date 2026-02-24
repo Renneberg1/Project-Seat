@@ -168,6 +168,24 @@ def init_db(db_path: str | Path = "seat.db") -> None:
                 FOREIGN KEY (project_id) REFERENCES projects(id)
             )
         """)
+        # Migration: ceo_reviews table
+        conn.execute("""
+            CREATE TABLE IF NOT EXISTS ceo_reviews (
+                id               INTEGER PRIMARY KEY AUTOINCREMENT,
+                project_id       INTEGER NOT NULL,
+                review_json      TEXT NOT NULL DEFAULT '{}',
+                confluence_body  TEXT NOT NULL DEFAULT '',
+                approval_item_id INTEGER,
+                status           TEXT NOT NULL DEFAULT 'draft',
+                created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+                FOREIGN KEY (project_id) REFERENCES projects(id)
+            )
+        """)
+        # Migration: add confluence_ceo_review_id column
+        try:
+            conn.execute("ALTER TABLE projects ADD COLUMN confluence_ceo_review_id TEXT")
+        except sqlite3.OperationalError:
+            pass  # column already exists
         # Migration: charter_suggestions table
         conn.execute("""
             CREATE TABLE IF NOT EXISTS charter_suggestions (

@@ -107,7 +107,8 @@ def extract_sections(storage_body: str) -> list[dict[str, str]]:
 
 
 def replace_section_content(
-    storage_body: str, section_name: str, new_content: str
+    storage_body: str, section_name: str, new_content: str,
+    *, raw_xhtml: bool = False,
 ) -> str:
     """Replace the ``<td>`` content adjacent to the matching ``<th>`` section.
 
@@ -117,6 +118,8 @@ def replace_section_content(
             (e.g. ``"Commercial Objective"`` or ``"Project Scope — In Scope"``).
         new_content: Plain text to replace the section content with.
             Will be wrapped in ``<p>`` tags and HTML-escaped.
+        raw_xhtml: If ``True``, insert *new_content* verbatim (caller
+            provides valid XHTML).  Skips escaping and ``<p>`` wrapping.
 
     Returns:
         The modified storage body string.
@@ -124,12 +127,15 @@ def replace_section_content(
     Raises:
         ValueError: If the section name is not found in the Charter.
     """
-    escaped_content = _escape_html(new_content)
-    # Wrap each line in a <p> tag
-    lines = escaped_content.split("\n")
-    new_html = "".join(f"<p>{line}</p>" for line in lines if line.strip())
-    if not new_html:
-        new_html = f"<p>{escaped_content}</p>"
+    if raw_xhtml:
+        new_html = new_content
+    else:
+        escaped_content = _escape_html(new_content)
+        # Wrap each line in a <p> tag
+        lines = escaped_content.split("\n")
+        new_html = "".join(f"<p>{line}</p>" for line in lines if line.strip())
+        if not new_html:
+            new_html = f"<p>{escaped_content}</p>"
 
     # Handle "Section — In Scope" / "Section — Out of Scope" sub-sections
     is_in_scope = section_name.endswith("— In Scope")

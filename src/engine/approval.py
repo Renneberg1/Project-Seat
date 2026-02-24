@@ -237,6 +237,7 @@ class ApprovalEngine:
                         current_body,
                         payload["section_name"],
                         payload["new_content"],
+                        raw_xhtml=payload.get("raw_xhtml", False),
                     )
                 elif payload.get("append_mode"):
                     # Append mode: fetch current body and append new content
