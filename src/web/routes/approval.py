@@ -2,21 +2,23 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from src.engine.approval import ApprovalEngine
 from src.models.approval import ApprovalStatus
 from src.services.spinup import SpinUpService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import get_approval_engine, get_nav_context, get_spinup_service, templates
 
 router = APIRouter(prefix="/approval", tags=["approval"])
 
 
 @router.get("/", response_class=HTMLResponse)
-async def approval_queue(request: Request) -> HTMLResponse:
+async def approval_queue(
+    request: Request,
+    engine: ApprovalEngine = Depends(get_approval_engine),
+) -> HTMLResponse:
     """Render the full approval queue page."""
-    engine = ApprovalEngine()
     pending = engine.list_pending()
     all_items = engine.list_all()
     history = [i for i in all_items if i.status != ApprovalStatus.PENDING]
@@ -39,9 +41,12 @@ async def approval_queue(request: Request) -> HTMLResponse:
 
 
 @router.post("/{item_id}/approve", response_class=HTMLResponse)
-async def approve_item(request: Request, item_id: int) -> HTMLResponse:
+async def approve_item(
+    request: Request,
+    item_id: int,
+    service: SpinUpService = Depends(get_spinup_service),
+) -> HTMLResponse:
     """Approve and execute a single item. Returns updated row partial."""
-    service = SpinUpService()
     item = await service.execute_approved_item(item_id)
     return templates.TemplateResponse(
         request,
@@ -51,9 +56,12 @@ async def approve_item(request: Request, item_id: int) -> HTMLResponse:
 
 
 @router.post("/{item_id}/reject", response_class=HTMLResponse)
-async def reject_item(request: Request, item_id: int) -> HTMLResponse:
+async def reject_item(
+    request: Request,
+    item_id: int,
+    engine: ApprovalEngine = Depends(get_approval_engine),
+) -> HTMLResponse:
     """Reject a single item. Returns updated row partial."""
-    engine = ApprovalEngine()
     item = engine.reject(item_id)
     return templates.TemplateResponse(
         request,
@@ -63,10 +71,12 @@ async def reject_item(request: Request, item_id: int) -> HTMLResponse:
 
 
 @router.post("/approve-all", response_class=HTMLResponse)
-async def approve_all(request: Request) -> HTMLResponse:
+async def approve_all(
+    request: Request,
+    engine: ApprovalEngine = Depends(get_approval_engine),
+    service: SpinUpService = Depends(get_spinup_service),
+) -> HTMLResponse:
     """Approve and execute all pending items in order. Returns refreshed pending list."""
-    engine = ApprovalEngine()
-    service = SpinUpService()
     pending = engine.list_pending()
 
     for item in pending:

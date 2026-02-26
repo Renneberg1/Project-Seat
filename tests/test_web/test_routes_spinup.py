@@ -34,7 +34,7 @@ def test_spinup_form_contains_expected_fields(client):
 
 
 def test_spinup_submit_queues_actions_and_shows_result(client):
-    with patch("src.web.routes.spinup.SpinUpService") as MockSvc:
+    with patch("src.web.deps.SpinUpService") as MockSvc:
         instance = MockSvc.return_value
         instance.prepare_spinup = AsyncMock(return_value=[1, 2, 3, 4, 5, 6])
 
@@ -56,7 +56,7 @@ def test_spinup_submit_queues_actions_and_shows_result(client):
 
 
 def test_spinup_submit_required_fields_only(client):
-    with patch("src.web.routes.spinup.SpinUpService") as MockSvc:
+    with patch("src.web.deps.SpinUpService") as MockSvc:
         instance = MockSvc.return_value
         instance.prepare_spinup = AsyncMock(return_value=[1, 2, 3])
 

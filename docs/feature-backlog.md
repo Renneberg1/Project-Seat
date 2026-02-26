@@ -74,38 +74,12 @@ Track key metrics over time per project (risk count, DHF completion %, story poi
 - Bulk operations: select multiple suggestions to accept/reject
 - Transcript summary card on project dashboard (already partially implemented)
 
-### Navigation Tab Grouping **(NEW)**
-The project-level nav has 10 tabs (Dashboard, Features, Documents, Approvals, Transcripts, Charter, Health, CEO Review, Teams, Settings). On narrower screens these overflow. Group related tabs into dropdowns (e.g., "Analysis" for Transcripts/Charter/Health/CEO Review) or add a responsive hamburger menu for less-used tabs.
-
-### Page Navigation Loading State **(NEW)**
-Regular page navigation (clicking between Dashboard → Features → Documents) has no loading indication. When Jira API calls take 1–2 seconds, the UI feels unresponsive. Add an HTMX-compatible progress bar or page-level spinner for non-LLM navigations.
-
 ### Notification / Toast System **(NEW)**
 Currently success/error feedback uses inline banners that can be missed. A toast notification system (auto-dismissing, stacking) would improve the UX for actions like "Settings saved", "Suggestion accepted", "Approval submitted".
-
-### Offline Resilience — Bundle CDN Assets **(NEW)**
-HTMX and Chart.js are loaded from CDN (`unpkg.com`, `jsdelivr.net`). If the CDN is down or blocked by a corporate proxy, the app is non-functional. Bundle these in `static/vendor/` for reliable offline operation.
 
 ---
 
 ## Infrastructure & Technical Debt
-
-### Nice to Have
-
-#### Automatic CSS Cache-Busting **(NEW)**
-`style.css?v=12` is manually incremented. Use a file hash or git commit short-hash for automatic cache-busting.
-
-#### Remove Dead Code **(NEW)**
-`src/web/routes/project.py` has an unused `_project_response()` function stub. Clean up along with the mid-file `import re` (move to top of file).
-
-#### Provider Unit Tests **(NEW)**
-`src/engine/providers/gemini.py` and `ollama.py` have no dedicated test files. Add tests for response parsing, error handling, retry logic, and edge cases (truncated responses, safety blocks).
-
-#### FastAPI Dependency Injection **(NEW)**
-`DashboardService()` is instantiated fresh in 40+ locations (including every `get_nav_context()` call). Using `Depends()` for service injection would reduce boilerplate and improve testability.
-
-#### API Health Check Endpoint **(NEW)**
-A `/api/health` endpoint that tests Atlassian API connectivity and returns status. Useful for debugging and could power a status indicator in the nav bar showing whether Jira/Confluence are reachable.
 
 ### Connector Extensions (as needed)
 - Jira: project/component listing, bulk operations
@@ -171,3 +145,11 @@ The `projects` table could further benefit from:
 - [x] Versioned Database Migrations (`schema_versions` table with numbered migration functions, each runs exactly once)
 - [x] Cache Context Between Q&A Steps (10-minute TTL cache in health_review and ceo_review services, Step 2 reuses Step 1 data)
 - [x] Add ON DELETE CASCADE to Foreign Keys (all FK constraints, simplified `delete_project()` to single DELETE)
+- [x] Automatic CSS Cache-Busting (MD5 content-hash query strings on all static assets, computed at import time in `deps.py`)
+- [x] Remove Dead Code (verified no dead code — `_project_response()` already removed, `import re` is used)
+- [x] Provider Unit Tests (17 tests for Gemini and Ollama providers: response parsing, error handling, schema params, client reuse, close)
+- [x] FastAPI Dependency Injection (all service/connector instantiation in routes uses `Depends()` factory functions from `deps.py`)
+- [x] API Health Check Endpoint (`GET /api/health` returns JSON connectivity status for DB, Jira, Confluence; 200 ok / 503 degraded)
+- [x] Bundle CDN Assets — Offline Resilience (HTMX 2.0.4 and Chart.js 4.x bundled in `static/vendor/` for air-gapped operation)
+- [x] Page Navigation Loading State (animated progress bar at top of page for regular navigation and HTMX requests)
+- [x] Navigation Tab Grouping (Analysis tabs collapse into dropdown on ≤1024px, flat on desktop; pure CSS via `:focus-within`)

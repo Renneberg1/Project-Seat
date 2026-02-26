@@ -48,7 +48,7 @@ def test_root_redirects_to_phases(client):
 
 
 def test_root_follow_redirect_returns_200(client):
-    with patch("src.web.routes.phases.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[])
         MockSvc.return_value.list_projects = lambda: []
 
@@ -63,7 +63,7 @@ def test_root_follow_redirect_returns_200(client):
 
 
 def test_phases_get_empty_state_shows_no_projects_message(client):
-    with patch("src.web.routes.phases.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[])
         MockSvc.return_value.list_projects = lambda: []
 
@@ -83,7 +83,7 @@ def test_phases_get_shows_project_cards(client, tmp_db):
     )
     summary = _make_summary(project)
 
-    with patch("src.web.routes.phases.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[summary])
         MockSvc.return_value.list_projects = lambda: [project]
 
@@ -95,7 +95,7 @@ def test_phases_get_shows_project_cards(client, tmp_db):
 
 
 def test_phases_get_page_title_says_phase_gates(client):
-    with patch("src.web.routes.phases.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[])
         MockSvc.return_value.list_projects = lambda: []
 
@@ -113,7 +113,7 @@ def test_phases_get_error_project_shows_banner(client, tmp_db):
     )
     summary = _make_summary(project, error="HTTP 503: Service Unavailable")
 
-    with patch("src.web.routes.phases.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         MockSvc.return_value.get_all_summaries = AsyncMock(return_value=[summary])
         MockSvc.return_value.list_projects = lambda: [project]
 
@@ -131,7 +131,7 @@ def test_phases_get_error_project_shows_banner(client, tmp_db):
 def test_update_phase_post_returns_200(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1", "planning")
 
-    with patch("src.web.routes.phases.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.update_phase = lambda pid, phase: None
         instance.get_project_by_id = lambda pid: Project(
@@ -155,7 +155,7 @@ def test_update_phase_post_returns_200(client, tmp_db):
 
 
 def test_update_phase_nonexistent_project_returns_404(client):
-    with patch("src.web.routes.phases.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.update_phase = lambda pid, phase: None
         instance.get_project_by_id = lambda pid: None

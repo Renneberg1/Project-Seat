@@ -15,11 +15,12 @@
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
     <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&display=swap">
-    <link rel="stylesheet" href="/static/style.css?v=12">
-    <script src="https://unpkg.com/htmx.org@2.0.4"></script>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js@4"></script>
+    <link rel="stylesheet" href="/static/style.css?v={{ static_versions.get('style.css', '0') }}">
+    <script src="/static/vendor/htmx.min.js?v={{ static_versions.get('vendor/htmx.min.js', '0') }}"></script>
+    <script src="/static/vendor/chart.umd.min.js?v={{ static_versions.get('vendor/chart.umd.min.js', '0') }}"></script>
 </head>
 <body>
+    <div id="page-progress" class="page-progress"></div>
     <nav class="nav-bar">
         <a href="/phases/" class="nav-logo" aria-label="harrison.ai">
             <svg viewBox="0 0 180 186" width="20" height="21" fill="currentColor" aria-hidden="true">
@@ -54,14 +55,20 @@
                class="nav-link {% if '/documents' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Documents</a>
             <a href="/project/{{ selected_project_id }}/approvals"
                class="nav-link {% if request.url.path == '/project/' ~ selected_project_id|string ~ '/approvals' %}active{% endif %}">Approvals</a>
-            <a href="/project/{{ selected_project_id }}/transcript/"
-               class="nav-link {% if '/transcript' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Transcripts</a>
-            <a href="/project/{{ selected_project_id }}/charter/"
-               class="nav-link {% if '/charter' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Charter</a>
-            <a href="/project/{{ selected_project_id }}/health-review/"
-               class="nav-link {% if '/health-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Health</a>
-            <a href="/project/{{ selected_project_id }}/ceo-review/"
-               class="nav-link {% if '/ceo-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">CEO Review</a>
+            {% set analysis_active = request.url.path.startswith('/project/') and ('/transcript' in request.url.path or '/charter' in request.url.path or '/health-review' in request.url.path or '/ceo-review' in request.url.path) %}
+            <div class="nav-dropdown" tabindex="-1">
+                <button type="button" class="nav-link nav-dropdown-toggle {% if analysis_active %}active{% endif %}">Analysis <span class="caret">&#x25BE;</span></button>
+                <div class="nav-dropdown-menu">
+                    <a href="/project/{{ selected_project_id }}/transcript/"
+                       class="nav-link {% if '/transcript' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Transcripts</a>
+                    <a href="/project/{{ selected_project_id }}/charter/"
+                       class="nav-link {% if '/charter' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Charter</a>
+                    <a href="/project/{{ selected_project_id }}/health-review/"
+                       class="nav-link {% if '/health-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Health</a>
+                    <a href="/project/{{ selected_project_id }}/ceo-review/"
+                       class="nav-link {% if '/ceo-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">CEO Review</a>
+                </div>
+            </div>
             <a href="/project/{{ selected_project_id }}/team-progress"
                class="nav-link {% if '/team-progress' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Teams</a>
             <button class="nav-link refresh-btn"
@@ -123,6 +130,35 @@
         document.head.appendChild(style);
     })();
     </script>
-    <script src="/static/typeahead.js?v=1"></script>
+    <script src="/static/typeahead.js?v={{ static_versions.get('typeahead.js', '0') }}"></script>
+    <script>
+    /* Page navigation progress bar */
+    (function() {
+        var bar = document.getElementById('page-progress');
+        function startProgress() {
+            bar.classList.remove('done');
+            bar.classList.add('active');
+        }
+        function finishProgress() {
+            bar.classList.remove('active');
+            bar.classList.add('done');
+            setTimeout(function() { bar.classList.remove('done'); }, 300);
+        }
+        /* Regular navigation clicks */
+        document.addEventListener('click', function(e) {
+            var link = e.target.closest('a[href]');
+            if (!link) return;
+            var href = link.getAttribute('href');
+            if (!href || href.startsWith('#') || href.startsWith('javascript:')) return;
+            if (link.hasAttribute('hx-get') || link.hasAttribute('hx-post')) return;
+            if (link.target === '_blank') return;
+            if (href.startsWith('http') && !href.startsWith(location.origin)) return;
+            startProgress();
+        });
+        /* HTMX request lifecycle */
+        document.body.addEventListener('htmx:beforeRequest', startProgress);
+        document.body.addEventListener('htmx:afterRequest', finishProgress);
+    })();
+    </script>
 </body>
 </html>

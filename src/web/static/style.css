@@ -1985,3 +1985,87 @@ button.htmx-request {
     font-size: 0.85rem;
     font-style: italic;
 }
+
+
+/* ═══════════════════════════════════════════════════════════
+   Page Progress Bar
+   ═══════════════════════════════════════════════════════════ */
+.page-progress {
+    position: fixed;
+    top: 0;
+    left: 0;
+    height: 3px;
+    width: 0;
+    background: var(--hai-royal);
+    z-index: 9999;
+    pointer-events: none;
+    opacity: 0;
+    transition: none;
+}
+.page-progress.active {
+    opacity: 1;
+    width: 85%;
+    transition: width 8s cubic-bezier(0.1, 0.5, 0.1, 1);
+}
+.page-progress.done {
+    opacity: 0;
+    width: 100%;
+    transition: width 0.15s ease-out, opacity 0.2s ease-out 0.15s;
+}
+
+
+/* ═══════════════════════════════════════════════════════════
+   Navigation Tab Grouping (Analysis dropdown)
+   ═══════════════════════════════════════════════════════════ */
+.nav-dropdown {
+    position: relative;
+    display: contents;  /* Children render flat in flex on desktop */
+}
+.nav-dropdown-toggle {
+    display: none;       /* Hidden on desktop */
+}
+.nav-dropdown-menu {
+    display: contents;   /* Flat on desktop */
+}
+
+@media (max-width: 1024px) {
+    .nav-dropdown {
+        display: block;
+        position: relative;
+    }
+    .nav-dropdown-toggle {
+        display: inline-flex;
+        align-items: center;
+        gap: 0.25rem;
+    }
+    .nav-dropdown-toggle .caret {
+        font-size: 0.65em;
+        transition: transform 0.15s;
+    }
+    .nav-dropdown-menu {
+        display: none;
+        position: absolute;
+        top: 100%;
+        left: 0;
+        background: var(--bg-surface);
+        border: 1px solid var(--border-default);
+        border-radius: 6px;
+        box-shadow: 0 4px 12px rgba(0,0,0,0.12);
+        padding: 0.25rem 0;
+        min-width: 160px;
+        z-index: 1000;
+    }
+    .nav-dropdown-menu .nav-link {
+        display: block;
+        padding: 0.4rem 0.8rem;
+        white-space: nowrap;
+    }
+    .nav-dropdown:focus-within .nav-dropdown-menu,
+    .nav-dropdown:hover .nav-dropdown-menu {
+        display: block;
+    }
+    .nav-dropdown:focus-within .nav-dropdown-toggle .caret,
+    .nav-dropdown:hover .nav-dropdown-toggle .caret {
+        transform: rotate(180deg);
+    }
+}

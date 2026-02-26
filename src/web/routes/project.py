@@ -7,7 +7,7 @@ import logging
 import re
 from datetime import date, timedelta
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 logger = logging.getLogger(__name__)
@@ -29,7 +29,20 @@ from src.services.spinup import SpinUpService
 from src.services.team_progress import TeamProgressService, TeamVersionReport
 from src.services.team_snapshot import TeamSnapshotService
 from src.services.transcript import TranscriptService
-from src.web.deps import render_project_page, templates
+from src.web.deps import (
+    get_approval_engine,
+    get_dashboard_service,
+    get_dhf_service,
+    get_health_review_service,
+    get_import_service,
+    get_release_service,
+    get_spinup_service,
+    get_team_progress_service,
+    get_team_snapshot_service,
+    get_transcript_service,
+    render_project_page,
+    templates,
+)
 
 router = APIRouter(prefix="/project", tags=["project"])
 
@@ -39,15 +52,23 @@ router = APIRouter(prefix="/project", tags=["project"])
 # ------------------------------------------------------------------
 
 @router.get("/{id}/dashboard", response_class=HTMLResponse)
-async def project_dashboard(request: Request, id: int) -> HTMLResponse:
+async def project_dashboard(
+    request: Request,
+    id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+    dhf_service: DHFService = Depends(get_dhf_service),
+    engine: ApprovalEngine = Depends(get_approval_engine),
+    release_service: ReleaseService = Depends(get_release_service),
+    transcript_service: TranscriptService = Depends(get_transcript_service),
+    team_service: TeamProgressService = Depends(get_team_progress_service),
+    health_svc: HealthReviewService = Depends(get_health_review_service),
+) -> HTMLResponse:
     """Single-project summary: goal, risks, decisions, documents, approvals."""
-    service = DashboardService()
     project = service.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
     # Run independent data fetches concurrently
-    dhf_service = DHFService()
 
     async def _fetch_dhf():
         if not project.dhf_draft_root_id or not project.dhf_released_root_id:
@@ -80,7 +101,6 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
 
     pi_summary = service.summarise_product_ideas(pi_ideas)
 
-    engine = ApprovalEngine()
     all_approvals = engine.list_all(project_id=id)
     # Cap at 100, split into last 10 (visible) + 10-100 (expandable)
     capped = all_approvals[-100:] if len(all_approvals) > 100 else all_approvals
@@ -99,7 +119,6 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
             logger.warning("Failed to compute market release date from %s", summary.goal.due_date)
 
     # Check for active locked release for the Documents card
-    release_service = ReleaseService()
     releases = release_service.list_releases(id)
     active_locked = next((r for r in releases if r.locked), None)
     release_published = 0
@@ -116,15 +135,12 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
             release_published = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
     release_pending = release_total - release_published
 
-    transcript_service = TranscriptService()
     transcript_summary = transcript_service.get_transcript_summary(id)
 
-    team_service = TeamProgressService()
     team_reports = await team_service.get_team_reports(project)
 
     # --- New dashboard context ---
     # Latest health rating (SQLite only, no API call)
-    health_svc = HealthReviewService()
     reviews = health_svc.list_reviews(id)
     latest_health_rating = reviews[0]["health_rating"] if reviews else None
 
@@ -176,9 +192,12 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
 
 
 @router.delete("/{id}", response_class=HTMLResponse)
-async def delete_project(request: Request, id: int) -> HTMLResponse:
+async def delete_project(
+    request: Request,
+    id: int,
+    service: ImportService = Depends(get_import_service),
+) -> HTMLResponse:
     """Remove a project from the local DB (no Jira/Confluence changes)."""
-    service = ImportService()
     service.delete_project(id)
     return HTMLResponse(headers={"HX-Redirect": "/phases/"}, content="", status_code=200)
 
@@ -188,9 +207,12 @@ async def delete_project(request: Request, id: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.post("/{id}/refresh", response_class=HTMLResponse)
-async def refresh_project(request: Request, id: int) -> HTMLResponse:
+async def refresh_project(
+    request: Request,
+    id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
     """Clear cached data for a project so the next load fetches fresh data."""
-    service = DashboardService()
     project = service.get_project_by_id(id)
     if project is not None:
         cache.invalidate(f"summary:{project.jira_goal_key}")
@@ -210,9 +232,12 @@ async def refresh_project(request: Request, id: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.get("/{id}/features", response_class=HTMLResponse)
-async def project_features(request: Request, id: int) -> HTMLResponse:
+async def project_features(
+    request: Request,
+    id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
     """Initiative list with progress (done/total Epics, Tasks)."""
-    service = DashboardService()
     project = service.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -233,9 +258,13 @@ async def project_features(request: Request, id: int) -> HTMLResponse:
 
 
 @router.get("/{id}/features/{key}", response_class=HTMLResponse)
-async def initiative_detail(request: Request, id: int, key: str) -> HTMLResponse:
+async def initiative_detail(
+    request: Request,
+    id: int,
+    key: str,
+    service: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
     """Initiative drilldown — Epics with child Tasks."""
-    service = DashboardService()
     project = service.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -256,10 +285,15 @@ async def initiative_detail(request: Request, id: int, key: str) -> HTMLResponse
 
 @router.get("/{id}/documents", response_class=HTMLResponse)
 async def project_documents(
-    request: Request, id: int, area: str | None = None, release_id: int | None = None,
+    request: Request,
+    id: int,
+    area: str | None = None,
+    release_id: int | None = None,
+    service: DashboardService = Depends(get_dashboard_service),
+    dhf_service: DHFService = Depends(get_dhf_service),
+    release_service: ReleaseService = Depends(get_release_service),
 ) -> HTMLResponse:
     """DHF document status table with optional area filter and release context."""
-    service = DashboardService()
     project = service.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -269,7 +303,6 @@ async def project_documents(
     error: str | None = None
 
     if project.dhf_draft_root_id and project.dhf_released_root_id:
-        dhf_service = DHFService()
         try:
             documents, areas = await dhf_service.get_dhf_table(project)
             if area:
@@ -278,7 +311,6 @@ async def project_documents(
             error = str(exc)
 
     # Release context
-    release_service = ReleaseService()
     releases = release_service.list_releases(id)
     active_release = None
     selected_docs: set[str] = set()
@@ -405,21 +437,27 @@ async def save_dhf_config(
 
 @router.post("/{id}/releases")
 async def create_release(
-    request: Request, id: int, release_name: str = Form(""),
+    request: Request,
+    id: int,
+    release_name: str = Form(""),
+    service: ReleaseService = Depends(get_release_service),
 ) -> RedirectResponse:
     """Create a new named release for a project."""
     name = release_name.strip()
     if not name:
         return RedirectResponse(f"/project/{id}/documents", status_code=303)
-    service = ReleaseService()
     release = service.create_release(id, name)
     return RedirectResponse(f"/project/{id}/documents?release_id={release.id}", status_code=303)
 
 
 @router.delete("/{id}/releases/{release_id}", response_class=HTMLResponse)
-async def delete_release(request: Request, id: int, release_id: int) -> HTMLResponse:
+async def delete_release(
+    request: Request,
+    id: int,
+    release_id: int,
+    service: ReleaseService = Depends(get_release_service),
+) -> HTMLResponse:
     """Delete a release and its document selections."""
-    service = ReleaseService()
     service.delete_release(release_id)
     return HTMLResponse(
         headers={"HX-Redirect": f"/project/{id}/documents"}, content="", status_code=200,
@@ -428,25 +466,31 @@ async def delete_release(request: Request, id: int, release_id: int) -> HTMLResp
 
 @router.post("/{id}/releases/{release_id}/documents")
 async def save_release_documents(
-    request: Request, id: int, release_id: int,
+    request: Request,
+    id: int,
+    release_id: int,
+    service: ReleaseService = Depends(get_release_service),
 ) -> RedirectResponse:
     """Save document selection for a release (checkboxes)."""
     form = await request.form()
     titles = set(form.getlist("doc_titles"))
-    service = ReleaseService()
     service.save_documents(release_id, titles)
     return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
 
 
 @router.post("/{id}/releases/{release_id}/lock")
-async def lock_release(request: Request, id: int, release_id: int) -> RedirectResponse:
+async def lock_release(
+    request: Request,
+    id: int,
+    release_id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    release_service: ReleaseService = Depends(get_release_service),
+    dhf_service: DHFService = Depends(get_dhf_service),
+) -> RedirectResponse:
     """Lock release scope — save document selection from form, then snapshot versions."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    release_service = ReleaseService()
 
     # Save document selection submitted with the lock form
     form = await request.form()
@@ -459,7 +503,6 @@ async def lock_release(request: Request, id: int, release_id: int) -> RedirectRe
     # Build version snapshot from current DHF data
     snapshot: dict[str, str | None] = {}
     if project.dhf_draft_root_id and project.dhf_released_root_id:
-        dhf_service = DHFService()
         try:
             documents, _ = await dhf_service.get_dhf_table(project)
             for doc in documents:
@@ -473,9 +516,13 @@ async def lock_release(request: Request, id: int, release_id: int) -> RedirectRe
 
 
 @router.post("/{id}/releases/{release_id}/unlock")
-async def unlock_release(request: Request, id: int, release_id: int) -> RedirectResponse:
+async def unlock_release(
+    request: Request,
+    id: int,
+    release_id: int,
+    service: ReleaseService = Depends(get_release_service),
+) -> RedirectResponse:
     """Unlock release scope (preserves snapshot)."""
-    service = ReleaseService()
     service.unlock_release(release_id)
     return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
 
@@ -486,18 +533,21 @@ async def unlock_release(request: Request, id: int, release_id: int) -> Redirect
 
 
 @router.get("/{id}/team-progress", response_class=HTMLResponse)
-async def project_team_progress(request: Request, id: int) -> HTMLResponse:
+async def project_team_progress(
+    request: Request,
+    id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+    team_service: TeamProgressService = Depends(get_team_progress_service),
+    snapshot_svc: TeamSnapshotService = Depends(get_team_snapshot_service),
+) -> HTMLResponse:
     """Per-team fix version progress (issue counts + story points)."""
-    service = DashboardService()
     project = service.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
-    team_service = TeamProgressService()
     reports = await team_service.get_team_reports(project)
 
     # Save today's snapshot (idempotent — ensures data even without orchestrator)
-    snapshot_svc = TeamSnapshotService()
     if reports:
         snapshot_svc.save_snapshot(project, reports)
 
@@ -505,7 +555,6 @@ async def project_team_progress(request: Request, id: int) -> HTMLResponse:
     snapshots_json = snapshot_svc.get_snapshots(project.id)
 
     # Fetch project due date for burnup projection line
-    service = DashboardService()
     summary = await service.get_project_summary(project)
     project_due_date = None
     if summary.goal and summary.goal.due_date:
@@ -542,6 +591,7 @@ async def save_team_projects_config(
     request: Request,
     id: int,
     team_projects: str = Form(""),
+    service_dash: DashboardService = Depends(get_dashboard_service),
 ) -> RedirectResponse:
     """Save team project keys for a project."""
     import json
@@ -550,7 +600,6 @@ async def save_team_projects_config(
     # Allows duplicate keys with different versions.
     team_list: list[list[str]] = []
     # We need the project name for default version fallback
-    service_dash = DashboardService()
     project_obj = service_dash.get_project_by_id(id)
     default_version = project_obj.name if project_obj else ""
     for entry in team_projects.split(","):
@@ -569,8 +618,7 @@ async def save_team_projects_config(
         )
         conn.commit()
     # Invalidate any cached team progress for this project
-    service = DashboardService()
-    project = service.get_project_by_id(id)
+    project = service_dash.get_project_by_id(id)
     if project:
         cache.invalidate(f"team_progress:{project.jira_goal_key}")
     return RedirectResponse(f"/project/{id}/team-progress", status_code=303)
@@ -581,14 +629,16 @@ async def save_team_projects_config(
 # ------------------------------------------------------------------
 
 @router.get("/{id}/approvals", response_class=HTMLResponse)
-async def project_approvals(request: Request, id: int) -> HTMLResponse:
+async def project_approvals(
+    request: Request,
+    id: int,
+    service: DashboardService = Depends(get_dashboard_service),
+    engine: ApprovalEngine = Depends(get_approval_engine),
+) -> HTMLResponse:
     """Approval queue filtered to this project."""
-    service = DashboardService()
     project = service.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    engine = ApprovalEngine()
     pending = engine.list_pending(project_id=id)
     all_items = engine.list_all(project_id=id)
     history = [i for i in all_items if i.status != ApprovalStatus.PENDING]
@@ -607,9 +657,13 @@ async def project_approvals(request: Request, id: int) -> HTMLResponse:
 
 
 @router.post("/{id}/approvals/{item_id}/approve", response_class=HTMLResponse)
-async def approve_item(request: Request, id: int, item_id: int) -> HTMLResponse:
+async def approve_item(
+    request: Request,
+    id: int,
+    item_id: int,
+    service: SpinUpService = Depends(get_spinup_service),
+) -> HTMLResponse:
     """Approve and execute a single item. Returns updated row partial."""
-    service = SpinUpService()
     item = await service.execute_approved_item(item_id)
     return templates.TemplateResponse(
         request,
@@ -619,9 +673,13 @@ async def approve_item(request: Request, id: int, item_id: int) -> HTMLResponse:
 
 
 @router.post("/{id}/approvals/{item_id}/reject", response_class=HTMLResponse)
-async def reject_item(request: Request, id: int, item_id: int) -> HTMLResponse:
+async def reject_item(
+    request: Request,
+    id: int,
+    item_id: int,
+    engine: ApprovalEngine = Depends(get_approval_engine),
+) -> HTMLResponse:
     """Reject a single item. Returns updated row partial."""
-    engine = ApprovalEngine()
     item = engine.reject(item_id)
     return templates.TemplateResponse(
         request,
@@ -631,9 +689,13 @@ async def reject_item(request: Request, id: int, item_id: int) -> HTMLResponse:
 
 
 @router.post("/{id}/approvals/{item_id}/retry", response_class=HTMLResponse)
-async def retry_item(request: Request, id: int, item_id: int) -> HTMLResponse:
+async def retry_item(
+    request: Request,
+    id: int,
+    item_id: int,
+    engine: ApprovalEngine = Depends(get_approval_engine),
+) -> HTMLResponse:
     """Reset a failed item to pending so it can be re-approved."""
-    engine = ApprovalEngine()
     try:
         engine.retry(item_id)
     except ValueError:
@@ -647,10 +709,13 @@ async def retry_item(request: Request, id: int, item_id: int) -> HTMLResponse:
 
 
 @router.post("/{id}/approvals/approve-all", response_class=HTMLResponse)
-async def approve_all(request: Request, id: int) -> HTMLResponse:
+async def approve_all(
+    request: Request,
+    id: int,
+    engine: ApprovalEngine = Depends(get_approval_engine),
+    service: SpinUpService = Depends(get_spinup_service),
+) -> HTMLResponse:
     """Approve and execute all pending items for this project."""
-    engine = ApprovalEngine()
-    service = SpinUpService()
     pending = engine.list_pending(project_id=id)
 
     success_count = 0

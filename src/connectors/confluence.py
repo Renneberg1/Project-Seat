@@ -158,6 +158,14 @@ class ConfluenceConnector(BaseConnector):
                 return None
             raise
 
+    # ------------------------------------------------------------------
+    # Health check
+    # ------------------------------------------------------------------
+
+    async def get_current_user(self) -> dict[str, Any]:
+        """Fetch the authenticated user's profile (/user/current)."""
+        return await self.get("/user/current")
+
     async def get_user_display_name(self, account_id: str) -> str:
         """Resolve an Atlassian account ID to a display name (v1 /user)."""
         try:

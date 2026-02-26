@@ -5,14 +5,20 @@ from __future__ import annotations
 import html
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
 
 from src.services.dashboard import DashboardService
 from src.services.health_review import HealthReviewService
-from src.web.deps import collect_qa_pairs, render_project_page, templates
+from src.web.deps import (
+    collect_qa_pairs,
+    get_dashboard_service,
+    get_health_review_service,
+    render_project_page,
+    templates,
+)
 
 router = APIRouter(prefix="/project/{id}/health-review", tags=["health_review"])
 
@@ -22,14 +28,16 @@ router = APIRouter(prefix="/project/{id}/health-review", tags=["health_review"])
 # ------------------------------------------------------------------
 
 @router.get("/", response_class=HTMLResponse)
-async def health_review_page(request: Request, id: int) -> HTMLResponse:
+async def health_review_page(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: HealthReviewService = Depends(get_health_review_service),
+) -> HTMLResponse:
     """Display the health review page with history of past reviews."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = HealthReviewService()
     past_reviews = service.list_reviews(id)
 
     return render_project_page(request, "project_health_review.html", {
@@ -43,14 +51,16 @@ async def health_review_page(request: Request, id: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.post("/ask", response_class=HTMLResponse)
-async def health_review_ask(request: Request, id: int) -> HTMLResponse:
+async def health_review_ask(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: HealthReviewService = Depends(get_health_review_service),
+) -> HTMLResponse:
     """LLM reviews project data and generates clarifying questions."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = HealthReviewService()
     try:
         questions = await service.generate_questions(project)
     except Exception as exc:
@@ -71,17 +81,19 @@ async def health_review_ask(request: Request, id: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.post("/analyze", response_class=HTMLResponse)
-async def health_review_analyze(request: Request, id: int) -> HTMLResponse:
+async def health_review_analyze(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: HealthReviewService = Depends(get_health_review_service),
+) -> HTMLResponse:
     """Receives Q&A answers and produces the structured health review."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
     form = await request.form()
     qa_pairs = collect_qa_pairs(form)
-
-    service = HealthReviewService()
     try:
         review = await service.generate_review(project, qa_pairs)
     except Exception as exc:

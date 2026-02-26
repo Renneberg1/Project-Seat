@@ -43,8 +43,8 @@ def _make_suggestion(**overrides):
 def test_charter_page_returns_200(client, tmp_db):
     project = _make_project()
 
-    with patch("src.web.routes.charter.DashboardService") as MockDash, \
-         patch("src.web.routes.charter.CharterService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.CharterService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -62,8 +62,8 @@ def test_charter_page_returns_200(client, tmp_db):
 def test_charter_page_shows_sections(client, tmp_db):
     project = _make_project()
 
-    with patch("src.web.routes.charter.DashboardService") as MockDash, \
-         patch("src.web.routes.charter.CharterService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.CharterService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -79,7 +79,7 @@ def test_charter_page_shows_sections(client, tmp_db):
 
 
 def test_charter_page_missing_project_404(client, tmp_db):
-    with patch("src.web.routes.charter.DashboardService") as MockDash:
+    with patch("src.web.deps.DashboardService") as MockDash:
         MockDash.return_value.get_project_by_id = lambda x: None
         MockDash.return_value.list_projects = lambda: []
 
@@ -96,8 +96,8 @@ def test_charter_page_missing_project_404(client, tmp_db):
 def test_charter_ask_returns_questions(client, tmp_db):
     project = _make_project()
 
-    with patch("src.web.routes.charter.DashboardService") as MockDash, \
-         patch("src.web.routes.charter.CharterService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.CharterService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -117,7 +117,7 @@ def test_charter_ask_returns_questions(client, tmp_db):
 def test_charter_ask_no_charter_page_400(client, tmp_db):
     project = _make_project(charter_id=None)
 
-    with patch("src.web.routes.charter.DashboardService") as MockDash:
+    with patch("src.web.deps.DashboardService") as MockDash:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
 
@@ -139,8 +139,8 @@ def test_charter_analyze_returns_suggestions(client, tmp_db):
 
     mock_sug = _make_suggestion(proposed_text="2027-01-01", section_name="Date")
 
-    with patch("src.web.routes.charter.DashboardService") as MockDash, \
-         patch("src.web.routes.charter.CharterService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.CharterService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -166,8 +166,8 @@ def test_accept_suggestion_returns_updated_row(client, tmp_db):
         status=CharterSuggestionStatus.QUEUED, approval_item_id=42,
     )
 
-    with patch("src.web.routes.charter.DashboardService") as MockDash, \
-         patch("src.web.routes.charter.CharterService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.CharterService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -183,8 +183,8 @@ def test_reject_suggestion_returns_updated_row(client, tmp_db):
     project = _make_project()
     mock_sug = _make_suggestion(status=CharterSuggestionStatus.REJECTED)
 
-    with patch("src.web.routes.charter.DashboardService") as MockDash, \
-         patch("src.web.routes.charter.CharterService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.CharterService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value

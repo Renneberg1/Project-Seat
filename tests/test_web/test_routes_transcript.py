@@ -48,8 +48,8 @@ def _make_parsed(filename="test.txt"):
 def test_transcript_page_returns_200(client, tmp_db):
     pid = _insert_project(tmp_db)
     project = _make_project(pid)
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         MockTS.return_value.list_transcripts.return_value = []
         result = client.get(f"/project/{pid}/transcript/")
@@ -59,7 +59,7 @@ def test_transcript_page_returns_200(client, tmp_db):
 
 
 def test_transcript_page_404_for_missing_project(client):
-    with patch("src.web.routes.transcript.DashboardService") as MockDS:
+    with patch("src.web.deps.DashboardService") as MockDS:
         MockDS.return_value.get_project_by_id.return_value = None
         result = client.get("/project/999/transcript/")
     assert result.status_code == 404
@@ -75,9 +75,9 @@ def test_upload_file_returns_parsed_preview(client, tmp_db):
     project = _make_project(pid)
     parsed = _make_parsed("test.txt")
 
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptParser") as MockParser, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptParser") as MockParser, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         MockParser.return_value.parse.return_value = parsed
         MockTS.return_value.store_transcript.return_value = 1
@@ -100,9 +100,9 @@ def test_paste_text_returns_parsed_preview(client, tmp_db):
     project = _make_project(pid)
     parsed = _make_parsed("pasted-input.txt")
 
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptParser") as MockParser, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptParser") as MockParser, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         MockParser.return_value.parse.return_value = parsed
         MockTS.return_value.store_transcript.return_value = 1
@@ -118,7 +118,7 @@ def test_paste_text_returns_parsed_preview(client, tmp_db):
 def test_paste_empty_text_returns_400(client, tmp_db):
     pid = _insert_project(tmp_db)
     project = _make_project(pid)
-    with patch("src.web.routes.transcript.DashboardService") as MockDS:
+    with patch("src.web.deps.DashboardService") as MockDS:
         MockDS.return_value.get_project_by_id.return_value = project
         result = client.post(
             f"/project/{pid}/transcript/paste",
@@ -135,9 +135,9 @@ def test_paste_calls_parser_with_txt_extension(client, tmp_db):
     parsed = _make_parsed("pasted-input.txt")
     text = "Some meeting notes."
 
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptParser") as MockParser, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptParser") as MockParser, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         MockParser.return_value.parse.return_value = parsed
         MockTS.return_value.store_transcript.return_value = 1
@@ -151,7 +151,7 @@ def test_paste_calls_parser_with_txt_extension(client, tmp_db):
 
 
 def test_paste_404_for_missing_project(client):
-    with patch("src.web.routes.transcript.DashboardService") as MockDS:
+    with patch("src.web.deps.DashboardService") as MockDS:
         MockDS.return_value.get_project_by_id.return_value = None
         result = client.post(
             "/project/999/transcript/paste",
@@ -201,8 +201,8 @@ def test_start_refinement_returns_panel(client, tmp_db):
         },
     }
 
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         mock_service = MockTS.return_value
         mock_service.start_risk_refinement = AsyncMock(return_value=refine_result)
@@ -216,7 +216,7 @@ def test_start_refinement_returns_panel(client, tmp_db):
 
 
 def test_start_refinement_404_missing_project(client):
-    with patch("src.web.routes.transcript.DashboardService") as MockDS:
+    with patch("src.web.deps.DashboardService") as MockDS:
         MockDS.return_value.get_project_by_id.return_value = None
         result = client.post("/project/999/transcript/1/suggestions/1/refine")
     assert result.status_code == 404
@@ -238,8 +238,8 @@ def test_refine_answer_returns_updated_panel(client, tmp_db):
         },
     }
 
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         mock_service = MockTS.return_value
         mock_service.continue_risk_refinement = AsyncMock(return_value=satisfied_result)
@@ -265,8 +265,8 @@ def test_apply_refinement_returns_suggestion_row(client, tmp_db):
     project = _make_project(pid)
     sug = _make_suggestion()
 
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         mock_service = MockTS.return_value
         mock_service.apply_refinement.return_value = sug
@@ -293,8 +293,8 @@ def test_apply_refinement_404_when_suggestion_missing(client, tmp_db):
     pid = _insert_project(tmp_db)
     project = _make_project(pid)
 
-    with patch("src.web.routes.transcript.DashboardService") as MockDS, \
-         patch("src.web.routes.transcript.TranscriptService") as MockTS:
+    with patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptService") as MockTS:
         MockDS.return_value.get_project_by_id.return_value = project
         MockTS.return_value.apply_refinement.return_value = None
         result = client.post(

@@ -2,12 +2,12 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse, RedirectResponse
 
 from src.connectors.base import ConnectorError
 from src.services.import_project import ImportService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import get_import_service, get_nav_context, templates
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -26,10 +26,10 @@ async def import_form(request: Request) -> HTMLResponse:
 async def import_fetch(
     request: Request,
     goal_key: str = Form(...),
+    service: ImportService = Depends(get_import_service),
 ) -> HTMLResponse:
     """HTMX: fetch Goal from Jira and return a confirmation partial."""
     goal_key = goal_key.strip().upper()
-    service = ImportService()
     try:
         preview = await service.fetch_preview(goal_key)
     except ConnectorError as exc:
@@ -56,9 +56,9 @@ async def import_save(
     team_projects: str = Form(""),
     jira_plan_url: str = Form(""),
     ceo_review_id: str = Form(""),
+    service: ImportService = Depends(get_import_service),
 ) -> RedirectResponse:
     """Save the imported project to the local DB and redirect to its dashboard."""
-    service = ImportService()
     # Parse KEY:VERSION pairs (e.g. "AIM:HOP Drop 2, CTCV:HOP Drop 2")
     # Allows duplicate keys with different versions.
     team_list: list[list[str]] = []

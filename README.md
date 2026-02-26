@@ -21,6 +21,11 @@ A locally-run project management cockpit for medical device software engineering
 - **CEO Review Output** — Generate fortnightly CEO-level status updates with a last-2-weeks lens. Deterministic data tables (new risks/decisions, team progress, DHF docs) combined with LLM-generated commentary, published to the program's CEO Review Confluence page via the approval queue.
 - **Iterative Risk/Decision Refinement** — Refine LLM-extracted risks and decisions through a multi-round Q&A loop. The LLM evaluates each draft against ISO 14971 quality criteria, asks targeted questions to fill gaps, and iterates until satisfied (max 5 rounds). Users can bail out early with "Apply Current Draft" or discard at any time.
 - **Typeahead Resource Linking** — Search-as-you-type for Confluence pages and Jira issues/projects/versions across all ID input fields. Replaces opaque numeric IDs with human-readable titles, with keyboard navigation, HTMX-powered server search with debounce, and TTL-cached results.
+- **API Health Check** — `GET /api/health` returns JSON connectivity status for DB, Jira, and Confluence (200 if all pass, 503 if degraded)
+- **Offline CDN Assets** — HTMX and Chart.js bundled locally for air-gapped/offline resilience; automatic cache-busting via content-hash query strings
+- **Page Progress Bar** — Animated loading indicator at top of page for both regular navigation and HTMX requests
+- **Navigation Tab Grouping** — Analysis tabs (Transcripts, Charter, Health, CEO Review) collapse into a dropdown on narrow screens (≤1024px), flat on desktop
+- **FastAPI Dependency Injection** — All service/connector instantiation in routes uses `Depends()` factory functions from `deps.py`
 
 ### Planned / Upcoming
 

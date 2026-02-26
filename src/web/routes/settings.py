@@ -5,14 +5,14 @@ from __future__ import annotations
 import json
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from src.cache import cache
 from src.config import settings as app_settings
 from src.database import get_db
 from src.services.dashboard import DashboardService
-from src.web.deps import render_project_page, templates
+from src.web.deps import get_dashboard_service, render_project_page, templates
 
 logger = logging.getLogger(__name__)
 
@@ -109,9 +109,12 @@ async def _resolve_display_values(project) -> _DisplayValues:
 
 
 @router.get("/", response_class=HTMLResponse)
-async def settings_page(request: Request, id: int) -> HTMLResponse:
+async def settings_page(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
     """Display the project settings form."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -125,9 +128,12 @@ async def settings_page(request: Request, id: int) -> HTMLResponse:
 
 
 @router.post("/", response_class=HTMLResponse)
-async def settings_save(request: Request, id: int) -> HTMLResponse:
+async def settings_save(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
     """Save updated project settings."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)

@@ -2,15 +2,50 @@
 
 from __future__ import annotations
 
+import hashlib
 from pathlib import Path
 
 from fastapi import Request
 from fastapi.templating import Jinja2Templates
 
+from src.connectors.confluence import ConfluenceConnector
+from src.connectors.jira import JiraConnector
+from src.engine.approval import ApprovalEngine
+from src.services.ceo_review import CeoReviewService
+from src.services.charter import CharterService
 from src.services.dashboard import DashboardService
+from src.services.dhf import DHFService
+from src.services.health_review import HealthReviewService
+from src.services.import_project import ImportService
+from src.services.release import ReleaseService
+from src.services.spinup import SpinUpService
+from src.services.team_progress import TeamProgressService
+from src.services.team_snapshot import TeamSnapshotService
+from src.services.transcript import TranscriptParser, TranscriptService
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
+_STATIC_DIR = Path(__file__).resolve().parent / "static"
+
+# ---------------------------------------------------------------------------
+# Static file cache-busting — compute MD5[:8] of each file at import time
+# ---------------------------------------------------------------------------
+
+
+def _compute_static_versions() -> dict[str, str]:
+    versions: dict[str, str] = {}
+    if _STATIC_DIR.is_dir():
+        for p in _STATIC_DIR.rglob("*"):
+            if p.is_file():
+                digest = hashlib.md5(p.read_bytes()).hexdigest()[:8]  # noqa: S324
+                rel = p.relative_to(_STATIC_DIR).as_posix()
+                versions[rel] = digest
+    return versions
+
+
+static_versions: dict[str, str] = _compute_static_versions()
+
 templates = Jinja2Templates(directory=str(_TEMPLATES_DIR))
+templates.env.globals["static_versions"] = static_versions
 
 
 def get_nav_context(request: Request) -> dict:
@@ -73,3 +108,68 @@ def collect_qa_pairs(form: dict) -> list[dict[str, str]]:
         pairs.append({"question": str(q), "answer": str(form.get(f"answer_{i}") or "")})
         i += 1
     return pairs
+
+
+# ---------------------------------------------------------------------------
+# FastAPI dependency injection factories
+# ---------------------------------------------------------------------------
+
+
+def get_dashboard_service() -> DashboardService:
+    return DashboardService()
+
+
+def get_approval_engine() -> ApprovalEngine:
+    return ApprovalEngine()
+
+
+def get_spinup_service() -> SpinUpService:
+    return SpinUpService()
+
+
+def get_import_service() -> ImportService:
+    return ImportService()
+
+
+def get_dhf_service() -> DHFService:
+    return DHFService()
+
+
+def get_release_service() -> ReleaseService:
+    return ReleaseService()
+
+
+def get_transcript_service() -> TranscriptService:
+    return TranscriptService()
+
+
+def get_transcript_parser() -> TranscriptParser:
+    return TranscriptParser()
+
+
+def get_charter_service() -> CharterService:
+    return CharterService()
+
+
+def get_health_review_service() -> HealthReviewService:
+    return HealthReviewService()
+
+
+def get_ceo_review_service() -> CeoReviewService:
+    return CeoReviewService()
+
+
+def get_team_progress_service() -> TeamProgressService:
+    return TeamProgressService()
+
+
+def get_team_snapshot_service() -> TeamSnapshotService:
+    return TeamSnapshotService()
+
+
+def get_jira_connector() -> JiraConnector:
+    return JiraConnector()
+
+
+def get_confluence_connector() -> ConfluenceConnector:
+    return ConfluenceConnector()

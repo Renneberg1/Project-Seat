@@ -56,7 +56,7 @@ def test_import_fetch_returns_confirm_partial(client):
         detected_teams={"AIM": "HOP Drop 2", "CTCV": "HOP Drop 2"},
     )
 
-    with patch("src.web.routes.import_project.ImportService") as MockSvc:
+    with patch("src.web.deps.ImportService") as MockSvc:
         MockSvc.return_value.fetch_preview = AsyncMock(return_value=preview)
 
         result = client.post("/import/fetch", data={"goal_key": "PROG-256"})
@@ -71,7 +71,7 @@ def test_import_fetch_returns_confirm_partial(client):
 
 
 def test_import_fetch_handles_connector_error(client):
-    with patch("src.web.routes.import_project.ImportService") as MockSvc:
+    with patch("src.web.deps.ImportService") as MockSvc:
         MockSvc.return_value.fetch_preview = AsyncMock(side_effect=ConnectorError(404, "Not found"))
 
         result = client.post("/import/fetch", data={"goal_key": "PROG-999"})
@@ -83,7 +83,7 @@ def test_import_fetch_handles_connector_error(client):
 def test_import_fetch_uppercases_goal_key(client):
     preview = ImportPreview(goal_key="PROG-256", goal_summary="Test")
 
-    with patch("src.web.routes.import_project.ImportService") as MockSvc:
+    with patch("src.web.deps.ImportService") as MockSvc:
         instance = MockSvc.return_value
         instance.fetch_preview = AsyncMock(return_value=preview)
 
@@ -98,7 +98,7 @@ def test_import_fetch_uppercases_goal_key(client):
 
 
 def test_import_save_redirects_to_dashboard(client, tmp_db):
-    with patch("src.web.routes.import_project.ImportService") as MockSvc:
+    with patch("src.web.deps.ImportService") as MockSvc:
         MockSvc.return_value.save_project.return_value = 42
 
         result = client.post(
@@ -129,7 +129,7 @@ def test_import_save_redirects_to_dashboard(client, tmp_db):
 
 
 def test_import_save_duplicate_shows_error(client, tmp_db):
-    with patch("src.web.routes.import_project.ImportService") as MockSvc:
+    with patch("src.web.deps.ImportService") as MockSvc:
         MockSvc.return_value.save_project.side_effect = ValueError("already exists (id=1)")
 
         result = client.post(
@@ -142,7 +142,7 @@ def test_import_save_duplicate_shows_error(client, tmp_db):
 
 
 def test_import_save_empty_page_ids_saved_as_none(client, tmp_db):
-    with patch("src.web.routes.import_project.ImportService") as MockSvc:
+    with patch("src.web.deps.ImportService") as MockSvc:
         instance = MockSvc.return_value
         instance.save_project.return_value = 1
 

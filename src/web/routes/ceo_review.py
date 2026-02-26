@@ -5,7 +5,7 @@ from __future__ import annotations
 import html
 import logging
 
-from fastapi import APIRouter, Request
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 logger = logging.getLogger(__name__)
@@ -14,7 +14,14 @@ from src.connectors.jira import JiraConnector
 from src.engine.mentions import resolve_confluence_mentions
 from src.services.ceo_review import CeoReviewService
 from src.services.dashboard import DashboardService
-from src.web.deps import collect_qa_pairs, render_project_page, templates
+from src.web.deps import (
+    collect_qa_pairs,
+    get_ceo_review_service,
+    get_dashboard_service,
+    get_jira_connector,
+    render_project_page,
+    templates,
+)
 
 router = APIRouter(prefix="/project/{id}/ceo-review", tags=["ceo_review"])
 
@@ -24,14 +31,16 @@ router = APIRouter(prefix="/project/{id}/ceo-review", tags=["ceo_review"])
 # ------------------------------------------------------------------
 
 @router.get("/", response_class=HTMLResponse)
-async def ceo_review_page(request: Request, id: int) -> HTMLResponse:
+async def ceo_review_page(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CeoReviewService = Depends(get_ceo_review_service),
+) -> HTMLResponse:
     """Display the CEO Review page with PM notes form and past reviews."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = CeoReviewService()
 
     # Auto-discover CEO Review page if not yet set
     if not project.confluence_ceo_review_id and project.confluence_charter_id:
@@ -63,17 +72,19 @@ async def ceo_review_page(request: Request, id: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.post("/ask", response_class=HTMLResponse)
-async def ceo_review_ask(request: Request, id: int) -> HTMLResponse:
+async def ceo_review_ask(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CeoReviewService = Depends(get_ceo_review_service),
+) -> HTMLResponse:
     """Gather context, compute metrics, ask LLM for clarifying questions."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
     form = await request.form()
     pm_notes = str(form.get("pm_notes", ""))
-
-    service = CeoReviewService()
     try:
         questions, metrics = await service.generate_questions(project, pm_notes)
     except Exception as exc:
@@ -95,9 +106,14 @@ async def ceo_review_ask(request: Request, id: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.post("/analyze", response_class=HTMLResponse)
-async def ceo_review_analyze(request: Request, id: int) -> HTMLResponse:
+async def ceo_review_analyze(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CeoReviewService = Depends(get_ceo_review_service),
+    jira: JiraConnector = Depends(get_jira_connector),
+) -> HTMLResponse:
     """Receives Q&A answers + PM notes, produces the CEO review."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -105,8 +121,6 @@ async def ceo_review_analyze(request: Request, id: int) -> HTMLResponse:
     form = await request.form()
     pm_notes = str(form.get("pm_notes", ""))
     qa_pairs = collect_qa_pairs(form)
-
-    service = CeoReviewService()
     try:
         review = await service.generate_review(project, pm_notes, qa_pairs)
     except Exception as exc:
@@ -118,7 +132,6 @@ async def ceo_review_analyze(request: Request, id: int) -> HTMLResponse:
 
     # Render Confluence XHTML and resolve @mentions
     xhtml = service.render_confluence_xhtml(review)
-    jira = JiraConnector()
     try:
         xhtml = await resolve_confluence_mentions(xhtml, jira)
     finally:
@@ -138,14 +151,17 @@ async def ceo_review_analyze(request: Request, id: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.post("/{rid}/accept", response_class=HTMLResponse)
-async def ceo_review_accept(request: Request, id: int, rid: int) -> HTMLResponse:
+async def ceo_review_accept(
+    request: Request,
+    id: int,
+    rid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CeoReviewService = Depends(get_ceo_review_service),
+) -> HTMLResponse:
     """Accept and queue the review for Confluence publish."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = CeoReviewService()
     try:
         result = service.accept_review(rid, project)
     except ValueError as exc:
@@ -166,9 +182,13 @@ async def ceo_review_accept(request: Request, id: int, rid: int) -> HTMLResponse
 
 
 @router.post("/{rid}/reject", response_class=HTMLResponse)
-async def ceo_review_reject(request: Request, id: int, rid: int) -> HTMLResponse:
+async def ceo_review_reject(
+    request: Request,
+    id: int,
+    rid: int,
+    service: CeoReviewService = Depends(get_ceo_review_service),
+) -> HTMLResponse:
     """Reject the CEO review."""
-    service = CeoReviewService()
     service.reject_review(rid)
     return HTMLResponse(
         '<div class="info-banner">Review rejected.</div>'

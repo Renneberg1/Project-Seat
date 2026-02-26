@@ -4,20 +4,22 @@ from __future__ import annotations
 
 from datetime import date
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
 from src.models.dashboard import PIPELINE_PHASES
 from src.services.dashboard import DashboardService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import get_dashboard_service, get_nav_context, templates
 
 router = APIRouter(tags=["phases"])
 
 
 @router.get("/phases/", response_class=HTMLResponse)
-async def phases(request: Request) -> HTMLResponse:
+async def phases(
+    request: Request,
+    service: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
     """Render the pipeline view with live Jira data."""
-    service = DashboardService()
     summaries = await service.get_all_summaries()
 
     # Group summaries by phase
@@ -48,9 +50,9 @@ async def update_phase(
     request: Request,
     project_id: int,
     phase: str = Form(...),
+    service: DashboardService = Depends(get_dashboard_service),
 ) -> HTMLResponse:
     """Update a project's pipeline phase. Returns refreshed project card partial."""
-    service = DashboardService()
     service.update_phase(project_id, phase)
 
     project = service.get_project_by_id(project_id)

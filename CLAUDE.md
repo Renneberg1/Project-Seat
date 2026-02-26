@@ -115,6 +115,8 @@ project-seat/
 │   │   │   ├── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
 │   │   │   ├── health_review.py    # Health review page, LLM Q&A, review output
 │   │   │   ├── ceo_review.py      # CEO review page, LLM Q&A, preview, accept/reject
+│   │   │   ├── settings.py        # Project settings page
+│   │   │   ├── health.py          # API health check endpoint (/api/health)
 │   │   │   └── typeahead.py       # Typeahead search endpoints for Atlassian resources
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
@@ -153,9 +155,12 @@ project-seat/
 │   │   │       ├── risk_refine_panel.html      # Risk/decision refinement Q&A panel
 │   │   │       ├── typeahead_input.html       # Reusable typeahead input macro
 │   │   │       └── typeahead_results.html     # Typeahead search results partial
-│   │   └── static/              # CSS + JS (CDN: HTMX, Chart.js)
+│   │   └── static/              # CSS + JS + bundled vendor libs
 │   │       ├── style.css
-│   │       └── typeahead.js     # Typeahead keyboard nav and selection logic
+│   │       ├── typeahead.js     # Typeahead keyboard nav and selection logic
+│   │       └── vendor/
+│   │           ├── htmx.min.js      # HTMX 2.0.4 (bundled for offline)
+│   │           └── chart.umd.min.js # Chart.js 4.x UMD (bundled for offline)
 │   └── models/
 │       ├── __init__.py
 │       ├── project.py           # Project data models
@@ -183,7 +188,11 @@ project-seat/
     │   ├── test_charter_agent.py    # CharterAgent questions + edits tests
     │   ├── test_health_review_agent.py  # HealthReviewAgent questions + review tests
     │   ├── test_risk_refine_agent.py   # RiskRefineAgent refinement loop tests
-    │   └── test_orchestrator.py
+    │   ├── test_orchestrator.py
+    │   └── test_providers/
+    │       ├── __init__.py
+    │       ├── test_gemini.py       # Gemini provider unit tests
+    │       └── test_ollama.py       # Ollama provider unit tests
     ├── test_models/
     │   ├── test_project_models.py
     │   ├── test_approval_models.py
@@ -212,7 +221,8 @@ project-seat/
         ├── test_routes_charter.py   # Charter route contract tests
         ├── test_routes_health_review.py  # Health review route tests
         ├── test_routes_team_progress.py  # Team progress route tests
-        └── test_routes_typeahead.py     # Typeahead search route tests
+        ├── test_routes_typeahead.py     # Typeahead search route tests
+        └── test_routes_health.py       # API health check route tests
 ```
 
 ## How to Run
@@ -272,6 +282,11 @@ pytest
 - Dashboard layout uses CSS Grid with `.dash-*` class prefix: hero bar, 4-column metric cards, full-width team breakdown, 3-column activity/links section. Responsive at 768px (2-col) and 480px (1-col).
 - **Typeahead inputs** use the `typeahead_input` Jinja2 macro from `partials/typeahead_input.html`. Import with `{% from "partials/typeahead_input.html" import typeahead_input %}` and call with `name`, `label`, `value`, `endpoint`, `placeholder`, `display_value`, and optional `params` dict. The macro generates a visible search input (HTMX-powered), a hidden input for form submission, and a results dropdown. JS logic is in `static/typeahead.js`. Endpoints are under `/api/typeahead/` (confluence-pages, jira-issues, jira-projects, jira-versions).
 - **Dark mode** uses `data-theme` attribute on `<html>` (`"light"` or `"dark"`). All colors are CSS custom properties defined in `:root` (light) and `[data-theme="dark"]` (dark) blocks in `style.css`. Never use hardcoded color values — always reference a `var(--*)` token. The toggle button is in `base.html` with localStorage persistence and OS preference detection via `prefers-color-scheme`. Chart.js charts read colors via `getThemeColor('--var-name')` and rebuild on the `theme-changed` custom event. Utility classes: `.text-secondary`, `.text-tertiary`, `.text-muted`.
+- **Static asset cache-busting** uses MD5 content hashes computed at import time in `deps.py`. The `static_versions` dict is a Jinja2 global — use `?v={{ static_versions.get('filename', '0') }}` in templates. New static files are automatically picked up via `rglob`.
+- **Offline CDN assets** — HTMX and Chart.js are bundled in `static/vendor/` and served locally. Google Fonts remains on CDN (cosmetic, has system font fallback).
+- **Page progress bar** — `<div id="page-progress">` in `base.html` with inline JS: animates on `<a>` clicks (non-HTMX, non-external) and on `htmx:beforeRequest`/`htmx:afterRequest` events. CSS in `style.css` (`.page-progress`, `.active`, `.done`).
+- **Navigation tab grouping** — Analysis tabs (Transcripts, Charter, Health, CEO Review) are wrapped in `.nav-dropdown`. On desktop (`>1024px`), `.nav-dropdown-menu` uses `display: contents` so children render flat in the flex row. On `≤1024px`, it becomes a positioned dropdown via `:focus-within`/`:hover`. No JS needed.
+- **Dependency injection** — All service/connector instantiation in routes uses `Depends()` with factory functions from `src/web/deps.py`. Never instantiate services directly in route functions. When adding a new service, add a factory in `deps.py` and use `Depends(get_new_service)` in the route signature.
 
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM

@@ -5,25 +5,33 @@ from __future__ import annotations
 import html
 import json
 
-from fastapi import APIRouter, Form, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 
 from src.services.dashboard import DashboardService
 from src.services.transcript import TranscriptParser, TranscriptService
-from src.web.deps import render_project_page, templates
+from src.web.deps import (
+    get_dashboard_service,
+    get_transcript_parser,
+    get_transcript_service,
+    render_project_page,
+    templates,
+)
 
 router = APIRouter(prefix="/project/{id}/transcript", tags=["transcript"])
 
 
 @router.get("/", response_class=HTMLResponse)
-async def transcript_page(request: Request, id: int) -> HTMLResponse:
+async def transcript_page(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Upload form + past transcripts list."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = TranscriptService()
     transcripts = service.list_transcripts(id)
 
     return render_project_page(request, "transcript.html", {
@@ -37,17 +45,17 @@ async def upload_transcript(
     request: Request,
     id: int,
     file: UploadFile = File(...),
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    parser: TranscriptParser = Depends(get_transcript_parser),
+    service: TranscriptService = Depends(get_transcript_service),
 ) -> HTMLResponse:
     """Parse uploaded file, store, return parsed preview partial."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
     content = await file.read()
     filename = file.filename or "transcript.txt"
-
-    parser = TranscriptParser()
     try:
         parsed = parser.parse(filename, content)
     except (ValueError, ImportError) as exc:
@@ -62,7 +70,6 @@ async def upload_transcript(
             status_code=400,
         )
 
-    service = TranscriptService()
     transcript_id = service.store_transcript(id, parsed)
 
     return templates.TemplateResponse(request, "partials/transcript_parsed.html", {
@@ -77,9 +84,11 @@ async def paste_transcript(
     request: Request,
     id: int,
     transcript_text: str = Form(...),
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    parser: TranscriptParser = Depends(get_transcript_parser),
+    service: TranscriptService = Depends(get_transcript_service),
 ) -> HTMLResponse:
     """Parse pasted text, store, return parsed preview partial."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -90,8 +99,6 @@ async def paste_transcript(
             '<div class="error-banner">Please enter some text.</div>',
             status_code=400,
         )
-
-    parser = TranscriptParser()
     parsed = parser.parse("pasted-input.txt", text.encode("utf-8"))
 
     if not parsed.segments:
@@ -100,7 +107,6 @@ async def paste_transcript(
             status_code=400,
         )
 
-    service = TranscriptService()
     transcript_id = service.store_transcript(id, parsed)
 
     return templates.TemplateResponse(request, "partials/transcript_parsed.html", {
@@ -111,9 +117,13 @@ async def paste_transcript(
 
 
 @router.delete("/{tid}", response_class=HTMLResponse)
-async def delete_transcript(request: Request, id: int, tid: int) -> HTMLResponse:
+async def delete_transcript(
+    request: Request,
+    id: int,
+    tid: int,
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Delete a transcript and redirect back."""
-    service = TranscriptService()
     service.delete_transcript(tid)
     return HTMLResponse(
         headers={"HX-Redirect": f"/project/{id}/transcript/"},
@@ -127,14 +137,17 @@ async def delete_transcript(request: Request, id: int, tid: int) -> HTMLResponse
 # ------------------------------------------------------------------
 
 @router.post("/{tid}/analyze", response_class=HTMLResponse)
-async def analyze_transcript(request: Request, id: int, tid: int) -> HTMLResponse:
+async def analyze_transcript(
+    request: Request,
+    id: int,
+    tid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Run LLM analysis on a transcript, return suggestions partial."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = TranscriptService()
     try:
         suggestions = await service.analyze_transcript(tid, project)
     except Exception as exc:
@@ -159,14 +172,17 @@ async def analyze_transcript(request: Request, id: int, tid: int) -> HTMLRespons
 
 
 @router.get("/{tid}/suggestions", response_class=HTMLResponse)
-async def view_suggestions(request: Request, id: int, tid: int) -> HTMLResponse:
+async def view_suggestions(
+    request: Request,
+    id: int,
+    tid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Full-page view of suggestions for a transcript."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = TranscriptService()
     record = service.get_transcript(tid)
     if record is None:
         return HTMLResponse("Transcript not found", status_code=404)
@@ -187,14 +203,18 @@ async def view_suggestions(request: Request, id: int, tid: int) -> HTMLResponse:
 # ------------------------------------------------------------------
 
 @router.post("/{tid}/suggestions/{sid}/accept", response_class=HTMLResponse)
-async def accept_suggestion(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+async def accept_suggestion(
+    request: Request,
+    id: int,
+    tid: int,
+    sid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Accept a suggestion — queue it for approval."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = TranscriptService()
     try:
         sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
@@ -213,14 +233,19 @@ async def accept_suggestion(request: Request, id: int, tid: int, sid: int) -> HT
 
 
 @router.post("/{tid}/suggestions/{sid}/reject", response_class=HTMLResponse)
-async def reject_suggestion(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+async def reject_suggestion(
+    request: Request,
+    id: int,
+    tid: int,
+    sid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Reject a suggestion."""
-    service = TranscriptService()
     sug = service.reject_suggestion(sid)
     if sug is None:
         return HTMLResponse("Suggestion not found", status_code=404)
 
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
 
     return templates.TemplateResponse(
@@ -231,14 +256,17 @@ async def reject_suggestion(request: Request, id: int, tid: int, sid: int) -> HT
 
 
 @router.post("/{tid}/suggestions/accept-all", response_class=HTMLResponse)
-async def accept_all_suggestions(request: Request, id: int, tid: int) -> HTMLResponse:
+async def accept_all_suggestions(
+    request: Request,
+    id: int,
+    tid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Accept all pending suggestions for a transcript."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = TranscriptService()
     await service.accept_all_suggestions(tid, project)
 
     suggestions = service.list_suggestions(tid)
@@ -261,14 +289,18 @@ async def accept_all_suggestions(request: Request, id: int, tid: int) -> HTMLRes
 # ------------------------------------------------------------------
 
 @router.post("/{tid}/suggestions/{sid}/refine", response_class=HTMLResponse)
-async def start_refinement(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+async def start_refinement(
+    request: Request,
+    id: int,
+    tid: int,
+    sid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Start iterative refinement for a risk/decision suggestion."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = TranscriptService()
     try:
         result = await service.start_risk_refinement(sid, project)
     except ValueError as exc:
@@ -301,9 +333,15 @@ async def start_refinement(request: Request, id: int, tid: int, sid: int) -> HTM
 
 
 @router.post("/{tid}/suggestions/{sid}/refine/answer", response_class=HTMLResponse)
-async def refine_answer(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+async def refine_answer(
+    request: Request,
+    id: int,
+    tid: int,
+    sid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Submit answers to refinement questions and continue the loop."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -329,7 +367,6 @@ async def refine_answer(request: Request, id: int, tid: int, sid: int) -> HTMLRe
 
     next_round = round_number + 1
 
-    service = TranscriptService()
     try:
         result = await service.continue_risk_refinement(
             suggestion_id=sid,
@@ -363,17 +400,21 @@ async def refine_answer(request: Request, id: int, tid: int, sid: int) -> HTMLRe
 
 
 @router.post("/{tid}/suggestions/{sid}/refine/apply", response_class=HTMLResponse)
-async def apply_refinement(request: Request, id: int, tid: int, sid: int) -> HTMLResponse:
+async def apply_refinement(
+    request: Request,
+    id: int,
+    tid: int,
+    sid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: TranscriptService = Depends(get_transcript_service),
+) -> HTMLResponse:
     """Apply the refined draft to the suggestion."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
     form = await request.form()
     refined_risk = json.loads(form.get("refined_risk", "{}"))
-
-    service = TranscriptService()
     sug = service.apply_refinement(sid, refined_risk)
     if sug is None:
         return HTMLResponse("Suggestion not found", status_code=404)

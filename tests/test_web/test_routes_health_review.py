@@ -28,8 +28,8 @@ def _make_project():
 def test_health_review_page_returns_200(client, tmp_db):
     project = _make_project()
 
-    with patch("src.web.routes.health_review.DashboardService") as MockDash, \
-         patch("src.web.routes.health_review.HealthReviewService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.HealthReviewService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -54,8 +54,8 @@ def test_health_review_page_shows_past_reviews(client, tmp_db):
         "created_at": "2026-02-01 10:00:00",
     }
 
-    with patch("src.web.routes.health_review.DashboardService") as MockDash, \
-         patch("src.web.routes.health_review.HealthReviewService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.HealthReviewService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -68,7 +68,7 @@ def test_health_review_page_shows_past_reviews(client, tmp_db):
 
 
 def test_health_review_page_missing_project_404(client, tmp_db):
-    with patch("src.web.routes.health_review.DashboardService") as MockDash:
+    with patch("src.web.deps.DashboardService") as MockDash:
         MockDash.return_value.get_project_by_id = lambda x: None
         MockDash.return_value.list_projects = lambda: []
 
@@ -85,8 +85,8 @@ def test_health_review_page_missing_project_404(client, tmp_db):
 def test_health_review_ask_returns_questions(client, tmp_db):
     project = _make_project()
 
-    with patch("src.web.routes.health_review.DashboardService") as MockDash, \
-         patch("src.web.routes.health_review.HealthReviewService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.HealthReviewService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -103,8 +103,8 @@ def test_health_review_ask_returns_questions(client, tmp_db):
 def test_health_review_ask_no_questions(client, tmp_db):
     project = _make_project()
 
-    with patch("src.web.routes.health_review.DashboardService") as MockDash, \
-         patch("src.web.routes.health_review.HealthReviewService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.HealthReviewService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value
@@ -135,8 +135,8 @@ def test_health_review_analyze_returns_review(client, tmp_db):
         "suggested_next_actions": ["Conduct risk review"],
     }
 
-    with patch("src.web.routes.health_review.DashboardService") as MockDash, \
-         patch("src.web.routes.health_review.HealthReviewService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.HealthReviewService") as MockSvc:
         MockDash.return_value.get_project_by_id = lambda x: project
         MockDash.return_value.list_projects = lambda: [project]
         instance = MockSvc.return_value

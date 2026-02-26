@@ -2,13 +2,13 @@
 
 from __future__ import annotations
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
 from src.config import settings as app_settings
 from src.models.project import SpinUpRequest
 from src.services.spinup import SpinUpService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import get_nav_context, get_spinup_service, templates
 
 router = APIRouter(prefix="/spinup", tags=["spinup"])
 
@@ -34,6 +34,7 @@ async def spinup_submit(
     goal_summary: str = Form(""),
     pi_version: str = Form(""),
     jira_plan_url: str = Form(""),
+    service: SpinUpService = Depends(get_spinup_service),
 ) -> HTMLResponse:
     """Parse the form, queue spin-up actions, and show result page."""
     # Parse comma-separated values
@@ -52,7 +53,6 @@ async def spinup_submit(
         jira_plan_url=jira_plan_url.strip(),
     )
 
-    service = SpinUpService()
     item_ids = await service.prepare_spinup(req)
 
     return templates.TemplateResponse(

@@ -4,12 +4,18 @@ from __future__ import annotations
 
 import html
 
-from fastapi import APIRouter, Form, Request
+from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
 from src.services.charter import CharterService
 from src.services.dashboard import DashboardService
-from src.web.deps import collect_qa_pairs, render_project_page, templates
+from src.web.deps import (
+    collect_qa_pairs,
+    get_charter_service,
+    get_dashboard_service,
+    render_project_page,
+    templates,
+)
 
 router = APIRouter(prefix="/project/{id}/charter", tags=["charter"])
 
@@ -19,14 +25,16 @@ router = APIRouter(prefix="/project/{id}/charter", tags=["charter"])
 # ------------------------------------------------------------------
 
 @router.get("/", response_class=HTMLResponse)
-async def charter_page(request: Request, id: int) -> HTMLResponse:
+async def charter_page(
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CharterService = Depends(get_charter_service),
+) -> HTMLResponse:
     """Display current Charter sections + textarea + past suggestions."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = CharterService()
     try:
         sections = await service.fetch_charter_sections(project)
     except Exception:
@@ -50,9 +58,10 @@ async def charter_ask(
     request: Request,
     id: int,
     user_input: str = Form(...),
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CharterService = Depends(get_charter_service),
 ) -> HTMLResponse:
     """LLM generates clarifying questions, returns questions form partial."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -62,8 +71,6 @@ async def charter_ask(
             '<div class="error-banner">No Charter page configured for this project.</div>',
             status_code=400,
         )
-
-    service = CharterService()
     try:
         questions = await service.generate_questions(project, user_input)
     except Exception as exc:
@@ -87,9 +94,10 @@ async def charter_ask(
 async def charter_analyze(
     request: Request,
     id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CharterService = Depends(get_charter_service),
 ) -> HTMLResponse:
     """Receives original input + answers, LLM proposes edits, returns suggestions partial."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
@@ -97,8 +105,6 @@ async def charter_analyze(
     form = await request.form()
     user_input = form.get("user_input", "")
     qa_pairs = collect_qa_pairs(form)
-
-    service = CharterService()
     try:
         suggestions = await service.analyze_charter_update(project, str(user_input), qa_pairs)
     except Exception as exc:
@@ -120,15 +126,16 @@ async def charter_analyze(
 
 @router.post("/suggestions/{sid}/accept", response_class=HTMLResponse)
 async def accept_charter_suggestion(
-    request: Request, id: int, sid: int,
+    request: Request,
+    id: int,
+    sid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CharterService = Depends(get_charter_service),
 ) -> HTMLResponse:
     """Accept a charter suggestion — queue it for approval."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = CharterService()
     try:
         sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
@@ -148,13 +155,14 @@ async def accept_charter_suggestion(
 
 @router.post("/suggestions/{sid}/reject", response_class=HTMLResponse)
 async def reject_charter_suggestion(
-    request: Request, id: int, sid: int,
+    request: Request,
+    id: int,
+    sid: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CharterService = Depends(get_charter_service),
 ) -> HTMLResponse:
     """Reject a charter suggestion."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
-
-    service = CharterService()
     sug = service.reject_suggestion(sid)
     if sug is None:
         return HTMLResponse("Suggestion not found", status_code=404)
@@ -168,15 +176,15 @@ async def reject_charter_suggestion(
 
 @router.post("/suggestions/accept-all", response_class=HTMLResponse)
 async def accept_all_charter_suggestions(
-    request: Request, id: int,
+    request: Request,
+    id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    service: CharterService = Depends(get_charter_service),
 ) -> HTMLResponse:
     """Accept all pending charter suggestions."""
-    dashboard = DashboardService()
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
-
-    service = CharterService()
     await service.accept_all_suggestions(project)
 
     suggestions = service.list_suggestions(id)

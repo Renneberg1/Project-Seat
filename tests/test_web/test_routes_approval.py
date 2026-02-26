@@ -24,7 +24,7 @@ def test_approval_queue_shows_pending_items(client, tmp_db):
     engine.propose(ApprovalAction.CREATE_JIRA_ISSUE, {"key": "test"}, preview="Create Goal")
     engine.propose(ApprovalAction.CREATE_JIRA_VERSION, {"name": "v1"}, preview="Create Version")
 
-    with patch("src.web.routes.approval.ApprovalEngine", return_value=engine):
+    with patch("src.web.deps.ApprovalEngine", return_value=engine):
         result = client.get("/approval/")
 
     assert result.status_code == 200
@@ -41,7 +41,7 @@ def test_reject_item_post_updates_status(client, tmp_db):
     engine = ApprovalEngine(db_path=tmp_db)
     item_id = engine.propose(ApprovalAction.CREATE_JIRA_ISSUE, {}, preview="Reject me")
 
-    with patch("src.web.routes.approval.ApprovalEngine", return_value=engine):
+    with patch("src.web.deps.ApprovalEngine", return_value=engine):
         result = client.post(f"/approval/{item_id}/reject")
 
     assert result.status_code == 200
@@ -63,7 +63,7 @@ def test_approve_item_post_executes(client, tmp_db):
     )
     mock_execute = AsyncMock(return_value=engine.get(item_id))
 
-    with patch("src.web.routes.approval.SpinUpService") as MockSvc:
+    with patch("src.web.deps.SpinUpService") as MockSvc:
         MockSvc.return_value.execute_approved_item = mock_execute
 
         result = client.post(f"/approval/{item_id}/approve")
@@ -82,8 +82,8 @@ def test_approve_all_processes_all_pending(client, tmp_db):
     id2 = engine.propose(ApprovalAction.CREATE_JIRA_VERSION, {}, preview="b")
     mock_execute = AsyncMock(side_effect=[engine.get(id1), engine.get(id2)])
 
-    with patch("src.web.routes.approval.ApprovalEngine", return_value=engine), \
-         patch("src.web.routes.approval.SpinUpService") as MockSvc:
+    with patch("src.web.deps.ApprovalEngine", return_value=engine), \
+         patch("src.web.deps.SpinUpService") as MockSvc:
         MockSvc.return_value.execute_approved_item = mock_execute
 
         result = client.post("/approval/approve-all")

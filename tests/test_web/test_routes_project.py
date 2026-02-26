@@ -55,7 +55,7 @@ def _make_summary(project):
 
 def _patch_dashboard(project):
     """Return a patch context for DashboardService returning the given project."""
-    mock = patch("src.web.routes.project.DashboardService")
+    mock = patch("src.web.deps.DashboardService")
     return mock, project
 
 
@@ -66,7 +66,7 @@ def _patch_dashboard(project):
 
 def _patch_health_review():
     """Return a patch context for HealthReviewService returning no reviews."""
-    return patch("src.web.routes.project.HealthReviewService",
+    return patch("src.web.deps.HealthReviewService",
                  return_value=type("MockHR", (), {"list_reviews": lambda self, pid: []})())
 
 
@@ -76,16 +76,16 @@ def test_project_dashboard_returns_200(client, tmp_db):
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
     cache.clear()
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=_make_summary(project))
         instance.get_product_ideas = AsyncMock(return_value=[])
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
-        with patch("src.web.routes.project.DHFService") as MockDHF:
+        with patch("src.web.deps.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_table = AsyncMock(return_value=([], []))
-            with patch("src.web.routes.project.ApprovalEngine") as MockEng:
+            with patch("src.web.deps.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
                 with _patch_health_review():
 
@@ -96,7 +96,7 @@ def test_project_dashboard_returns_200(client, tmp_db):
 
 
 def test_project_dashboard_not_found_returns_404(client):
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         MockSvc.return_value.get_project_by_id = lambda x: None
 
         result = client.get("/project/999/dashboard")
@@ -110,16 +110,16 @@ def test_project_dashboard_sets_cookie(client, tmp_db):
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
     cache.clear()
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=_make_summary(project))
         instance.get_product_ideas = AsyncMock(return_value=[])
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
-        with patch("src.web.routes.project.DHFService") as MockDHF:
+        with patch("src.web.deps.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_table = AsyncMock(return_value=([], []))
-            with patch("src.web.routes.project.ApprovalEngine") as MockEng:
+            with patch("src.web.deps.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
                 with _patch_health_review():
 
@@ -145,16 +145,16 @@ def test_project_dashboard_shows_dhf_counts(client, tmp_db):
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
     cache.clear()
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=_make_summary(project))
         instance.get_product_ideas = AsyncMock(return_value=[])
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
-        with patch("src.web.routes.project.DHFService") as MockDHF:
+        with patch("src.web.deps.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_table = AsyncMock(return_value=(dhf_docs, ["Design", "Risk", "Test"]))
-            with patch("src.web.routes.project.ApprovalEngine") as MockEng:
+            with patch("src.web.deps.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
                 with _patch_health_review():
 
@@ -174,7 +174,7 @@ def test_project_dashboard_shows_dhf_counts(client, tmp_db):
 def test_delete_project_returns_redirect_header(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
 
-    with patch("src.web.routes.project.ImportService") as MockSvc:
+    with patch("src.web.deps.ImportService") as MockSvc:
         instance = MockSvc.return_value
 
         result = client.delete(f"/project/{pid}")
@@ -205,16 +205,16 @@ def test_delete_project_danger_zone_exists_on_dashboard(client, tmp_db):
     empty_pi = ProductIdeaSummary(0, 0, 0, 0, 0, 0, 0)
     cache.clear()
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_project_summary = AsyncMock(return_value=summary)
         instance.get_product_ideas = AsyncMock(return_value=[])
         instance.summarise_product_ideas = lambda ideas: empty_pi
         instance.list_projects = lambda: [project]
-        with patch("src.web.routes.project.DHFService") as MockDHF:
+        with patch("src.web.deps.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_table = AsyncMock(return_value=([], []))
-            with patch("src.web.routes.project.ApprovalEngine") as MockEng:
+            with patch("src.web.deps.ApprovalEngine") as MockEng:
                 MockEng.return_value.list_all = lambda project_id=None: []
                 with _patch_health_review():
 
@@ -311,7 +311,7 @@ def test_project_features_returns_200_with_initiatives(client, tmp_db):
         epic_count=3, task_count=10, done_epic_count=1, done_task_count=5,
     )
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_initiatives = AsyncMock(return_value=[init_summary])
@@ -329,7 +329,7 @@ def test_project_features_empty_shows_message(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_initiatives = AsyncMock(return_value=[])
@@ -360,7 +360,7 @@ def test_initiative_detail_returns_200_with_epics(client, tmp_db):
         ],
     )
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_initiative_detail = AsyncMock(return_value=detail)
@@ -378,7 +378,7 @@ def test_initiative_detail_not_found_returns_404(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.get_initiative_detail = AsyncMock(return_value=None)
@@ -398,7 +398,7 @@ def test_project_documents_no_config_shows_configuration_form(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.list_projects = lambda: [project]
@@ -419,11 +419,11 @@ def test_project_documents_with_documents(client, tmp_db):
         DHFDocument("Plan B", "Design", None, "1", DocumentStatus.IN_DRAFT, "2026-01-02", "Bob", "https://y"),
     ]
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.list_projects = lambda: [project]
-        with patch("src.web.routes.project.DHFService") as MockDHF:
+        with patch("src.web.deps.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_table = AsyncMock(return_value=(docs, ["Design", "Risk"]))
 
             result = client.get(f"/project/{pid}/documents")
@@ -443,11 +443,11 @@ def test_project_documents_area_filter(client, tmp_db):
         DHFDocument("Plan B", "Design", None, "1", DocumentStatus.IN_DRAFT, "", "", ""),
     ]
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.list_projects = lambda: [project]
-        with patch("src.web.routes.project.DHFService") as MockDHF:
+        with patch("src.web.deps.DHFService") as MockDHF:
             MockDHF.return_value.get_dhf_table = AsyncMock(return_value=(docs, ["Design", "Risk"]))
 
             result = client.get(f"/project/{pid}/documents?area=Risk")
@@ -541,11 +541,11 @@ def test_project_approvals_returns_200(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1")
     project = _make_project(pid, "Alpha", "PROG-1")
 
-    with patch("src.web.routes.project.DashboardService") as MockSvc:
+    with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.get_project_by_id = lambda x: project
         instance.list_projects = lambda: [project]
-        with patch("src.web.routes.project.ApprovalEngine") as MockEng:
+        with patch("src.web.deps.ApprovalEngine") as MockEng:
             eng_instance = MockEng.return_value
             eng_instance.list_pending = lambda project_id=None: []
             eng_instance.list_all = lambda project_id=None: []

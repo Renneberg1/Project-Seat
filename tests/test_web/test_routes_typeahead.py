@@ -23,7 +23,7 @@ def test_confluence_pages_returns_results(client):
         {"id": "123456", "title": "Project Charter", "_expandable": {"space": "/rest/api/space/HPP"}},
         {"id": "789012", "title": "Charter Template", "_expandable": {"space": "/rest/api/space/HPP"}},
     ]
-    with patch("src.web.routes.typeahead.ConfluenceConnector") as MockConn:
+    with patch("src.web.deps.ConfluenceConnector") as MockConn:
         instance = MockConn.return_value
         instance.search_pages_by_title = AsyncMock(return_value=mock_pages)
         instance.close = AsyncMock()
@@ -38,7 +38,7 @@ def test_confluence_pages_returns_results(client):
 
 def test_confluence_pages_with_space_filter(client):
     """Space parameter is passed through to connector."""
-    with patch("src.web.routes.typeahead.ConfluenceConnector") as MockConn:
+    with patch("src.web.deps.ConfluenceConnector") as MockConn:
         instance = MockConn.return_value
         instance.search_pages_by_title = AsyncMock(return_value=[])
         instance.close = AsyncMock()
@@ -51,7 +51,7 @@ def test_confluence_pages_with_space_filter(client):
 
 def test_confluence_pages_empty_results(client):
     """No matching pages returns 'No results' message."""
-    with patch("src.web.routes.typeahead.ConfluenceConnector") as MockConn:
+    with patch("src.web.deps.ConfluenceConnector") as MockConn:
         instance = MockConn.return_value
         instance.search_pages_by_title = AsyncMock(return_value=[])
         instance.close = AsyncMock()
@@ -80,7 +80,7 @@ def test_jira_issues_returns_results(client):
         {"key": "PROG-256", "fields": {"summary": "HOP Drop 2"}},
         {"key": "PROG-300", "fields": {"summary": "HOP Drop 3"}},
     ]
-    with patch("src.web.routes.typeahead.JiraConnector") as MockConn:
+    with patch("src.web.deps.JiraConnector") as MockConn:
         instance = MockConn.return_value
         instance.search = AsyncMock(return_value=mock_issues)
         instance.close = AsyncMock()
@@ -94,7 +94,7 @@ def test_jira_issues_returns_results(client):
 
 def test_jira_issues_key_pattern_uses_key_jql(client):
     """Query matching issue key pattern uses key-based JQL."""
-    with patch("src.web.routes.typeahead.JiraConnector") as MockConn:
+    with patch("src.web.deps.JiraConnector") as MockConn:
         instance = MockConn.return_value
         instance.search = AsyncMock(return_value=[
             {"key": "PROG-256", "fields": {"summary": "HOP Drop 2"}},
@@ -112,7 +112,7 @@ def test_jira_issues_key_pattern_uses_key_jql(client):
 
 def test_jira_issues_with_project_filter(client):
     """Project parameter restricts JQL search."""
-    with patch("src.web.routes.typeahead.JiraConnector") as MockConn:
+    with patch("src.web.deps.JiraConnector") as MockConn:
         instance = MockConn.return_value
         instance.search = AsyncMock(return_value=[])
         instance.close = AsyncMock()
@@ -136,7 +136,7 @@ def test_jira_projects_returns_results(client):
         {"key": "AIM", "name": "AIM Team"},
         {"key": "CTCV", "name": "CTCV Team"},
     ]
-    with patch("src.web.routes.typeahead.JiraConnector") as MockConn:
+    with patch("src.web.deps.JiraConnector") as MockConn:
         instance = MockConn.return_value
         instance.list_projects = AsyncMock(return_value=mock_projects)
         instance.close = AsyncMock()
@@ -151,7 +151,7 @@ def test_jira_projects_returns_results(client):
 def test_jira_projects_no_query_returns_all(client):
     """No query parameter returns all projects."""
     mock_projects = [{"key": "PROG", "name": "Program"}]
-    with patch("src.web.routes.typeahead.JiraConnector") as MockConn:
+    with patch("src.web.deps.JiraConnector") as MockConn:
         instance = MockConn.return_value
         instance.list_projects = AsyncMock(return_value=mock_projects)
         instance.close = AsyncMock()
@@ -180,7 +180,7 @@ def test_jira_versions_returns_results(client):
         {"name": "HOP Drop 2", "released": False},
         {"name": "HOP Drop 1", "released": True},
     ]
-    with patch("src.web.routes.typeahead.JiraConnector") as MockConn:
+    with patch("src.web.deps.JiraConnector") as MockConn:
         instance = MockConn.return_value
         instance.get_versions = AsyncMock(return_value=mock_versions)
         instance.close = AsyncMock()

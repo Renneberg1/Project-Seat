@@ -76,9 +76,9 @@ def test_team_progress_200_with_teams(client, tmp_db):
     project = _make_project()
     reports = [_make_report("AIM"), _make_report("CTCV", done_count=3)]
 
-    with patch("src.web.routes.project.DashboardService") as MockDash, \
-         patch("src.web.routes.project.TeamProgressService") as MockTeam, \
-         patch("src.web.routes.project.TeamSnapshotService") as MockSnap:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.TeamProgressService") as MockTeam, \
+         patch("src.web.deps.TeamSnapshotService") as MockSnap:
         _setup_mocks(MockDash, MockTeam, MockSnap, project, reports, [])
 
         result = client.get("/project/1/team-progress")
@@ -92,9 +92,9 @@ def test_team_progress_200_with_teams(client, tmp_db):
 def test_team_progress_200_without_teams(client, tmp_db):
     project = _make_project(team_projects=[])
 
-    with patch("src.web.routes.project.DashboardService") as MockDash, \
-         patch("src.web.routes.project.TeamProgressService") as MockTeam, \
-         patch("src.web.routes.project.TeamSnapshotService") as MockSnap:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.TeamProgressService") as MockTeam, \
+         patch("src.web.deps.TeamSnapshotService") as MockSnap:
         _setup_mocks(MockDash, MockTeam, MockSnap, project, [], [])
 
         result = client.get("/project/1/team-progress")
@@ -104,7 +104,7 @@ def test_team_progress_200_without_teams(client, tmp_db):
 
 
 def test_team_progress_404_unknown_project(client, tmp_db):
-    with patch("src.web.routes.project.DashboardService") as MockDash:
+    with patch("src.web.deps.DashboardService") as MockDash:
         MockDash.return_value.get_project_by_id = lambda x: None
         MockDash.return_value.list_projects = lambda: []
 
@@ -148,9 +148,9 @@ def test_team_progress_burnup_chart_shown_with_data(client, tmp_db):
         {"date": "2026-02-21", "sp_total": 20, "sp_done": 10},
     ]
 
-    with patch("src.web.routes.project.DashboardService") as MockDash, \
-         patch("src.web.routes.project.TeamProgressService") as MockTeam, \
-         patch("src.web.routes.project.TeamSnapshotService") as MockSnap:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.TeamProgressService") as MockTeam, \
+         patch("src.web.deps.TeamSnapshotService") as MockSnap:
         _setup_mocks(MockDash, MockTeam, MockSnap, project, reports, snapshots)
 
         result = client.get("/project/1/team-progress")
@@ -166,9 +166,9 @@ def test_team_progress_burnup_hint_with_single_snapshot(client, tmp_db):
     reports = [_make_report("AIM")]
     snapshots = [{"date": "2026-02-21", "sp_total": 20, "sp_done": 10}]
 
-    with patch("src.web.routes.project.DashboardService") as MockDash, \
-         patch("src.web.routes.project.TeamProgressService") as MockTeam, \
-         patch("src.web.routes.project.TeamSnapshotService") as MockSnap:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.TeamProgressService") as MockTeam, \
+         patch("src.web.deps.TeamSnapshotService") as MockSnap:
         _setup_mocks(MockDash, MockTeam, MockSnap, project, reports, snapshots)
 
         result = client.get("/project/1/team-progress")
@@ -192,9 +192,9 @@ def test_team_progress_projection_shown_with_due_date(client, tmp_db):
         {"date": "2026-02-21", "sp_total": 20, "sp_done": 10},
     ]
 
-    with patch("src.web.routes.project.DashboardService") as MockDash, \
-         patch("src.web.routes.project.TeamProgressService") as MockTeam, \
-         patch("src.web.routes.project.TeamSnapshotService") as MockSnap:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.TeamProgressService") as MockTeam, \
+         patch("src.web.deps.TeamSnapshotService") as MockSnap:
         _setup_mocks(MockDash, MockTeam, MockSnap, project, reports, snapshots, due_date="2026-09-01")
 
         result = client.get("/project/1/team-progress")
@@ -214,9 +214,9 @@ def test_team_progress_no_projection_without_due_date(client, tmp_db):
         {"date": "2026-02-21", "sp_total": 20, "sp_done": 10},
     ]
 
-    with patch("src.web.routes.project.DashboardService") as MockDash, \
-         patch("src.web.routes.project.TeamProgressService") as MockTeam, \
-         patch("src.web.routes.project.TeamSnapshotService") as MockSnap:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.TeamProgressService") as MockTeam, \
+         patch("src.web.deps.TeamSnapshotService") as MockSnap:
         _setup_mocks(MockDash, MockTeam, MockSnap, project, reports, snapshots, due_date=None)
 
         result = client.get("/project/1/team-progress")
@@ -235,9 +235,9 @@ def test_team_progress_no_projection_due_date_in_past(client, tmp_db):
         {"date": "2026-02-21", "sp_total": 20, "sp_done": 10},
     ]
 
-    with patch("src.web.routes.project.DashboardService") as MockDash, \
-         patch("src.web.routes.project.TeamProgressService") as MockTeam, \
-         patch("src.web.routes.project.TeamSnapshotService") as MockSnap:
+    with patch("src.web.deps.DashboardService") as MockDash, \
+         patch("src.web.deps.TeamProgressService") as MockTeam, \
+         patch("src.web.deps.TeamSnapshotService") as MockSnap:
         _setup_mocks(MockDash, MockTeam, MockSnap, project, reports, snapshots, due_date="2026-01-01")
 
         result = client.get("/project/1/team-progress")

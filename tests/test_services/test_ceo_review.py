@@ -402,8 +402,8 @@ class TestRoutes:
     """Test CEO Review route contracts."""
 
     def test_main_page(self, client, tmp_db, project):
-        with patch("src.web.routes.ceo_review.DashboardService") as MockDash, \
-             patch("src.web.routes.ceo_review.CeoReviewService") as MockSvc:
+        with patch("src.web.deps.DashboardService") as MockDash, \
+             patch("src.web.deps.CeoReviewService") as MockSvc:
             MockDash.return_value.get_project_by_id.return_value = project
             MockSvc.return_value.list_reviews.return_value = []
 
@@ -412,7 +412,7 @@ class TestRoutes:
             assert "CEO Review" in resp.text
 
     def test_main_page_not_found(self, client, tmp_db):
-        with patch("src.web.routes.ceo_review.DashboardService") as MockDash:
+        with patch("src.web.deps.DashboardService") as MockDash:
             MockDash.return_value.get_project_by_id.return_value = None
             resp = client.get("/project/999/ceo-review/")
             assert resp.status_code == 404
@@ -421,8 +421,8 @@ class TestRoutes:
         questions = [{"question": "Why?", "category": "Dev", "why_needed": "Context"}]
         metrics = {"project_name": "Test"}
 
-        with patch("src.web.routes.ceo_review.DashboardService") as MockDash, \
-             patch("src.web.routes.ceo_review.CeoReviewService") as MockSvc:
+        with patch("src.web.deps.DashboardService") as MockDash, \
+             patch("src.web.deps.CeoReviewService") as MockSvc:
             MockDash.return_value.get_project_by_id.return_value = project
             MockSvc.return_value.generate_questions = AsyncMock(
                 return_value=(questions, metrics)
@@ -449,10 +449,10 @@ class TestRoutes:
                         "dhf_recently_updated": [], "open_risk_count": 0, "total_risk_count": 0},
         }
 
-        with patch("src.web.routes.ceo_review.DashboardService") as MockDash, \
-             patch("src.web.routes.ceo_review.CeoReviewService") as MockSvc, \
+        with patch("src.web.deps.DashboardService") as MockDash, \
+             patch("src.web.deps.CeoReviewService") as MockSvc, \
              patch("src.web.routes.ceo_review.resolve_confluence_mentions", new_callable=AsyncMock) as mock_resolve, \
-             patch("src.web.routes.ceo_review.JiraConnector") as MockJira:
+             patch("src.web.deps.JiraConnector") as MockJira:
             MockDash.return_value.get_project_by_id.return_value = project
             MockSvc.return_value.generate_review = AsyncMock(return_value=review)
             MockSvc.return_value.render_confluence_xhtml.return_value = "<h1>test</h1>"
@@ -471,8 +471,8 @@ class TestRoutes:
         mock_review = MagicMock()
         mock_review.status.value = "queued"
 
-        with patch("src.web.routes.ceo_review.DashboardService") as MockDash, \
-             patch("src.web.routes.ceo_review.CeoReviewService") as MockSvc:
+        with patch("src.web.deps.DashboardService") as MockDash, \
+             patch("src.web.deps.CeoReviewService") as MockSvc:
             MockDash.return_value.get_project_by_id.return_value = project
             MockSvc.return_value.accept_review.return_value = mock_review
 
@@ -481,8 +481,8 @@ class TestRoutes:
             assert "queued" in resp.text.lower() or "Approval Queue" in resp.text
 
     def test_reject(self, client, tmp_db, project):
-        with patch("src.web.routes.ceo_review.DashboardService") as MockDash, \
-             patch("src.web.routes.ceo_review.CeoReviewService") as MockSvc:
+        with patch("src.web.deps.DashboardService") as MockDash, \
+             patch("src.web.deps.CeoReviewService") as MockSvc:
             MockDash.return_value.get_project_by_id.return_value = project
 
             resp = client.post(f"/project/{project.id}/ceo-review/1/reject")

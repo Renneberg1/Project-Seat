@@ -49,7 +49,7 @@ def client(tmp_db):
 
 class TestSettingsPage:
     def test_get_settings(self, client, tmp_db, project):
-        with patch("src.web.routes.settings.DashboardService") as MockDash:
+        with patch("src.web.deps.DashboardService") as MockDash:
             MockDash.return_value.get_project_by_id.return_value = project
             resp = client.get(f"/project/{project.id}/settings/")
             assert resp.status_code == 200
@@ -58,13 +58,13 @@ class TestSettingsPage:
             assert "Test Project" in resp.text
 
     def test_get_settings_not_found(self, client, tmp_db):
-        with patch("src.web.routes.settings.DashboardService") as MockDash:
+        with patch("src.web.deps.DashboardService") as MockDash:
             MockDash.return_value.get_project_by_id.return_value = None
             resp = client.get("/project/999/settings/")
             assert resp.status_code == 404
 
     def test_save_settings(self, client, tmp_db, project):
-        with patch("src.web.routes.settings.DashboardService") as MockDash:
+        with patch("src.web.deps.DashboardService") as MockDash:
             MockDash.return_value.get_project_by_id.return_value = project
 
             resp = client.post(
@@ -99,7 +99,7 @@ class TestSettingsPage:
 
     def test_save_clears_optional_fields(self, client, tmp_db, project):
         """Empty optional fields should be set to NULL."""
-        with patch("src.web.routes.settings.DashboardService") as MockDash:
+        with patch("src.web.deps.DashboardService") as MockDash:
             MockDash.return_value.get_project_by_id.return_value = project
 
             resp = client.post(

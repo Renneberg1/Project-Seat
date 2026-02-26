@@ -158,3 +158,11 @@ class JiraConnector(BaseConnector):
     def field_id(self, name: str) -> str:
         """Convenience proxy to settings.field_id()."""
         return self._settings.field_id(name)
+
+    # ------------------------------------------------------------------
+    # Health check
+    # ------------------------------------------------------------------
+
+    async def get_myself(self) -> dict[str, Any]:
+        """Fetch the authenticated user's profile (/myself)."""
+        return await self.get("/myself")
