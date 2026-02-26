@@ -1,4 +1,4 @@
-"""Tests for the LLM agent layer — provider factory, mock provider, TranscriptAgent."""
+"""Tests for the LLM agent layer — provider factory, BaseAgent, mock provider, TranscriptAgent."""
 
 from __future__ import annotations
 
@@ -9,7 +9,15 @@ from unittest.mock import AsyncMock
 import pytest
 
 from src.config import LLMSettings
-from src.engine.agent import TranscriptAgent, get_provider
+from src.engine.agent import (
+    BaseAgent,
+    CharterAgent,
+    CeoReviewAgent,
+    HealthReviewAgent,
+    RiskRefineAgent,
+    TranscriptAgent,
+    get_provider,
+)
 
 
 # ---------------------------------------------------------------------------
@@ -68,6 +76,68 @@ class MockProvider:
 
     async def close(self) -> None:
         pass
+
+
+# ---------------------------------------------------------------------------
+# BaseAgent tests
+# ---------------------------------------------------------------------------
+
+
+class TestBaseAgent:
+
+    def test_strip_fences_removes_markdown_json_fences(self):
+        raw = '```json\n{"key": "value"}\n```'
+        assert BaseAgent._strip_fences(raw) == '{"key": "value"}'
+
+    def test_strip_fences_removes_plain_fences(self):
+        raw = '```\n{"key": "value"}\n```'
+        assert BaseAgent._strip_fences(raw) == '{"key": "value"}'
+
+    def test_strip_fences_no_fences(self):
+        raw = '{"key": "value"}'
+        assert BaseAgent._strip_fences(raw) == '{"key": "value"}'
+
+    async def test_generate_with_retry_parses_valid_json(self):
+        provider = MockProvider('{"result": 42}')
+        agent = BaseAgent(provider)
+        result = await agent._generate_with_retry(
+            "system", "user", {"type": "object"},
+        )
+        assert result == {"result": 42}
+        assert len(provider.generate_calls) == 1
+
+    async def test_generate_with_retry_retries_on_invalid_json(self):
+        call_count = 0
+
+        class RetryProvider:
+            async def generate(self, system_prompt, user_prompt, **kwargs):
+                nonlocal call_count
+                call_count += 1
+                if call_count == 1:
+                    return "not json"
+                return '{"ok": true}'
+
+            async def close(self):
+                pass
+
+        agent = BaseAgent(RetryProvider())
+        result = await agent._generate_with_retry("sys", "user", {})
+        assert result == {"ok": True}
+        assert call_count == 2
+
+    async def test_generate_with_retry_strips_fences(self):
+        provider = MockProvider('```json\n{"key": "val"}\n```')
+        agent = BaseAgent(provider)
+        result = await agent._generate_with_retry("sys", "user", {})
+        assert result == {"key": "val"}
+
+    def test_all_agents_inherit_from_base_agent(self):
+        """All agent classes should be subclasses of BaseAgent."""
+        assert issubclass(TranscriptAgent, BaseAgent)
+        assert issubclass(CharterAgent, BaseAgent)
+        assert issubclass(HealthReviewAgent, BaseAgent)
+        assert issubclass(CeoReviewAgent, BaseAgent)
+        assert issubclass(RiskRefineAgent, BaseAgent)
 
 
 # ---------------------------------------------------------------------------

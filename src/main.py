@@ -29,7 +29,7 @@ from src.services.team_snapshot import snapshot_all_projects
 _STATIC_DIR = Path(__file__).resolve().parent / "web" / "static"
 
 orchestrator = Orchestrator()
-orchestrator.register("team_progress_snapshot", snapshot_all_projects, interval_seconds=86400)
+orchestrator.register("team_progress_snapshot", snapshot_all_projects, interval_seconds=86400, run_immediately=True)
 
 
 @asynccontextmanager

@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import logging
 
 from fastapi import APIRouter, Request
@@ -11,18 +12,9 @@ logger = logging.getLogger(__name__)
 
 from src.services.dashboard import DashboardService
 from src.services.health_review import HealthReviewService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import collect_qa_pairs, render_project_page, templates
 
 router = APIRouter(prefix="/project/{id}/health-review", tags=["health_review"])
-
-
-def _render(request: Request, template: str, context: dict, project_id: int) -> HTMLResponse:
-    """Render a template with nav context and project cookie."""
-    nav = get_nav_context(request)
-    nav["selected_project_id"] = project_id
-    response = templates.TemplateResponse(request, template, {**context, **nav})
-    response.set_cookie("seat_selected_project", str(project_id), max_age=60 * 60 * 24 * 30)
-    return response
 
 
 # ------------------------------------------------------------------
@@ -40,7 +32,7 @@ async def health_review_page(request: Request, id: int) -> HTMLResponse:
     service = HealthReviewService()
     past_reviews = service.list_reviews(id)
 
-    return _render(request, "project_health_review.html", {
+    return render_project_page(request, "project_health_review.html", {
         "project": project,
         "past_reviews": past_reviews,
     }, id)
@@ -64,7 +56,7 @@ async def health_review_ask(request: Request, id: int) -> HTMLResponse:
     except Exception as exc:
         logger.exception("Health review /ask failed")
         return HTMLResponse(
-            f'<div class="error-banner">Health review failed: {exc}</div>',
+            f'<div class="error-banner">Health review failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 
@@ -87,24 +79,14 @@ async def health_review_analyze(request: Request, id: int) -> HTMLResponse:
         return HTMLResponse("Project not found", status_code=404)
 
     form = await request.form()
-
-    # Collect Q&A pairs from form fields
-    qa_pairs: list[dict[str, str]] = []
-    i = 0
-    while True:
-        q = form.get(f"question_{i}")
-        a = form.get(f"answer_{i}")
-        if q is None:
-            break
-        qa_pairs.append({"question": str(q), "answer": str(a or "")})
-        i += 1
+    qa_pairs = collect_qa_pairs(form)
 
     service = HealthReviewService()
     try:
         review = await service.generate_review(project, qa_pairs)
     except Exception as exc:
         return HTMLResponse(
-            f'<div class="error-banner">Health review failed: {exc}</div>',
+            f'<div class="error-banner">Health review failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 

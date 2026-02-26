@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import asyncio
 import logging
+import re
 from datetime import date, timedelta
 
 from fastapi import APIRouter, Form, Request
@@ -28,29 +29,9 @@ from src.services.spinup import SpinUpService
 from src.services.team_progress import TeamProgressService, TeamVersionReport
 from src.services.team_snapshot import TeamSnapshotService
 from src.services.transcript import TranscriptService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import render_project_page, templates
 
 router = APIRouter(prefix="/project", tags=["project"])
-
-
-def _project_response(request: Request, project_id: int):
-    """Build a response that sets the project cookie."""
-    # Returns (response, set_cookie) — caller must set cookie on the response.
-    # We handle this in a middleware-like pattern via _render helper below.
-    pass  # not used directly; see _render
-
-
-def _render(request: Request, template: str, context: dict, project_id: int) -> HTMLResponse:
-    """Render a template and set the project selection cookie."""
-    nav = get_nav_context(request)
-    nav["selected_project_id"] = project_id
-    response = templates.TemplateResponse(
-        request,
-        template,
-        {**context, **nav},
-    )
-    response.set_cookie("seat_selected_project", str(project_id), max_age=60 * 60 * 24 * 30)
-    return response
 
 
 # ------------------------------------------------------------------
@@ -171,7 +152,7 @@ async def project_dashboard(request: Request, id: int) -> HTMLResponse:
         except ValueError:
             pass
 
-    return _render(request, "project_dashboard.html", {
+    return render_project_page(request, "project_dashboard.html", {
         "project": project,
         "summary": summary,
         "dhf_summary": dhf_summary,
@@ -244,7 +225,7 @@ async def project_features(request: Request, id: int) -> HTMLResponse:
     _PI_PRIORITY_ORDER = {"Must Have": 0, "Should Have": 1, "Could Have": 2}
     pi_ideas.sort(key=lambda i: _PI_PRIORITY_ORDER.get(i.release_priority or "", 9))
 
-    return _render(request, "project_features.html", {
+    return render_project_page(request, "project_features.html", {
         "project": project,
         "initiatives": initiatives,
         "pi_ideas": pi_ideas,
@@ -263,7 +244,7 @@ async def initiative_detail(request: Request, id: int, key: str) -> HTMLResponse
     if detail is None:
         return HTMLResponse("Initiative not found", status_code=404)
 
-    return _render(request, "initiative_detail.html", {
+    return render_project_page(request, "initiative_detail.html", {
         "project": project,
         "detail": detail,
     }, id)
@@ -320,7 +301,7 @@ async def project_documents(
             published_count = sum(1 for _, s in statuses if s == ReleaseStatus.PUBLISHED)
             pending_count = sum(1 for _, s in statuses if s == ReleaseStatus.PENDING)
 
-    return _render(request, "project_documents.html", {
+    return render_project_page(request, "project_documents.html", {
         "project": project,
         "documents": documents,
         "areas": areas,
@@ -373,8 +354,6 @@ async def save_plan_config(
         conn.commit()
     return RedirectResponse(f"/project/{id}/dashboard", status_code=303)
 
-
-import re
 
 _IFRAME_SRC_RE = re.compile(r"""<iframe\b[^>]*\bsrc\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE)
 
@@ -549,7 +528,7 @@ async def project_team_progress(request: Request, id: int) -> HTMLResponse:
             sp_missing_count=sum(r.sp_missing_count for r in reports),
         )
 
-    return _render(request, "project_team_progress.html", {
+    return render_project_page(request, "project_team_progress.html", {
         "project": project,
         "reports": reports,
         "totals": totals,
@@ -618,7 +597,7 @@ async def project_approvals(request: Request, id: int) -> HTMLResponse:
     recent_history = capped_history[-10:] if len(capped_history) > 10 else capped_history
     older_history = capped_history[:-10] if len(capped_history) > 10 else []
 
-    return _render(request, "project_approvals.html", {
+    return render_project_page(request, "project_approvals.html", {
         "project": project,
         "pending": pending,
         "history": recent_history,

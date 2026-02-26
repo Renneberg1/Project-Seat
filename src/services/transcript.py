@@ -320,8 +320,9 @@ class TranscriptService:
         # Try to extract component/label from Goal ticket labels
         default_label = None
         default_component = None
+        goal_jira = JiraConnector(settings=self._settings)
         try:
-            goal = await JiraConnector(settings=self._settings).get_issue(
+            goal = await goal_jira.get_issue(
                 project.jira_goal_key, fields=["labels", "components"]
             )
             labels = goal.get("fields", {}).get("labels", [])
@@ -332,6 +333,8 @@ class TranscriptService:
                 default_component = components[0].get("name")
         except (ConnectorError, Exception):
             logger.warning("Failed to fetch labels/components from Goal %s", project.jira_goal_key, exc_info=True)
+        finally:
+            await goal_jira.close()
 
         # Fall back to project-level defaults if Goal fetch didn't yield values
         if not default_label and getattr(project, "default_label", None):

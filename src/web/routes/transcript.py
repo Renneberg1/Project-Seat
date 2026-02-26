@@ -2,6 +2,7 @@
 
 from __future__ import annotations
 
+import html
 import json
 
 from fastapi import APIRouter, Form, Request, UploadFile, File
@@ -9,18 +10,9 @@ from fastapi.responses import HTMLResponse
 
 from src.services.dashboard import DashboardService
 from src.services.transcript import TranscriptParser, TranscriptService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import render_project_page, templates
 
 router = APIRouter(prefix="/project/{id}/transcript", tags=["transcript"])
-
-
-def _render(request: Request, template: str, context: dict, project_id: int) -> HTMLResponse:
-    """Render a template with nav context and project cookie."""
-    nav = get_nav_context(request)
-    nav["selected_project_id"] = project_id
-    response = templates.TemplateResponse(request, template, {**context, **nav})
-    response.set_cookie("seat_selected_project", str(project_id), max_age=60 * 60 * 24 * 30)
-    return response
 
 
 @router.get("/", response_class=HTMLResponse)
@@ -34,7 +26,7 @@ async def transcript_page(request: Request, id: int) -> HTMLResponse:
     service = TranscriptService()
     transcripts = service.list_transcripts(id)
 
-    return _render(request, "transcript.html", {
+    return render_project_page(request, "transcript.html", {
         "project": project,
         "transcripts": transcripts,
     }, id)
@@ -60,7 +52,7 @@ async def upload_transcript(
         parsed = parser.parse(filename, content)
     except (ValueError, ImportError) as exc:
         return HTMLResponse(
-            f'<div class="error-banner">{exc}</div>',
+            f'<div class="error-banner">{html.escape(str(exc))}</div>',
             status_code=400,
         )
 
@@ -147,7 +139,7 @@ async def analyze_transcript(request: Request, id: int, tid: int) -> HTMLRespons
         suggestions = await service.analyze_transcript(tid, project)
     except Exception as exc:
         return HTMLResponse(
-            f'<div class="error-banner">Analysis failed: {exc}</div>',
+            f'<div class="error-banner">Analysis failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 
@@ -181,7 +173,7 @@ async def view_suggestions(request: Request, id: int, tid: int) -> HTMLResponse:
 
     suggestions = service.list_suggestions(tid)
 
-    return _render(request, "transcript_suggestions_page.html", {
+    return render_project_page(request, "transcript_suggestions_page.html", {
         "project": project,
         "transcript": record,
         "transcript_id": tid,
@@ -207,7 +199,7 @@ async def accept_suggestion(request: Request, id: int, tid: int, sid: int) -> HT
         sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
         return HTMLResponse(
-            f'<div class="error-banner">{exc}</div>',
+            f'<div class="error-banner">{html.escape(str(exc))}</div>',
             status_code=400,
         )
     if sug is None:
@@ -281,12 +273,12 @@ async def start_refinement(request: Request, id: int, tid: int, sid: int) -> HTM
         result = await service.start_risk_refinement(sid, project)
     except ValueError as exc:
         return HTMLResponse(
-            f'<div class="error-banner">{exc}</div>',
+            f'<div class="error-banner">{html.escape(str(exc))}</div>',
             status_code=400,
         )
     except Exception as exc:
         return HTMLResponse(
-            f'<div class="error-banner">Refinement failed: {exc}</div>',
+            f'<div class="error-banner">Refinement failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 
@@ -322,7 +314,7 @@ async def refine_answer(request: Request, id: int, tid: int, sid: int) -> HTMLRe
     qa_history = json.loads(form.get("qa_history", "[]"))
     round_number = int(form.get("round_number", "1"))
 
-    # Collect new Q&A pairs from form
+    # Collect new Q&A pairs from form (risk refine has its own pattern)
     idx = 0
     while True:
         q_key = f"question_{idx}"
@@ -348,7 +340,7 @@ async def refine_answer(request: Request, id: int, tid: int, sid: int) -> HTMLRe
         )
     except Exception as exc:
         return HTMLResponse(
-            f'<div class="error-banner">Refinement failed: {exc}</div>',
+            f'<div class="error-banner">Refinement failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 

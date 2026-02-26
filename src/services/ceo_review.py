@@ -10,10 +10,13 @@ from datetime import date, datetime, timedelta
 from html import escape
 from typing import Any
 
+from src.cache import cache
 from src.config import Settings, settings as default_settings
 from src.database import get_db
 from src.models.ceo_review import CeoReview, CeoReviewStatus
 from src.models.project import Project
+
+_CONTEXT_CACHE_TTL = 600  # 10 minutes
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +39,16 @@ class CeoReviewService:
     # ------------------------------------------------------------------
 
     async def gather_ceo_context(self, project: Project) -> dict[str, Any]:
-        """Fetch all data needed for a CEO review, including 2-week-focused queries."""
+        """Fetch all data needed for a CEO review, including 2-week-focused queries.
+
+        Uses a 10-minute cache so Step 2 reuses context from Step 1.
+        """
+        cache_key = f"ctx:ceo_review:{project.id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.debug("CEO review: using cached context for project %d", project.id)
+            return cached
+
         from src.connectors.jira import JiraConnector
         from src.services.dashboard import DashboardService
         from src.services.dhf import DHFService
@@ -168,7 +180,7 @@ class CeoReviewService:
             _get_meeting_summaries(),
         )
 
-        return {
+        ctx = {
             "project": project,
             "summary": summary,
             "initiatives": initiatives,
@@ -180,6 +192,8 @@ class CeoReviewService:
             "new_decisions_raw": new_decisions_raw,
             "meeting_summaries": meeting_summaries,
         }
+        cache.set(cache_key, ctx, _CONTEXT_CACHE_TTL)
+        return ctx
 
     # ------------------------------------------------------------------
     # Compute deterministic metrics from context

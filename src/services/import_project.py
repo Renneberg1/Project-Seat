@@ -244,21 +244,9 @@ class ImportService:
     def delete_project(self, project_id: int) -> None:
         """Remove a project and all related data from the local DB.
 
-        Cascades to: release_documents, releases, transcript_suggestions,
-        charter_suggestions, team_progress_snapshots, health_reviews,
-        ceo_reviews, approval_queue, approval_log, transcript_cache.
+        All child rows are removed automatically via ON DELETE CASCADE.
         Does NOT touch Jira or Confluence.
         """
         with get_db(self._db_path) as conn:
-            conn.execute("DELETE FROM release_documents WHERE release_id IN (SELECT id FROM releases WHERE project_id = ?)", (project_id,))
-            conn.execute("DELETE FROM releases WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM transcript_suggestions WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM charter_suggestions WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM team_progress_snapshots WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM health_reviews WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM ceo_reviews WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM approval_queue WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM approval_log WHERE project_id = ?", (project_id,))
-            conn.execute("DELETE FROM transcript_cache WHERE project_id = ?", (project_id,))
             conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
             conn.commit()

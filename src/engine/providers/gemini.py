@@ -16,14 +16,15 @@ _BASE_URL = "https://generativelanguage.googleapis.com/v1beta"
 class GeminiProvider:
     """Provider for Google Gemini models via REST API (no SDK dependency)."""
 
-    def __init__(self, api_key: str, model: str = "gemini-2.5-flash") -> None:
+    def __init__(self, api_key: str, model: str = "gemini-2.5-flash", *, verify_ssl: bool = True) -> None:
         self._api_key = api_key
         self._model = model
+        self._verify_ssl = verify_ssl
         self._client: httpx.AsyncClient | None = None
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=120.0, verify=False)
+            self._client = httpx.AsyncClient(timeout=120.0, verify=self._verify_ssl)
         return self._client
 
     async def generate(

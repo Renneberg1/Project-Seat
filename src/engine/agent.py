@@ -53,6 +53,7 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
         return GeminiProvider(
             api_key=settings.api_key,
             model=settings.model or "gemini-2.5-flash",
+            verify_ssl=settings.verify_ssl,
         )
 
     elif provider == "ollama":
@@ -72,14 +73,76 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
 
 
 # ------------------------------------------------------------------
-# Transcript Agent
+# Base Agent — shared retry + fence-stripping logic
 # ------------------------------------------------------------------
 
-class TranscriptAgent:
-    """Analyzes meeting transcripts using the configured LLM provider."""
+class BaseAgent:
+    """Common base for all LLM agents.
+
+    Provides ``_generate_with_retry`` (JSON parse with one retry) and
+    ``_strip_fences`` (remove markdown code fences from LLM output).
+    """
 
     def __init__(self, provider: LLMProvider) -> None:
         self._provider = provider
+
+    @staticmethod
+    def _strip_fences(text: str) -> str:
+        """Remove markdown code fences from LLM output."""
+        text = text.strip()
+        if text.startswith("```"):
+            text = text.split("\n", 1)[-1]
+        if text.endswith("```"):
+            text = text.rsplit("```", 1)[0]
+        return text.strip()
+
+    async def _generate_with_retry(
+        self,
+        system_prompt: str,
+        user_prompt: str,
+        schema: dict[str, Any],
+        temperature: float = 0.3,
+        max_tokens: int = 4096,
+    ) -> dict[str, Any]:
+        """Generate and parse JSON, retrying once on parse failure."""
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt,
+            response_schema=schema,
+            temperature=temperature,
+            max_tokens=max_tokens,
+        )
+
+        try:
+            return json.loads(self._strip_fences(raw))
+        except json.JSONDecodeError:
+            logger.warning(
+                "LLM returned invalid JSON (len=%d), retrying. Raw: %s",
+                len(raw), raw[:500],
+            )
+
+        correction = (
+            "\n\nIMPORTANT: Your previous response was not valid JSON. "
+            "Please respond with ONLY valid JSON matching the required schema. "
+            "No markdown, no explanation — just the JSON object."
+        )
+        raw = await self._provider.generate(
+            system_prompt=system_prompt,
+            user_prompt=user_prompt + correction,
+            response_schema=schema,
+            temperature=0.2,
+            max_tokens=max_tokens,
+        )
+
+        return json.loads(self._strip_fences(raw))
+
+
+# ------------------------------------------------------------------
+# Transcript Agent
+# ------------------------------------------------------------------
+
+class TranscriptAgent(BaseAgent):
+    """Analyzes meeting transcripts using the configured LLM provider."""
 
     async def analyze_transcript(
         self,
@@ -104,54 +167,18 @@ class TranscriptAgent:
 
         user_prompt = build_user_prompt(transcript_text, project_context)
 
-        # First attempt
-        raw = await self._provider.generate(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=user_prompt,
-            response_schema=TRANSCRIPT_ANALYSIS_SCHEMA,
-            temperature=0.3,
-            max_tokens=4096,
+        return await self._generate_with_retry(
+            SYSTEM_PROMPT, user_prompt, TRANSCRIPT_ANALYSIS_SCHEMA,
+            temperature=0.3, max_tokens=4096,
         )
-
-        try:
-            result = json.loads(raw)
-            return result
-        except json.JSONDecodeError:
-            logger.warning("LLM returned invalid JSON, retrying with correction suffix")
-
-        # Retry with correction hint
-        correction = (
-            "\n\nIMPORTANT: Your previous response was not valid JSON. "
-            "Please respond with ONLY valid JSON matching the required schema. "
-            "No markdown, no explanation — just the JSON object."
-        )
-        raw = await self._provider.generate(
-            system_prompt=SYSTEM_PROMPT,
-            user_prompt=user_prompt + correction,
-            response_schema=TRANSCRIPT_ANALYSIS_SCHEMA,
-            temperature=0.2,
-            max_tokens=4096,
-        )
-
-        # Strip markdown fences if present
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-
-        return json.loads(text)
 
 
 # ------------------------------------------------------------------
 # Charter Agent
 # ------------------------------------------------------------------
 
-class CharterAgent:
+class CharterAgent(BaseAgent):
     """Two-step Charter update agent: ask questions, then propose edits."""
-
-    def __init__(self, provider: LLMProvider) -> None:
-        self._provider = provider
 
     async def ask_questions(
         self,
@@ -199,59 +226,13 @@ class CharterAgent:
             EDITS_SYSTEM_PROMPT, user_prompt, CHARTER_EDITS_SCHEMA,
         )
 
-    async def _generate_with_retry(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        schema: dict[str, Any],
-        temperature: float = 0.3,
-        max_tokens: int = 4096,
-    ) -> dict[str, Any]:
-        """Generate and parse JSON, retrying once on parse failure."""
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_schema=schema,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        try:
-            return json.loads(raw)
-        except json.JSONDecodeError:
-            logger.warning("Charter LLM returned invalid JSON, retrying")
-
-        correction = (
-            "\n\nIMPORTANT: Your previous response was not valid JSON. "
-            "Please respond with ONLY valid JSON matching the required schema. "
-            "No markdown, no explanation — just the JSON object."
-        )
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt + correction,
-            response_schema=schema,
-            temperature=0.2,
-            max_tokens=max_tokens,
-        )
-
-        text = raw.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-
-        return json.loads(text)
-
 
 # ------------------------------------------------------------------
 # Health Review Agent
 # ------------------------------------------------------------------
 
-class HealthReviewAgent:
+class HealthReviewAgent(BaseAgent):
     """Two-step Health Review agent: ask questions, then produce review."""
-
-    def __init__(self, provider: LLMProvider) -> None:
-        self._provider = provider
 
     async def ask_questions(
         self,
@@ -293,66 +274,13 @@ class HealthReviewAgent:
             REVIEW_SYSTEM_PROMPT, user_prompt, HEALTH_REVIEW_SCHEMA,
         )
 
-    async def _generate_with_retry(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        schema: dict[str, Any],
-        temperature: float = 0.3,
-        max_tokens: int = 16384,
-    ) -> dict[str, Any]:
-        """Generate and parse JSON, retrying once on parse failure."""
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_schema=schema,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        try:
-            return json.loads(self._strip_fences(raw))
-        except json.JSONDecodeError:
-            logger.warning(
-                "Health review LLM returned invalid JSON (len=%d), retrying. Raw: %s",
-                len(raw), raw[:500],
-            )
-
-        correction = (
-            "\n\nIMPORTANT: Your previous response was not valid JSON. "
-            "Please respond with ONLY valid JSON matching the required schema. "
-            "No markdown, no explanation — just the JSON object."
-        )
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt + correction,
-            response_schema=schema,
-            temperature=0.2,
-            max_tokens=max_tokens,
-        )
-
-        return json.loads(self._strip_fences(raw))
-
-    @staticmethod
-    def _strip_fences(text: str) -> str:
-        """Remove markdown code fences from LLM output."""
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-        return text.strip()
-
 
 # ------------------------------------------------------------------
 # CEO Review Agent
 # ------------------------------------------------------------------
 
-class CeoReviewAgent:
+class CeoReviewAgent(BaseAgent):
     """Two-step CEO Review agent: ask questions, then produce update."""
-
-    def __init__(self, provider: LLMProvider) -> None:
-        self._provider = provider
 
     async def ask_questions(
         self,
@@ -396,65 +324,13 @@ class CeoReviewAgent:
             REVIEW_SYSTEM_PROMPT, user_prompt, CEO_REVIEW_SCHEMA,
         )
 
-    async def _generate_with_retry(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        schema: dict[str, Any],
-        temperature: float = 0.3,
-        max_tokens: int = 16384,
-    ) -> dict[str, Any]:
-        """Generate and parse JSON, retrying once on parse failure."""
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_schema=schema,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        try:
-            return json.loads(self._strip_fences(raw))
-        except json.JSONDecodeError:
-            logger.warning(
-                "CEO review LLM returned invalid JSON (len=%d), retrying. Raw: %s",
-                len(raw), raw[:500],
-            )
-
-        correction = (
-            "\n\nIMPORTANT: Your previous response was not valid JSON. "
-            "Please respond with ONLY valid JSON matching the required schema. "
-            "No markdown, no explanation — just the JSON object."
-        )
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt + correction,
-            response_schema=schema,
-            temperature=0.2,
-            max_tokens=max_tokens,
-        )
-
-        return json.loads(self._strip_fences(raw))
-
-    @staticmethod
-    def _strip_fences(text: str) -> str:
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-        return text.strip()
-
 
 # ------------------------------------------------------------------
 # Risk Refine Agent
 # ------------------------------------------------------------------
 
-class RiskRefineAgent:
+class RiskRefineAgent(BaseAgent):
     """Iterative risk/decision refinement via Q&A loop."""
-
-    def __init__(self, provider: LLMProvider) -> None:
-        self._provider = provider
 
     async def refine(
         self,
@@ -489,52 +365,3 @@ class RiskRefineAgent:
             temperature=0.3,
             max_tokens=4096,
         )
-
-    async def _generate_with_retry(
-        self,
-        system_prompt: str,
-        user_prompt: str,
-        schema: dict[str, Any],
-        temperature: float = 0.3,
-        max_tokens: int = 4096,
-    ) -> dict[str, Any]:
-        """Generate and parse JSON, retrying once on parse failure."""
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt,
-            response_schema=schema,
-            temperature=temperature,
-            max_tokens=max_tokens,
-        )
-
-        try:
-            return json.loads(self._strip_fences(raw))
-        except json.JSONDecodeError:
-            logger.warning(
-                "Risk refine LLM returned invalid JSON (len=%d), retrying. Raw: %s",
-                len(raw), raw[:500],
-            )
-
-        correction = (
-            "\n\nIMPORTANT: Your previous response was not valid JSON. "
-            "Please respond with ONLY valid JSON matching the required schema. "
-            "No markdown, no explanation — just the JSON object."
-        )
-        raw = await self._provider.generate(
-            system_prompt=system_prompt,
-            user_prompt=user_prompt + correction,
-            response_schema=schema,
-            temperature=0.2,
-            max_tokens=max_tokens,
-        )
-
-        return json.loads(self._strip_fences(raw))
-
-    @staticmethod
-    def _strip_fences(text: str) -> str:
-        text = text.strip()
-        if text.startswith("```"):
-            text = text.split("\n", 1)[-1]
-        if text.endswith("```"):
-            text = text.rsplit("```", 1)[0]
-        return text.strip()

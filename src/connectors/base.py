@@ -42,6 +42,7 @@ class BaseConnector:
         cfg = settings or default_settings
         self._base_url = base_url.rstrip("/")
         self._auth = (cfg.atlassian.email, cfg.atlassian.api_token)
+        self._verify_ssl = cfg.atlassian.verify_ssl
         self._client: httpx.AsyncClient | None = None
 
     # ------------------------------------------------------------------
@@ -58,7 +59,7 @@ class BaseConnector:
                     "Content-Type": "application/json",
                 },
                 timeout=30.0,
-                verify=False,
+                verify=self._verify_ssl,
             )
         return self._client
 

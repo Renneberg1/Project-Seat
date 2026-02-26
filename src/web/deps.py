@@ -44,3 +44,32 @@ def get_nav_context(request: Request) -> dict:
         "nav_projects": nav_projects,
         "selected_project_id": selected_project_id,
     }
+
+
+def render_project_page(
+    request: Request, template: str, context: dict, project_id: int,
+) -> "HTMLResponse":
+    """Render a template with nav context and set the project cookie."""
+    from fastapi.responses import HTMLResponse
+
+    nav = get_nav_context(request)
+    nav["selected_project_id"] = project_id
+    response = templates.TemplateResponse(request, template, {**context, **nav})
+    response.set_cookie("seat_selected_project", str(project_id), max_age=60 * 60 * 24 * 30)
+    return response
+
+
+def collect_qa_pairs(form: dict) -> list[dict[str, str]]:
+    """Extract numbered question/answer pairs from a form dict.
+
+    Looks for ``question_0``, ``answer_0``, ``question_1``, ``answer_1``, etc.
+    """
+    pairs: list[dict[str, str]] = []
+    i = 0
+    while True:
+        q = form.get(f"question_{i}")
+        if q is None:
+            break
+        pairs.append({"question": str(q), "answer": str(form.get(f"answer_{i}") or "")})
+        i += 1
+    return pairs

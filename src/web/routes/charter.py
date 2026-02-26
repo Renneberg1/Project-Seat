@@ -2,23 +2,16 @@
 
 from __future__ import annotations
 
+import html
+
 from fastapi import APIRouter, Form, Request
 from fastapi.responses import HTMLResponse
 
 from src.services.charter import CharterService
 from src.services.dashboard import DashboardService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import collect_qa_pairs, render_project_page, templates
 
 router = APIRouter(prefix="/project/{id}/charter", tags=["charter"])
-
-
-def _render(request: Request, template: str, context: dict, project_id: int) -> HTMLResponse:
-    """Render a template with nav context and project cookie."""
-    nav = get_nav_context(request)
-    nav["selected_project_id"] = project_id
-    response = templates.TemplateResponse(request, template, {**context, **nav})
-    response.set_cookie("seat_selected_project", str(project_id), max_age=60 * 60 * 24 * 30)
-    return response
 
 
 # ------------------------------------------------------------------
@@ -41,7 +34,7 @@ async def charter_page(request: Request, id: int) -> HTMLResponse:
 
     suggestions = service.list_suggestions(id)
 
-    return _render(request, "charter.html", {
+    return render_project_page(request, "charter.html", {
         "project": project,
         "sections": sections,
         "suggestions": suggestions,
@@ -75,7 +68,7 @@ async def charter_ask(
         questions = await service.generate_questions(project, user_input)
     except Exception as exc:
         return HTMLResponse(
-            f'<div class="error-banner">LLM analysis failed: {exc}</div>',
+            f'<div class="error-banner">LLM analysis failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 
@@ -103,24 +96,14 @@ async def charter_analyze(
 
     form = await request.form()
     user_input = form.get("user_input", "")
-
-    # Collect Q&A pairs from form fields (question_0, answer_0, etc.)
-    qa_pairs: list[dict[str, str]] = []
-    i = 0
-    while True:
-        q = form.get(f"question_{i}")
-        a = form.get(f"answer_{i}")
-        if q is None:
-            break
-        qa_pairs.append({"question": str(q), "answer": str(a or "")})
-        i += 1
+    qa_pairs = collect_qa_pairs(form)
 
     service = CharterService()
     try:
         suggestions = await service.analyze_charter_update(project, str(user_input), qa_pairs)
     except Exception as exc:
         return HTMLResponse(
-            f'<div class="error-banner">LLM analysis failed: {exc}</div>',
+            f'<div class="error-banner">LLM analysis failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 
@@ -150,7 +133,7 @@ async def accept_charter_suggestion(
         sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
         return HTMLResponse(
-            f'<div class="error-banner">{exc}</div>',
+            f'<div class="error-banner">{html.escape(str(exc))}</div>',
             status_code=400,
         )
     if sug is None:

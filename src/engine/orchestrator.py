@@ -16,6 +16,7 @@ class ScheduledTask:
     fn: Callable[[], Awaitable[None]]
     interval_seconds: int
     enabled: bool = True
+    run_immediately: bool = False
 
 
 class Orchestrator:
@@ -31,17 +32,19 @@ class Orchestrator:
         fn: Callable[[], Awaitable[None]],
         interval_seconds: int,
         enabled: bool = True,
+        run_immediately: bool = False,
     ) -> None:
-        self._tasks.append(ScheduledTask(name, fn, interval_seconds, enabled))
+        self._tasks.append(ScheduledTask(name, fn, interval_seconds, enabled, run_immediately))
 
     async def start(self) -> None:
         for task in self._tasks:
             if task.enabled:
                 self._running.append(asyncio.create_task(self._run_loop(task)))
                 logger.info(
-                    "Orchestrator: started task '%s' (every %ds)",
+                    "Orchestrator: started task '%s' (every %ds, immediate=%s)",
                     task.name,
                     task.interval_seconds,
+                    task.run_immediately,
                 )
 
     async def stop(self) -> None:
@@ -52,6 +55,11 @@ class Orchestrator:
         logger.info("Orchestrator: all tasks stopped")
 
     async def _run_loop(self, task: ScheduledTask) -> None:
+        if task.run_immediately:
+            try:
+                await task.fn()
+            except Exception:
+                logger.exception("Orchestrator: task '%s' failed (initial run)", task.name)
         while True:
             await asyncio.sleep(task.interval_seconds)
             try:

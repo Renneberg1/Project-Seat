@@ -12,21 +12,13 @@ from src.cache import cache
 from src.config import settings as app_settings
 from src.database import get_db
 from src.services.dashboard import DashboardService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import render_project_page, templates
 
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/project/{id}/settings", tags=["settings"])
 
 _DISPLAY_CACHE_TTL = 300  # 5 min
-
-
-def _render(request: Request, template: str, context: dict, project_id: int) -> HTMLResponse:
-    nav = get_nav_context(request)
-    nav["selected_project_id"] = project_id
-    response = templates.TemplateResponse(request, template, {**context, **nav})
-    response.set_cookie("seat_selected_project", str(project_id), max_age=60 * 60 * 24 * 30)
-    return response
 
 
 class _DisplayValues:
@@ -126,7 +118,7 @@ async def settings_page(request: Request, id: int) -> HTMLResponse:
 
     display_values = await _resolve_display_values(project)
 
-    return _render(request, "project_settings.html", {
+    return render_project_page(request, "project_settings.html", {
         "project": project,
         "display_values": display_values,
     }, id)
@@ -192,7 +184,7 @@ async def settings_save(request: Request, id: int) -> HTMLResponse:
     project = dashboard.get_project_by_id(id)
     display_values = await _resolve_display_values(project)
 
-    return _render(request, "project_settings.html", {
+    return render_project_page(request, "project_settings.html", {
         "project": project,
         "display_values": display_values,
         "saved": True,

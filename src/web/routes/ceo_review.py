@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-import json
+import html
 import logging
 
 from fastapi import APIRouter, Request
@@ -14,18 +14,9 @@ from src.connectors.jira import JiraConnector
 from src.engine.mentions import resolve_confluence_mentions
 from src.services.ceo_review import CeoReviewService
 from src.services.dashboard import DashboardService
-from src.web.deps import get_nav_context, templates
+from src.web.deps import collect_qa_pairs, render_project_page, templates
 
 router = APIRouter(prefix="/project/{id}/ceo-review", tags=["ceo_review"])
-
-
-def _render(request: Request, template: str, context: dict, project_id: int) -> HTMLResponse:
-    """Render a template with nav context and project cookie."""
-    nav = get_nav_context(request)
-    nav["selected_project_id"] = project_id
-    response = templates.TemplateResponse(request, template, {**context, **nav})
-    response.set_cookie("seat_selected_project", str(project_id), max_age=60 * 60 * 24 * 30)
-    return response
 
 
 # ------------------------------------------------------------------
@@ -61,7 +52,7 @@ async def ceo_review_page(request: Request, id: int) -> HTMLResponse:
 
     past_reviews = service.list_reviews(id)
 
-    return _render(request, "project_ceo_review.html", {
+    return render_project_page(request, "project_ceo_review.html", {
         "project": project,
         "past_reviews": past_reviews,
     }, id)
@@ -88,7 +79,7 @@ async def ceo_review_ask(request: Request, id: int) -> HTMLResponse:
     except Exception as exc:
         logger.exception("CEO review /ask failed")
         return HTMLResponse(
-            f'<div class="error-banner">CEO review failed: {exc}</div>',
+            f'<div class="error-banner">CEO review failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 
@@ -113,17 +104,7 @@ async def ceo_review_analyze(request: Request, id: int) -> HTMLResponse:
 
     form = await request.form()
     pm_notes = str(form.get("pm_notes", ""))
-
-    # Collect Q&A pairs from form fields
-    qa_pairs: list[dict[str, str]] = []
-    i = 0
-    while True:
-        q = form.get(f"question_{i}")
-        a = form.get(f"answer_{i}")
-        if q is None:
-            break
-        qa_pairs.append({"question": str(q), "answer": str(a or "")})
-        i += 1
+    qa_pairs = collect_qa_pairs(form)
 
     service = CeoReviewService()
     try:
@@ -131,7 +112,7 @@ async def ceo_review_analyze(request: Request, id: int) -> HTMLResponse:
     except Exception as exc:
         logger.exception("CEO review /analyze failed")
         return HTMLResponse(
-            f'<div class="error-banner">CEO review failed: {exc}</div>',
+            f'<div class="error-banner">CEO review failed: {html.escape(str(exc))}</div>',
             status_code=500,
         )
 
@@ -169,7 +150,7 @@ async def ceo_review_accept(request: Request, id: int, rid: int) -> HTMLResponse
         result = service.accept_review(rid, project)
     except ValueError as exc:
         return HTMLResponse(
-            f'<div class="error-banner">{exc}</div>',
+            f'<div class="error-banner">{html.escape(str(exc))}</div>',
             status_code=400,
         )
 

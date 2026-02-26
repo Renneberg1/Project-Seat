@@ -8,9 +8,12 @@ import logging
 from dataclasses import asdict
 from typing import Any
 
+from src.cache import cache
 from src.config import Settings, settings as default_settings
 from src.database import get_db
 from src.models.project import Project
+
+_CONTEXT_CACHE_TTL = 600  # 10 minutes
 
 logger = logging.getLogger(__name__)
 
@@ -34,7 +37,14 @@ class HealthReviewService:
         """Fetch all available project data in parallel.
 
         Returns a dict suitable for passing to the prompt builders.
+        Uses a 10-minute cache so Step 2 reuses context from Step 1.
         """
+        cache_key = f"ctx:health_review:{project.id}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            logger.debug("Health review: using cached context for project %d", project.id)
+            return cached
+
         from src.services.dashboard import DashboardService
         from src.services.dhf import DHFService
         from src.services.release import ReleaseService
@@ -227,6 +237,7 @@ class HealthReviewService:
         if meeting_summaries:
             ctx["meeting_summaries"] = meeting_summaries
 
+        cache.set(cache_key, ctx, _CONTEXT_CACHE_TTL)
         return ctx
 
     # ------------------------------------------------------------------

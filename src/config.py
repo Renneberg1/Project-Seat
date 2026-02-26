@@ -23,12 +23,17 @@ def _load_field_map() -> dict[str, str]:
     return {}
 
 
+def _env_bool(name: str, default: bool = True) -> bool:
+    return os.getenv(name, str(default)).lower() in ("true", "1", "yes")
+
+
 @dataclass(frozen=True)
 class AtlassianSettings:
     domain: str = os.getenv("ATLASSIAN_DOMAIN", "")
     email: str = os.getenv("ATLASSIAN_EMAIL", "")
     api_token: str = os.getenv("ATLASSIAN_API_TOKEN", "")
     confluence_space_key: str = os.getenv("CONFLUENCE_SPACE_KEY", "HPP")
+    verify_ssl: bool = _env_bool("VERIFY_SSL", True)
 
     @property
     def jira_base_url(self) -> str:
@@ -45,6 +50,7 @@ class LLMSettings:
     api_key: str = os.getenv("LLM_API_KEY", "")
     model: str = os.getenv("LLM_MODEL", "gemini-2.5-flash")
     base_url: str = os.getenv("LLM_BASE_URL", "http://localhost:11434")
+    verify_ssl: bool = _env_bool("VERIFY_SSL", True)
 
 
 @dataclass(frozen=True)
