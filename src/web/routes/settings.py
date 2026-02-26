@@ -8,6 +8,7 @@ import logging
 from fastapi import APIRouter, Request
 from fastapi.responses import HTMLResponse
 
+from src.cache import cache
 from src.config import settings as app_settings
 from src.database import get_db
 from src.services.dashboard import DashboardService
@@ -16,6 +17,8 @@ from src.web.deps import get_nav_context, templates
 logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/project/{id}/settings", tags=["settings"])
+
+_DISPLAY_CACHE_TTL = 300  # 5 min
 
 
 def _render(request: Request, template: str, context: dict, project_id: int) -> HTMLResponse:
@@ -26,6 +29,93 @@ def _render(request: Request, template: str, context: dict, project_id: int) -> 
     return response
 
 
+class _DisplayValues:
+    """Simple namespace for display values passed to the template."""
+
+    def __init__(self, **kwargs: str):
+        for k, v in kwargs.items():
+            setattr(self, k, v)
+
+    def __getattr__(self, name: str) -> str:
+        return ""
+
+
+def _looks_like_page_id(value: str | None) -> bool:
+    """Return True if value looks like a numeric Confluence page ID."""
+    return bool(value and value.strip().isdigit())
+
+
+def _looks_like_issue_key(value: str | None) -> bool:
+    """Return True if value looks like a Jira issue key (e.g. PROG-256)."""
+    import re
+
+    return bool(value and re.match(r"^[A-Z]+-\d+$", value.strip(), re.IGNORECASE))
+
+
+async def _resolve_display_values(project) -> _DisplayValues:
+    """Resolve opaque IDs to human-readable display strings.
+
+    Skips API calls for values that don't look like valid IDs/keys.
+    """
+    from src.connectors.confluence import ConfluenceConnector
+    from src.connectors.jira import JiraConnector
+
+    vals: dict[str, str] = {}
+
+    # Confluence page IDs → titles (only for numeric IDs)
+    page_fields = [
+        ("confluence_charter_id", getattr(project, "confluence_charter_id", None)),
+        ("confluence_xft_id", getattr(project, "confluence_xft_id", None)),
+        ("confluence_ceo_review_id", getattr(project, "confluence_ceo_review_id", None)),
+        ("dhf_draft_root_id", getattr(project, "dhf_draft_root_id", None)),
+        ("dhf_released_root_id", getattr(project, "dhf_released_root_id", None)),
+    ]
+
+    ids_to_resolve = [(name, pid) for name, pid in page_fields if _looks_like_page_id(pid)]
+
+    if ids_to_resolve:
+        confluence = ConfluenceConnector()
+        try:
+            for field_name, page_id in ids_to_resolve:
+                cache_key = f"display:confluence:{page_id}"
+                cached = cache.get(cache_key)
+                if cached is not None:
+                    vals[field_name] = cached
+                    continue
+                try:
+                    page = await confluence.get_page(str(page_id))
+                    title = page.get("title", str(page_id))
+                    display = f"{title} ({page_id})"
+                    cache.set(cache_key, display, _DISPLAY_CACHE_TTL)
+                    vals[field_name] = display
+                except Exception:
+                    vals[field_name] = str(page_id)
+        finally:
+            await confluence.close()
+
+    # Jira goal key → key + summary (only for valid KEY-123 format)
+    goal_key = getattr(project, "jira_goal_key", None)
+    if _looks_like_issue_key(goal_key):
+        cache_key = f"display:jira:{goal_key}"
+        cached = cache.get(cache_key)
+        if cached is not None:
+            vals["jira_goal_key"] = cached
+        else:
+            jira = JiraConnector()
+            try:
+                issue = await jira.get_issue(goal_key, fields=["summary"])
+                summary = issue.get("fields", {}).get("summary", "")
+                display = f"{goal_key} — {summary}" if summary else goal_key
+                cache.set(cache_key, display, _DISPLAY_CACHE_TTL)
+                vals["jira_goal_key"] = display
+            except Exception:
+                vals["jira_goal_key"] = goal_key
+            finally:
+                await jira.close()
+
+    return _DisplayValues(**vals)
+
+
 @router.get("/", response_class=HTMLResponse)
 async def settings_page(request: Request, id: int) -> HTMLResponse:
     """Display the project settings form."""
@@ -34,7 +124,12 @@ async def settings_page(request: Request, id: int) -> HTMLResponse:
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
-    return _render(request, "project_settings.html", {"project": project}, id)
+    display_values = await _resolve_display_values(project)
+
+    return _render(request, "project_settings.html", {
+        "project": project,
+        "display_values": display_values,
+    }, id)
 
 
 @router.post("/", response_class=HTMLResponse)
@@ -93,9 +188,12 @@ async def settings_save(request: Request, id: int) -> HTMLResponse:
         )
         conn.commit()
 
-    # Reload project
+    # Reload project and resolve display values
     project = dashboard.get_project_by_id(id)
+    display_values = await _resolve_display_values(project)
+
     return _render(request, "project_settings.html", {
         "project": project,
+        "display_values": display_values,
         "saved": True,
     }, id)

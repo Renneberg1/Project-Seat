@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/typeahead_input.html" import typeahead_input %}
 {% block title %}Settings — {{ project.name }}{% endblock %}
 
 {% block content %}
@@ -17,10 +18,15 @@
             <label for="name">Project Name</label>
             <input type="text" id="name" name="name" value="{{ project.name }}">
         </div>
-        <div class="form-group">
-            <label for="jira_goal_key">Jira Goal Key</label>
-            <input type="text" id="jira_goal_key" name="jira_goal_key" value="{{ project.jira_goal_key }}" placeholder="e.g. PROG-123">
-        </div>
+        {{ typeahead_input(
+            name="jira_goal_key",
+            label="Jira Goal Key",
+            value=project.jira_goal_key,
+            endpoint="/api/typeahead/jira-issues",
+            placeholder="e.g. PROG-123",
+            display_value=display_values.jira_goal_key if display_values is defined else project.jira_goal_key,
+            params={"project": "PROG"}
+        ) }}
         <div class="form-group">
             <label for="phase">Phase</label>
             <select id="phase" name="phase">
@@ -33,30 +39,50 @@
 
     <fieldset>
         <legend>Confluence Pages</legend>
-        <div class="form-group">
-            <label for="confluence_charter_id">Charter Page ID</label>
-            <input type="text" id="confluence_charter_id" name="confluence_charter_id" value="{{ project.confluence_charter_id or '' }}" placeholder="e.g. 3559363918">
-        </div>
-        <div class="form-group">
-            <label for="confluence_xft_id">XFT Page ID</label>
-            <input type="text" id="confluence_xft_id" name="confluence_xft_id" value="{{ project.confluence_xft_id or '' }}" placeholder="e.g. 3559363934">
-        </div>
-        <div class="form-group">
-            <label for="confluence_ceo_review_id">CEO Review Page ID</label>
-            <input type="text" id="confluence_ceo_review_id" name="confluence_ceo_review_id" value="{{ project.confluence_ceo_review_id or '' }}" placeholder="Auto-discovered or enter manually">
-        </div>
+        {{ typeahead_input(
+            name="confluence_charter_id",
+            label="Charter Page ID",
+            value=project.confluence_charter_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=display_values.confluence_charter_id if display_values is defined and display_values.confluence_charter_id else (project.confluence_charter_id or '')
+        ) }}
+        {{ typeahead_input(
+            name="confluence_xft_id",
+            label="XFT Page ID",
+            value=project.confluence_xft_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=display_values.confluence_xft_id if display_values is defined and display_values.confluence_xft_id else (project.confluence_xft_id or '')
+        ) }}
+        {{ typeahead_input(
+            name="confluence_ceo_review_id",
+            label="CEO Review Page ID",
+            value=project.confluence_ceo_review_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Auto-discovered or search by title...",
+            display_value=display_values.confluence_ceo_review_id if display_values is defined and display_values.confluence_ceo_review_id else (project.confluence_ceo_review_id or '')
+        ) }}
     </fieldset>
 
     <fieldset>
         <legend>DHF Document Tracking</legend>
-        <div class="form-group">
-            <label for="dhf_draft_root_id">Draft Root Page ID</label>
-            <input type="text" id="dhf_draft_root_id" name="dhf_draft_root_id" value="{{ project.dhf_draft_root_id or '' }}" placeholder="Confluence page ID for draft DHF space">
-        </div>
-        <div class="form-group">
-            <label for="dhf_released_root_id">Released Root Page ID</label>
-            <input type="text" id="dhf_released_root_id" name="dhf_released_root_id" value="{{ project.dhf_released_root_id or '' }}" placeholder="Confluence page ID for released DHF space">
-        </div>
+        {{ typeahead_input(
+            name="dhf_draft_root_id",
+            label="Draft Root Page ID",
+            value=project.dhf_draft_root_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=display_values.dhf_draft_root_id if display_values is defined and display_values.dhf_draft_root_id else (project.dhf_draft_root_id or '')
+        ) }}
+        {{ typeahead_input(
+            name="dhf_released_root_id",
+            label="Released Root Page ID",
+            value=project.dhf_released_root_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=display_values.dhf_released_root_id if display_values is defined and display_values.dhf_released_root_id else (project.dhf_released_root_id or '')
+        ) }}
     </fieldset>
 
     <fieldset>

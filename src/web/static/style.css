@@ -1922,3 +1922,66 @@ button.htmx-request {
     border-color: var(--border-hover);
     background: var(--bg-hover);
 }
+
+/* ═══════════════════════════════════════════════════════════
+   Typeahead / Autocomplete
+   ═══════════════════════════════════════════════════════════ */
+.typeahead-wrapper {
+    position: relative;
+}
+
+.typeahead-results {
+    position: absolute;
+    z-index: 100;
+    left: 0;
+    right: 0;
+    max-height: 240px;
+    overflow-y: auto;
+    list-style: none;
+    margin: 0;
+    padding: 0;
+    background: var(--bg-surface);
+    border: 1px solid var(--border-default);
+    border-top: none;
+    border-radius: 0 0 4px 4px;
+    box-shadow: var(--shadow-md);
+}
+
+.typeahead-results:empty {
+    display: none;
+}
+
+.typeahead-results .ta-result {
+    display: flex;
+    align-items: baseline;
+    gap: 0.5rem;
+    padding: 0.4rem 0.6rem;
+    cursor: pointer;
+    font-size: 0.85rem;
+}
+
+.typeahead-results .ta-result:hover,
+.typeahead-results .ta-result.ta-active {
+    background: var(--bg-hover);
+}
+
+.typeahead-results .ta-label {
+    font-weight: 500;
+    color: var(--text-primary);
+    white-space: nowrap;
+}
+
+.typeahead-results .ta-sublabel {
+    color: var(--text-secondary);
+    font-size: 0.8rem;
+    overflow: hidden;
+    text-overflow: ellipsis;
+    white-space: nowrap;
+}
+
+.typeahead-results .ta-no-results {
+    padding: 0.5rem 0.6rem;
+    color: var(--text-muted);
+    font-size: 0.85rem;
+    font-style: italic;
+}

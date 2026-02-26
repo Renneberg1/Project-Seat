@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/typeahead_input.html" import typeahead_input %}
 
 {% block title %}Documents — {{ project.name }} — Project Seat{% endblock %}
 
@@ -211,16 +212,24 @@ document.getElementById('select-all').addEventListener('change', function() {
 <details class="dhf-config-section">
     <summary>DHF Configuration</summary>
     <form method="post" action="/project/{{ project.id }}/documents/config" class="dhf-config-form">
-        <div class="form-group">
-            <label for="dhf_draft_root_id">Draft Root Page ID</label>
-            <input type="text" id="dhf_draft_root_id" name="dhf_draft_root_id"
-                   value="{{ project.dhf_draft_root_id or '' }}" placeholder="e.g. 123456789">
-        </div>
-        <div class="form-group">
-            <label for="dhf_released_root_id">Released Root Page ID</label>
-            <input type="text" id="dhf_released_root_id" name="dhf_released_root_id"
-                   value="{{ project.dhf_released_root_id or '' }}" placeholder="e.g. 987654321">
-        </div>
+        {{ typeahead_input(
+            name="dhf_draft_root_id",
+            label="Draft Root Page ID",
+            value=project.dhf_draft_root_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=display_values.dhf_draft_root_id if display_values is defined and display_values.dhf_draft_root_id else (project.dhf_draft_root_id or ''),
+            input_id="dhf_draft_root_id_config"
+        ) }}
+        {{ typeahead_input(
+            name="dhf_released_root_id",
+            label="Released Root Page ID",
+            value=project.dhf_released_root_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=display_values.dhf_released_root_id if display_values is defined and display_values.dhf_released_root_id else (project.dhf_released_root_id or ''),
+            input_id="dhf_released_root_id_config"
+        ) }}
         <button type="submit">Save</button>
     </form>
 </details>
@@ -232,16 +241,22 @@ document.getElementById('select-all').addEventListener('change', function() {
     <h3>Configure DHF Tracking</h3>
     <p>Enter the Confluence page IDs for the Draft and Released DHF root pages to enable document tracking.</p>
     <form method="post" action="/project/{{ project.id }}/documents/config">
-        <div class="form-group">
-            <label for="dhf_draft_root_id">Draft Root Page ID</label>
-            <input type="text" id="dhf_draft_root_id" name="dhf_draft_root_id"
-                   value="" placeholder="e.g. 123456789">
-        </div>
-        <div class="form-group">
-            <label for="dhf_released_root_id">Released Root Page ID</label>
-            <input type="text" id="dhf_released_root_id" name="dhf_released_root_id"
-                   value="" placeholder="e.g. 987654321">
-        </div>
+        {{ typeahead_input(
+            name="dhf_draft_root_id",
+            label="Draft Root Page ID",
+            value='',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            input_id="dhf_draft_root_id_banner"
+        ) }}
+        {{ typeahead_input(
+            name="dhf_released_root_id",
+            label="Released Root Page ID",
+            value='',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            input_id="dhf_released_root_id_banner"
+        ) }}
         <button type="submit">Save</button>
     </form>
 </div>

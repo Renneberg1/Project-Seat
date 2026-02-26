@@ -140,6 +140,18 @@ class JiraConnector(BaseConnector):
         return resp.json()
 
     # ------------------------------------------------------------------
+    # Projects
+    # ------------------------------------------------------------------
+
+    async def list_projects(self, query: str = "", max_results: int = 20) -> list[dict[str, Any]]:
+        """Search for Jira projects by name/key."""
+        params: dict[str, Any] = {"maxResults": max_results}
+        if query:
+            params["query"] = query
+        data = await self.get("/project/search", params=params)
+        return data.get("values", [])
+
+    # ------------------------------------------------------------------
     # Field helpers
     # ------------------------------------------------------------------
 

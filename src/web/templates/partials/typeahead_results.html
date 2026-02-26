@@ -1,0 +1,10 @@
+{% if results %}
+{% for r in results %}
+<li class="ta-result" data-value="{{ r.id }}" data-label="{{ r.label }}{% if r.sublabel %} — {{ r.sublabel }}{% endif %}" tabindex="-1">
+    <span class="ta-label">{{ r.label }}</span>
+    {% if r.sublabel %}<span class="ta-sublabel">{{ r.sublabel }}</span>{% endif %}
+</li>
+{% endfor %}
+{% else %}
+<li class="ta-no-results">No results</li>
+{% endif %}

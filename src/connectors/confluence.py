@@ -81,6 +81,27 @@ class ConfluenceConnector(BaseConnector):
             params={"cql": cql},
         )
 
+    async def search_pages_by_title(
+        self, query: str, space_key: str = "", max_results: int = 10
+    ) -> list[dict[str, Any]]:
+        """Search pages by title via CQL (single page, no auto-pagination).
+
+        Uses the ``~`` (contains) operator.  Inside a CQL quoted string
+        only double-quotes need escaping — other characters are literal.
+        Expands ``space`` so callers can read the space key.
+        """
+        escaped = query.replace("\\", "\\\\").replace('"', '\\"')
+        cql_parts = [f'title ~ "{escaped}"', "type=page"]
+        if space_key:
+            cql_parts.append(f'space="{space_key}"')
+        cql = " AND ".join(cql_parts)
+        # Single GET — no pagination; typeahead only needs the top results.
+        data = await self.get(
+            "/content/search",
+            params={"cql": cql, "limit": max_results, "expand": "space"},
+        )
+        return data.get("results", [])
+
     # ------------------------------------------------------------------
     # v2 API helpers
     # ------------------------------------------------------------------

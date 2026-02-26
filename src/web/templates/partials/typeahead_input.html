@@ -1,0 +1,38 @@
+{#
+  Typeahead input macro.
+
+  Parameters:
+    name        — form field name (hidden input carries the selected ID)
+    label       — visible label text
+    value       — current ID value (for form submission)
+    endpoint    — typeahead API URL, e.g. "/api/typeahead/confluence-pages"
+    placeholder — input placeholder text
+    display_value — human-readable display text for current value (optional)
+    params      — extra query params as dict, e.g. {"space": "HPP"} (optional)
+    input_id    — HTML id for the hidden input (defaults to name)
+#}
+{% macro typeahead_input(name, label, value="", endpoint="", placeholder="", display_value="", params={}, input_id="") %}
+{% set eid = input_id or name %}
+{% set extra_parts = [] %}
+{% for k, v in params.items() %}{% if v %}{% if extra_parts.append(k ~ "=" ~ v) %}{% endif %}{% endif %}{% endfor %}
+{% set extra_qs = extra_parts | join("&") %}
+{% set full_endpoint = endpoint ~ ("?" ~ extra_qs if extra_qs else "") %}
+<div class="form-group typeahead-wrapper" data-typeahead>
+    <label for="{{ eid }}_display">{{ label }}</label>
+    <input type="text"
+           id="{{ eid }}_display"
+           class="ta-search-input"
+           value="{{ display_value }}"
+           placeholder="{{ placeholder }}"
+           autocomplete="off"
+           hx-get="{{ full_endpoint }}"
+           hx-trigger="keyup changed delay:300ms"
+           hx-target="#{{ eid }}_results"
+           hx-swap="innerHTML"
+           hx-include="none"
+           hx-vals='js:{"q": document.getElementById("{{ eid }}_display").value}'
+           name="{{ eid }}_display_field">
+    <input type="hidden" id="{{ eid }}" name="{{ name }}" value="{{ value }}">
+    <ul id="{{ eid }}_results" class="typeahead-results"></ul>
+</div>
+{% endmacro %}

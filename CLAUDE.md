@@ -21,7 +21,7 @@ The application has four layers:
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -114,7 +114,8 @@ project-seat/
 │   │   │   ├── transcript.py       # Upload, analyze, accept/reject suggestions
 │   │   │   ├── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
 │   │   │   ├── health_review.py    # Health review page, LLM Q&A, review output
-│   │   │   └── ceo_review.py      # CEO review page, LLM Q&A, preview, accept/reject
+│   │   │   ├── ceo_review.py      # CEO review page, LLM Q&A, preview, accept/reject
+│   │   │   └── typeahead.py       # Typeahead search endpoints for Atlassian resources
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
 │   │   │   ├── phases.html
@@ -149,9 +150,12 @@ project-seat/
 │   │   │       ├── ceo_review_questions.html   # CEO review clarifying questions form
 │   │   │       ├── ceo_review_preview.html     # CEO review preview with accept/reject
 │   │   │       ├── ceo_review_row.html         # Individual past CEO review row
-│   │   │       └── risk_refine_panel.html      # Risk/decision refinement Q&A panel
-│   │   └── static/              # CSS (JS loaded from CDN: HTMX, Chart.js)
-│   │       └── style.css
+│   │   │       ├── risk_refine_panel.html      # Risk/decision refinement Q&A panel
+│   │   │       ├── typeahead_input.html       # Reusable typeahead input macro
+│   │   │       └── typeahead_results.html     # Typeahead search results partial
+│   │   └── static/              # CSS + JS (CDN: HTMX, Chart.js)
+│   │       ├── style.css
+│   │       └── typeahead.js     # Typeahead keyboard nav and selection logic
 │   └── models/
 │       ├── __init__.py
 │       ├── project.py           # Project data models
@@ -207,7 +211,8 @@ project-seat/
         ├── test_routes_transcript.py
         ├── test_routes_charter.py   # Charter route contract tests
         ├── test_routes_health_review.py  # Health review route tests
-        └── test_routes_team_progress.py  # Team progress route tests
+        ├── test_routes_team_progress.py  # Team progress route tests
+        └── test_routes_typeahead.py     # Typeahead search route tests
 ```
 
 ## How to Run
@@ -265,6 +270,7 @@ pytest
 - Routes are thin — validate input, call a service, return a template
 - LLM loading indicators use animated CSS spinners (opacity-based, compatible with HTMX's built-in `.htmx-indicator` mechanism) and `hx-disabled-elt` for button disabling during requests
 - Dashboard layout uses CSS Grid with `.dash-*` class prefix: hero bar, 4-column metric cards, full-width team breakdown, 3-column activity/links section. Responsive at 768px (2-col) and 480px (1-col).
+- **Typeahead inputs** use the `typeahead_input` Jinja2 macro from `partials/typeahead_input.html`. Import with `{% from "partials/typeahead_input.html" import typeahead_input %}` and call with `name`, `label`, `value`, `endpoint`, `placeholder`, `display_value`, and optional `params` dict. The macro generates a visible search input (HTMX-powered), a hidden input for form submission, and a results dropdown. JS logic is in `static/typeahead.js`. Endpoints are under `/api/typeahead/` (confluence-pages, jira-issues, jira-projects, jira-versions).
 - **Dark mode** uses `data-theme` attribute on `<html>` (`"light"` or `"dark"`). All colors are CSS custom properties defined in `:root` (light) and `[data-theme="dark"]` (dark) blocks in `style.css`. Never use hardcoded color values — always reference a `var(--*)` token. The toggle button is in `base.html` with localStorage persistence and OS preference detection via `prefers-color-scheme`. Chart.js charts read colors via `getThemeColor('--var-name')` and rebuild on the `theme-changed` custom event. Utility classes: `.text-secondary`, `.text-tertiary`, `.text-muted`.
 
 ### Database

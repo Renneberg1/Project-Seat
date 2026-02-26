@@ -1,3 +1,4 @@
+{% from "partials/typeahead_input.html" import typeahead_input %}
 <div class="import-confirm">
     <h2>Confirm Import</h2>
 
@@ -10,19 +11,23 @@
                    value="{{ preview.goal_summary }}">
         </div>
 
-        <div class="form-group">
-            <label for="charter_id">Charter Page ID</label>
-            <input type="text" id="charter_id" name="charter_id"
-                   value="{{ preview.charter_id or '' }}"
-                   placeholder="Confluence page ID">
-        </div>
+        {{ typeahead_input(
+            name="charter_id",
+            label="Charter Page ID",
+            value=preview.charter_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=preview.charter_title if preview.charter_title is defined and preview.charter_title else (preview.charter_id or '')
+        ) }}
 
-        <div class="form-group">
-            <label for="xft_id">XFT / Scope Page ID</label>
-            <input type="text" id="xft_id" name="xft_id"
-                   value="{{ preview.xft_id or '' }}"
-                   placeholder="Confluence page ID">
-        </div>
+        {{ typeahead_input(
+            name="xft_id",
+            label="XFT / Scope Page ID",
+            value=preview.xft_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=preview.xft_title if preview.xft_title is defined and preview.xft_title else (preview.xft_id or '')
+        ) }}
 
         <div class="form-group">
             <label for="pi_version">PI Version (Product Ideas board)</label>
@@ -36,15 +41,17 @@
                    placeholder="Paste URL or <iframe> embed code from Jira Plans">
         </div>
 
-        <div class="form-group">
-            <label for="ceo_review_id">CEO Review Page ID</label>
-            <input type="text" id="ceo_review_id" name="ceo_review_id"
-                   value="{{ preview.ceo_review_id or '' }}"
-                   placeholder="Confluence page ID">
-            {% if preview.ceo_review_id %}
-            <small class="text-secondary">Auto-detected from Charter ancestors</small>
-            {% endif %}
-        </div>
+        {{ typeahead_input(
+            name="ceo_review_id",
+            label="CEO Review Page ID",
+            value=preview.ceo_review_id or '',
+            endpoint="/api/typeahead/confluence-pages",
+            placeholder="Search by page title...",
+            display_value=preview.ceo_review_title if preview.ceo_review_title is defined and preview.ceo_review_title else (preview.ceo_review_id or '')
+        ) }}
+        {% if preview.ceo_review_id %}
+        <small class="text-secondary">Auto-detected from Charter ancestors</small>
+        {% endif %}
 
         <div class="form-group">
             <label for="team_projects">Team Projects (KEY:VERSION, comma-separated)</label>

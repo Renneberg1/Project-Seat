@@ -1,4 +1,5 @@
 {% extends "base.html" %}
+{% from "partials/typeahead_input.html" import typeahead_input %}
 
 {% block title %}Import Project — Project Seat{% endblock %}
 
@@ -11,12 +12,14 @@
 {% endif %}
 
 <form hx-post="/import/fetch" hx-target="#import-result" hx-swap="innerHTML">
-    <div class="form-group">
-        <label for="goal_key">PROG Goal Key</label>
-        <input type="text" id="goal_key" name="goal_key" required
-               placeholder="e.g. PROG-256" pattern="[A-Za-z]+-\d+"
-               style="text-transform: uppercase;">
-    </div>
+    {{ typeahead_input(
+        name="goal_key",
+        label="PROG Goal Key",
+        value='',
+        endpoint="/api/typeahead/jira-issues",
+        placeholder="e.g. PROG-256",
+        params={"project": "PROG"}
+    ) }}
     <button type="submit">Fetch from Jira</button>
 </form>
 
