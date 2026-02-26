@@ -2,17 +2,13 @@
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-from dataclasses import asdict
-from datetime import date, datetime, timedelta
+from datetime import date, timedelta
 from html import escape
 from typing import Any
 
-from src.cache import cache
 from src.config import Settings, settings as default_settings
-from src.database import get_db
 from src.models.ceo_review import CeoReview, CeoReviewStatus
 from src.models.project import Project
 
@@ -30,12 +26,16 @@ class CeoReviewService:
         self,
         db_path: str | None = None,
         settings: Settings | None = None,
+        review_repo: "CeoReviewRepository | None" = None,
     ) -> None:
         self._settings = settings or default_settings
         self._db_path = db_path or self._settings.db_path
 
+        from src.repositories.review_repo import CeoReviewRepository
+        self._repo = review_repo or CeoReviewRepository(self._db_path)
+
     # ------------------------------------------------------------------
-    # Gather context (reuses existing services + new recent queries)
+    # Gather context (reuses ProjectContextService)
     # ------------------------------------------------------------------
 
     async def gather_ceo_context(self, project: Project) -> dict[str, Any]:
@@ -43,157 +43,37 @@ class CeoReviewService:
 
         Uses a 10-minute cache so Step 2 reuses context from Step 1.
         """
-        cache_key = f"ctx:ceo_review:{project.id}"
-        cached = cache.get(cache_key)
-        if cached is not None:
-            logger.debug("CEO review: using cached context for project %d", project.id)
-            return cached
+        from src.services.project_context import ProjectContextService
 
-        from src.connectors.jira import JiraConnector
-        from src.services.dashboard import DashboardService
-        from src.services.dhf import DHFService
-        from src.services.release import ReleaseService
-        from src.services.team_progress import TeamProgressService
-        from src.services.team_snapshot import TeamSnapshotService
-
-        dashboard = DashboardService(db_path=self._db_path, settings=self._settings)
-        dhf_service = DHFService(settings=self._settings)
-        team_progress = TeamProgressService()
-        team_snapshot = TeamSnapshotService(db_path=self._db_path)
-
-        async def _get_summary():
-            try:
-                return await dashboard.get_project_summary(project)
-            except Exception as exc:
-                logger.warning("CEO review: failed to get project summary: %s", exc)
-                return None
-
-        async def _get_initiatives():
-            try:
-                return await dashboard.get_initiatives(project)
-            except Exception as exc:
-                logger.warning("CEO review: failed to get initiatives: %s", exc)
-                return []
-
-        async def _get_team_reports():
-            try:
-                return await team_progress.get_team_reports(project)
-            except Exception as exc:
-                logger.warning("CEO review: failed to get team reports: %s", exc)
-                return []
-
-        async def _get_snapshots():
-            try:
-                return team_snapshot.get_snapshots(project.id, 14)
-            except Exception as exc:
-                logger.warning("CEO review: failed to get snapshots: %s", exc)
-                return []
-
-        async def _get_dhf():
-            try:
-                docs, _ = await dhf_service.get_dhf_table(project)
-                return docs
-            except Exception as exc:
-                logger.warning("CEO review: failed to get DHF data: %s", exc)
-                return []
-
-        async def _get_releases():
-            try:
-                release_service = ReleaseService(db_path=self._db_path)
-                releases = release_service.list_releases(project.id)
-                return [{"name": r.name, "locked": r.locked} for r in releases]
-            except Exception as exc:
-                logger.warning("CEO review: failed to get releases: %s", exc)
-                return []
-
-        async def _get_new_risks():
-            """Fetch risks created in the last 2 weeks."""
-            try:
-                jira = JiraConnector(settings=self._settings)
-                try:
-                    # Build version filter from team_projects
-                    jql = (
-                        f'project = RISK AND issuetype = Risk '
-                        f'AND parent = {project.jira_goal_key} AND created >= -2w'
-                    )
-                    issues = await jira.search(
-                        jql,
-                        fields=["summary", "status", "components"],
-                    )
-                    return issues
-                finally:
-                    await jira.close()
-            except Exception as exc:
-                logger.warning("CEO review: failed to get new risks: %s", exc)
-                return []
-
-        async def _get_new_decisions():
-            """Fetch decisions created in the last 2 weeks."""
-            try:
-                jira = JiraConnector(settings=self._settings)
-                try:
-                    jql = (
-                        f'project = RISK AND issuetype = "Project Issue" '
-                        f'AND parent = {project.jira_goal_key} AND created >= -2w'
-                    )
-                    issues = await jira.search(
-                        jql,
-                        fields=["summary", "status"],
-                    )
-                    return issues
-                finally:
-                    await jira.close()
-            except Exception as exc:
-                logger.warning("CEO review: failed to get new decisions: %s", exc)
-                return []
-
-        async def _get_meeting_summaries():
-            try:
-                with get_db(self._db_path) as conn:
-                    rows = conn.execute(
-                        "SELECT filename, meeting_summary, created_at FROM transcript_cache "
-                        "WHERE project_id = ? AND meeting_summary IS NOT NULL "
-                        "AND created_at >= ? ORDER BY created_at DESC LIMIT 5",
-                        (project.id, _TWO_WEEKS_AGO()),
-                    ).fetchall()
-                return [
-                    {"filename": r["filename"], "summary": r["meeting_summary"], "created_at": r["created_at"]}
-                    for r in rows
-                ]
-            except Exception as exc:
-                logger.warning("CEO review: failed to get meeting summaries: %s", exc)
-                return []
-
-        (
-            summary, initiatives, team_reports, snapshots,
-            dhf_docs, releases, new_risks_raw, new_decisions_raw,
-            meeting_summaries,
-        ) = await asyncio.gather(
-            _get_summary(),
-            _get_initiatives(),
-            _get_team_reports(),
-            _get_snapshots(),
-            _get_dhf(),
-            _get_releases(),
-            _get_new_risks(),
-            _get_new_decisions(),
-            _get_meeting_summaries(),
+        ctx_service = ProjectContextService(
+            db_path=self._db_path, settings=self._settings,
+        )
+        data = await ctx_service.gather(
+            project,
+            summary=True, initiatives=True,
+            team_reports=True,
+            snapshots=True, snapshot_days=14,
+            dhf_docs=True, releases=True,
+            risks_raw=True, risks_created_since="-2w",
+            decisions_raw=True, decisions_created_since="-2w",
+            meeting_summaries=True, meeting_summary_limit=5,
+            meeting_summary_since=_TWO_WEEKS_AGO(),
+            cache_key=f"ctx:ceo_review:{project.id}",
+            cache_ttl=_CONTEXT_CACHE_TTL,
         )
 
-        ctx = {
+        return {
             "project": project,
-            "summary": summary,
-            "initiatives": initiatives,
-            "team_reports": team_reports,
-            "snapshots": snapshots,
-            "dhf_docs": dhf_docs,
-            "releases": releases,
-            "new_risks_raw": new_risks_raw,
-            "new_decisions_raw": new_decisions_raw,
-            "meeting_summaries": meeting_summaries,
+            "summary": data.summary,
+            "initiatives": data.initiatives,
+            "team_reports": data.team_reports,
+            "snapshots": data.snapshots,
+            "dhf_docs": data.dhf_docs,
+            "releases": data.releases,
+            "new_risks_raw": data.new_risks_raw,
+            "new_decisions_raw": data.new_decisions_raw,
+            "meeting_summaries": data.meeting_summaries,
         }
-        cache.set(cache_key, ctx, _CONTEXT_CACHE_TTL)
-        return ctx
 
     # ------------------------------------------------------------------
     # Compute deterministic metrics from context
@@ -417,14 +297,7 @@ class CeoReviewService:
 
     def save_review(self, project_id: int, review: dict[str, Any], xhtml: str) -> int:
         """Persist a CEO review and return its ID."""
-        with get_db(self._db_path) as conn:
-            cursor = conn.execute(
-                "INSERT INTO ceo_reviews (project_id, review_json, confluence_body, status) "
-                "VALUES (?, ?, ?, ?)",
-                (project_id, json.dumps(review), xhtml, CeoReviewStatus.DRAFT.value),
-            )
-            conn.commit()
-            return cursor.lastrowid
+        return self._repo.insert(project_id, json.dumps(review), xhtml, CeoReviewStatus.DRAFT.value)
 
     def accept_review(self, review_id: int, project: Project) -> CeoReview | None:
         """Accept a review and queue it for approval (Confluence append)."""
@@ -459,42 +332,22 @@ class CeoReviewService:
             project_id=project.id,
         )
 
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE ceo_reviews SET status = ?, approval_item_id = ? WHERE id = ?",
-                (CeoReviewStatus.QUEUED.value, item_id, review_id),
-            )
-            conn.commit()
+        self._repo.update_status(review_id, CeoReviewStatus.QUEUED.value, item_id)
 
         return self.get_review(review_id)
 
     def reject_review(self, review_id: int) -> CeoReview | None:
         """Reject a CEO review."""
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE ceo_reviews SET status = ? WHERE id = ?",
-                (CeoReviewStatus.REJECTED.value, review_id),
-            )
-            conn.commit()
+        self._repo.update_status(review_id, CeoReviewStatus.REJECTED.value)
         return self.get_review(review_id)
 
     def list_reviews(self, project_id: int) -> list[CeoReview]:
         """Return recent CEO reviews (last 10), newest first."""
-        with get_db(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM ceo_reviews WHERE project_id = ? ORDER BY id DESC LIMIT 10",
-                (project_id,),
-            ).fetchall()
-        return [CeoReview.from_row(r) for r in rows]
+        return self._repo.list_reviews(project_id)
 
     def get_review(self, review_id: int) -> CeoReview | None:
         """Fetch a single CEO review by ID."""
-        with get_db(self._db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM ceo_reviews WHERE id = ?",
-                (review_id,),
-            ).fetchone()
-        return CeoReview.from_row(row) if row else None
+        return self._repo.get_review(review_id)
 
     # ------------------------------------------------------------------
     # CEO Review page discovery

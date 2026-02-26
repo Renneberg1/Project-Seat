@@ -10,7 +10,6 @@ from fastapi.responses import HTMLResponse
 
 from src.cache import cache
 from src.config import settings as app_settings
-from src.database import get_db
 from src.services.dashboard import DashboardService
 from src.web.deps import get_dashboard_service, render_project_page, templates
 
@@ -164,27 +163,17 @@ async def settings_save(
             if key:
                 team_projects.append([key, val])
 
-    with get_db(app_settings.db_path) as conn:
-        conn.execute(
-            """UPDATE projects SET
-                name = ?, phase = ?, jira_goal_key = ?,
-                confluence_charter_id = ?, confluence_xft_id = ?,
-                confluence_ceo_review_id = ?,
-                dhf_draft_root_id = ?, dhf_released_root_id = ?,
-                pi_version = ?, jira_plan_url = ?,
-                team_projects = ?
-            WHERE id = ?""",
-            (
-                name, phase, jira_goal_key,
-                confluence_charter_id, confluence_xft_id,
-                confluence_ceo_review_id,
-                dhf_draft_root_id, dhf_released_root_id,
-                pi_version, jira_plan_url,
-                json.dumps(team_projects),
-                id,
-            ),
-        )
-        conn.commit()
+    dashboard.update_project(
+        id,
+        name=name, phase=phase, jira_goal_key=jira_goal_key,
+        confluence_charter_id=confluence_charter_id,
+        confluence_xft_id=confluence_xft_id,
+        confluence_ceo_review_id=confluence_ceo_review_id,
+        dhf_draft_root_id=dhf_draft_root_id,
+        dhf_released_root_id=dhf_released_root_id,
+        pi_version=pi_version, jira_plan_url=jira_plan_url,
+        team_projects=team_projects,
+    )
 
     # Reload project and resolve display values
     project = dashboard.get_project_by_id(id)

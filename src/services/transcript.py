@@ -1,18 +1,13 @@
-"""Transcript service — parsing, storage, LLM analysis, and suggestion management."""
+"""Transcript service — storage, LLM analysis, and suggestion management."""
 
 from __future__ import annotations
 
-import asyncio
 import json
 import logging
-import re
-from io import BytesIO
 from typing import Any
 
 from src.config import Settings, settings as default_settings
-from src.connectors.base import ConnectorError
 from src.connectors.jira import JiraConnector
-from src.database import get_db
 from src.engine.mentions import resolve_adf_doc_mentions, resolve_confluence_mentions
 from src.models.transcript import (
     ParsedTranscript,
@@ -20,164 +15,12 @@ from src.models.transcript import (
     SuggestionStatus,
     SuggestionType,
     TranscriptRecord,
-    TranscriptSegment,
     TranscriptSuggestion,
 )
+from src.services._transcript_helpers import build_preview, extract_adf_text, get_suggestion as _get_suggestion_by_id
+from src.services.transcript_parser import TranscriptParser  # noqa: F401 — re-export
 
 logger = logging.getLogger(__name__)
-
-
-class TranscriptParser:
-    """Parse meeting transcripts from various file formats."""
-
-    def parse(self, filename: str, content: bytes) -> ParsedTranscript:
-        """Route to the appropriate parser based on file extension."""
-        ext = filename.rsplit(".", 1)[-1].lower() if "." in filename else ""
-        if ext == "vtt":
-            return self._parse_vtt(filename, content)
-        elif ext == "txt":
-            return self._parse_txt(filename, content)
-        elif ext == "docx":
-            return self._parse_docx(filename, content)
-        else:
-            raise ValueError(f"Unsupported file format: .{ext}. Use .vtt, .txt, or .docx")
-
-    def _parse_vtt(self, filename: str, content: bytes) -> ParsedTranscript:
-        """Parse WebVTT with <v Name> speaker tags and timestamp blocks."""
-        text = content.decode("utf-8-sig", errors="replace")
-        segments: list[TranscriptSegment] = []
-        speakers: set[str] = set()
-
-        # Split into blocks separated by blank lines
-        blocks = re.split(r"\n\s*\n", text)
-        timestamp_re = re.compile(
-            r"(\d{2}:\d{2}:\d{2}\.\d{3})\s*-->\s*(\d{2}:\d{2}:\d{2}\.\d{3})"
-        )
-        speaker_re = re.compile(r"<v\s+([^>]+)>(.+?)(?:</v>|$)", re.DOTALL)
-
-        for block in blocks:
-            lines = block.strip().split("\n")
-            if not lines:
-                continue
-
-            ts_start = ts_end = None
-            speech_lines: list[str] = []
-
-            for line in lines:
-                ts_match = timestamp_re.search(line)
-                if ts_match:
-                    ts_start, ts_end = ts_match.group(1), ts_match.group(2)
-                    continue
-                # Skip WEBVTT header and sequence numbers
-                if line.strip().startswith("WEBVTT") or line.strip().isdigit():
-                    continue
-                if line.strip():
-                    speech_lines.append(line.strip())
-
-            if not speech_lines:
-                continue
-
-            full_text = " ".join(speech_lines)
-
-            # Try to extract speaker from <v Name> tags
-            speaker_match = speaker_re.search(full_text)
-            if speaker_match:
-                speaker = speaker_match.group(1).strip()
-                spoken = speaker_re.sub(r"\2", full_text).strip()
-            else:
-                speaker = "Unknown"
-                spoken = full_text
-
-            speakers.add(speaker)
-            segments.append(TranscriptSegment(
-                speaker=speaker,
-                text=spoken,
-                timestamp_start=ts_start,
-                timestamp_end=ts_end,
-            ))
-
-        raw = "\n".join(f"{s.speaker}: {s.text}" for s in segments)
-        duration = None
-        if segments and segments[-1].timestamp_end:
-            duration = segments[-1].timestamp_end
-
-        return ParsedTranscript(
-            filename=filename,
-            segments=segments,
-            raw_text=raw,
-            speaker_list=sorted(speakers),
-            duration_hint=duration,
-        )
-
-    def _parse_txt(self, filename: str, content: bytes) -> ParsedTranscript:
-        """Parse plain text with 'Name: text' speaker prefixes."""
-        text = content.decode("utf-8-sig", errors="replace")
-        segments: list[TranscriptSegment] = []
-        speakers: set[str] = set()
-
-        speaker_line_re = re.compile(r"^([A-Za-z][A-Za-z .'-]{0,40}):\s+(.+)$")
-
-        current_speaker = "Unknown"
-        for line in text.split("\n"):
-            line = line.strip()
-            if not line:
-                continue
-            match = speaker_line_re.match(line)
-            if match:
-                current_speaker = match.group(1).strip()
-                spoken = match.group(2).strip()
-            else:
-                spoken = line
-
-            speakers.add(current_speaker)
-            segments.append(TranscriptSegment(speaker=current_speaker, text=spoken))
-
-        raw = "\n".join(f"{s.speaker}: {s.text}" for s in segments)
-        return ParsedTranscript(
-            filename=filename,
-            segments=segments,
-            raw_text=raw,
-            speaker_list=sorted(speakers),
-        )
-
-    def _parse_docx(self, filename: str, content: bytes) -> ParsedTranscript:
-        """Extract paragraph text via python-docx."""
-        try:
-            from docx import Document
-        except ImportError:
-            raise ImportError(
-                "python-docx is required for .docx parsing. "
-                "Install with: uv add python-docx"
-            )
-
-        doc = Document(BytesIO(content))
-        segments: list[TranscriptSegment] = []
-        speakers: set[str] = set()
-
-        speaker_line_re = re.compile(r"^([A-Za-z][A-Za-z .'-]{0,40}):\s+(.+)$")
-        current_speaker = "Unknown"
-
-        for para in doc.paragraphs:
-            text = para.text.strip()
-            if not text:
-                continue
-            match = speaker_line_re.match(text)
-            if match:
-                current_speaker = match.group(1).strip()
-                spoken = match.group(2).strip()
-            else:
-                spoken = text
-
-            speakers.add(current_speaker)
-            segments.append(TranscriptSegment(speaker=current_speaker, text=spoken))
-
-        raw = "\n".join(f"{s.speaker}: {s.text}" for s in segments)
-        return ParsedTranscript(
-            filename=filename,
-            segments=segments,
-            raw_text=raw,
-            speaker_list=sorted(speakers),
-        )
 
 
 class TranscriptService:
@@ -187,9 +30,13 @@ class TranscriptService:
         self,
         db_path: str | None = None,
         settings: Settings | None = None,
+        transcript_repo: "TranscriptRepository | None" = None,
     ) -> None:
         self._settings = settings or default_settings
         self._db_path = db_path or self._settings.db_path
+
+        from src.repositories.transcript_repo import TranscriptRepository
+        self._repo = transcript_repo or TranscriptRepository(self._db_path)
 
     # ------------------------------------------------------------------
     # Storage
@@ -210,46 +57,19 @@ class TranscriptService:
             "speaker_list": parsed.speaker_list,
             "duration_hint": parsed.duration_hint,
         })
-        with get_db(self._db_path) as conn:
-            cursor = conn.execute(
-                """INSERT INTO transcript_cache
-                   (project_id, filename, raw_text, processed_json)
-                   VALUES (?, ?, ?, ?)""",
-                (project_id, parsed.filename, parsed.raw_text, processed),
-            )
-            conn.commit()
-            return cursor.lastrowid
+        return self._repo.insert_transcript(project_id, parsed.filename, parsed.raw_text, processed)
 
     def list_transcripts(self, project_id: int) -> list[TranscriptRecord]:
         """List all transcripts for a project, newest first."""
-        with get_db(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM transcript_cache WHERE project_id = ? ORDER BY created_at DESC",
-                (project_id,),
-            ).fetchall()
-        return [TranscriptRecord.from_row(r) for r in rows]
+        return self._repo.list_transcripts(project_id)
 
     def get_transcript(self, transcript_id: int) -> TranscriptRecord | None:
         """Fetch a single transcript by ID."""
-        with get_db(self._db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM transcript_cache WHERE id = ?",
-                (transcript_id,),
-            ).fetchone()
-        return TranscriptRecord.from_row(row) if row else None
+        return self._repo.get_transcript(transcript_id)
 
     def delete_transcript(self, transcript_id: int) -> None:
         """Delete a transcript and its suggestions."""
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "DELETE FROM transcript_suggestions WHERE transcript_id = ?",
-                (transcript_id,),
-            )
-            conn.execute(
-                "DELETE FROM transcript_cache WHERE id = ?",
-                (transcript_id,),
-            )
-            conn.commit()
+        self._repo.delete_transcript(transcript_id)
 
     # ------------------------------------------------------------------
     # Project context gathering
@@ -257,98 +77,28 @@ class TranscriptService:
 
     async def gather_project_context(self, project: Any) -> ProjectContext:
         """Fetch existing risks, decisions, and Confluence page content in parallel."""
-        from src.connectors.jira import JiraConnector
-        from src.connectors.confluence import ConfluenceConnector
+        from src.services.project_context import ProjectContextService
 
-        jira = JiraConnector(settings=self._settings)
-        confluence = ConfluenceConnector(settings=self._settings)
+        ctx_service = ProjectContextService(
+            db_path=self._db_path, settings=self._settings,
+        )
+        data = await ctx_service.gather(
+            project,
+            risks=True, decisions=True,
+            charter=True, xft=True,
+            goal_metadata=True,
+        )
 
-        async def _fetch_risks() -> list[dict[str, str]]:
-            try:
-                raw = await jira.search(
-                    f'project = RISK AND issuetype = Risk AND parent = {project.jira_goal_key}',
-                    fields=["summary", "status"],
-                )
-                return [
-                    {
-                        "key": r.get("key", ""),
-                        "summary": r.get("fields", {}).get("summary", ""),
-                        "status": r.get("fields", {}).get("status", {}).get("name", ""),
-                    }
-                    for r in raw
-                ]
-            except ConnectorError:
-                return []
-
-        async def _fetch_decisions() -> list[dict[str, str]]:
-            try:
-                raw = await jira.search(
-                    f'project = RISK AND issuetype = "Project Issue" AND parent = {project.jira_goal_key}',
-                    fields=["summary", "status"],
-                )
-                return [
-                    {
-                        "key": r.get("key", ""),
-                        "summary": r.get("fields", {}).get("summary", ""),
-                        "status": r.get("fields", {}).get("status", {}).get("name", ""),
-                    }
-                    for r in raw
-                ]
-            except ConnectorError:
-                return []
-
-        async def _fetch_page_body(page_id: str | None) -> str | None:
-            if not page_id:
-                return None
-            try:
-                data = await confluence.get_page(page_id, expand=["body.storage"])
-                return data.get("body", {}).get("storage", {}).get("value", "")
-            except ConnectorError:
-                return None
-
-        try:
-            risks, decisions, charter, xft = await asyncio.gather(
-                _fetch_risks(),
-                _fetch_decisions(),
-                _fetch_page_body(project.confluence_charter_id),
-                _fetch_page_body(project.confluence_xft_id),
-            )
-        finally:
-            await jira.close()
-            await confluence.close()
-
-        # Try to extract component/label from Goal ticket labels
-        default_label = None
-        default_component = None
-        goal_jira = JiraConnector(settings=self._settings)
-        try:
-            goal = await goal_jira.get_issue(
-                project.jira_goal_key, fields=["labels", "components"]
-            )
-            labels = goal.get("fields", {}).get("labels", [])
-            if labels:
-                default_label = labels[0]
-            components = goal.get("fields", {}).get("components", [])
-            if components:
-                default_component = components[0].get("name")
-        except (ConnectorError, Exception):
-            logger.warning("Failed to fetch labels/components from Goal %s", project.jira_goal_key, exc_info=True)
-        finally:
-            await goal_jira.close()
-
-        # Fall back to project-level defaults if Goal fetch didn't yield values
-        if not default_label and getattr(project, "default_label", None):
-            default_label = project.default_label
-        if not default_component and getattr(project, "default_component", None):
-            default_component = project.default_component
+        default_label = data.goal_labels[0] if data.goal_labels else None
+        default_component = data.goal_components[0] if data.goal_components else None
 
         return ProjectContext(
             project_name=project.name,
             jira_goal_key=project.jira_goal_key,
-            existing_risks=risks,
-            existing_decisions=decisions,
-            charter_content=charter,
-            xft_content=xft,
+            existing_risks=data.existing_risks,
+            existing_decisions=data.existing_decisions,
+            charter_content=data.charter_content,
+            xft_content=data.xft_content,
             default_component=default_component,
             default_label=default_label,
         )
@@ -388,20 +138,10 @@ class TranscriptService:
 
         # Store meeting summary
         summary = result.get("meeting_summary", "")
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE transcript_cache SET meeting_summary = ? WHERE id = ?",
-                (summary, transcript_id),
-            )
-            conn.commit()
+        self._repo.update_meeting_summary(transcript_id, summary)
 
         # Clear old suggestions for re-analysis
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "DELETE FROM transcript_suggestions WHERE transcript_id = ?",
-                (transcript_id,),
-            )
-            conn.commit()
+        self._repo.delete_suggestions(transcript_id)
 
         # Store new suggestions
         suggestions: list[TranscriptSuggestion] = []
@@ -422,31 +162,21 @@ class TranscriptService:
                 continue
 
             detail = raw_sug.get("background", "") or raw_sug.get("confluence_content", "")
-            preview = self._build_preview(raw_sug, stype)
+            preview = build_preview(raw_sug, stype)
 
-            with get_db(self._db_path) as conn:
-                cursor = conn.execute(
-                    """INSERT INTO transcript_suggestions
-                       (transcript_id, project_id, suggestion_type, title, detail,
-                        evidence, proposed_payload, proposed_action, proposed_preview,
-                        confidence, status)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        transcript_id,
-                        project.id,
-                        stype.value,
-                        raw_sug.get("title", "Untitled"),
-                        detail,
-                        raw_sug.get("evidence", ""),
-                        json.dumps(payload),
-                        action,
-                        preview,
-                        raw_sug.get("confidence", 0.5),
-                        SuggestionStatus.PENDING.value,
-                    ),
-                )
-                conn.commit()
-                sug_id = cursor.lastrowid
+            sug_id = self._repo.insert_suggestion(
+                transcript_id=transcript_id,
+                project_id=project.id,
+                suggestion_type=stype.value,
+                title=raw_sug.get("title", "Untitled"),
+                detail=detail,
+                evidence=raw_sug.get("evidence", ""),
+                proposed_payload=json.dumps(payload),
+                proposed_action=action,
+                proposed_preview=preview,
+                confidence=raw_sug.get("confidence", 0.5),
+                status=SuggestionStatus.PENDING.value,
+            )
 
             sug = self._get_suggestion(sug_id)
             if sug:
@@ -460,44 +190,17 @@ class TranscriptService:
 
     def list_suggestions(self, transcript_id: int) -> list[TranscriptSuggestion]:
         """List all suggestions for a transcript."""
-        with get_db(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM transcript_suggestions WHERE transcript_id = ? ORDER BY id",
-                (transcript_id,),
-            ).fetchall()
-        return [TranscriptSuggestion.from_row(r) for r in rows]
+        return self._repo.list_suggestions(transcript_id)
 
     def _get_suggestion(self, suggestion_id: int) -> TranscriptSuggestion | None:
-        with get_db(self._db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM transcript_suggestions WHERE id = ?",
-                (suggestion_id,),
-            ).fetchone()
-        return TranscriptSuggestion.from_row(row) if row else None
+        return self._repo.get_suggestion(suggestion_id)
 
     def get_suggestion(self, suggestion_id: int) -> TranscriptSuggestion | None:
         return self._get_suggestion(suggestion_id)
 
     def get_transcript_summary(self, project_id: int) -> dict[str, Any]:
         """Return a summary of transcript activity for the dashboard."""
-        with get_db(self._db_path) as conn:
-            transcript_count = conn.execute(
-                "SELECT COUNT(*) FROM transcript_cache WHERE project_id = ?",
-                (project_id,),
-            ).fetchone()[0]
-            suggestion_count = conn.execute(
-                "SELECT COUNT(*) FROM transcript_suggestions WHERE project_id = ?",
-                (project_id,),
-            ).fetchone()[0]
-            pending_count = conn.execute(
-                "SELECT COUNT(*) FROM transcript_suggestions WHERE project_id = ? AND status = ?",
-                (project_id, SuggestionStatus.PENDING.value),
-            ).fetchone()[0]
-        return {
-            "transcript_count": transcript_count,
-            "suggestion_count": suggestion_count,
-            "pending_count": pending_count,
-        }
+        return self._repo.get_transcript_summary(project_id)
 
     # ------------------------------------------------------------------
     # Accept / Reject
@@ -591,23 +294,13 @@ class TranscriptService:
             project_id=sug.project_id,
         )
 
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE transcript_suggestions SET status = ?, approval_item_id = ? WHERE id = ?",
-                (SuggestionStatus.QUEUED.value, item_id, suggestion_id),
-            )
-            conn.commit()
+        self._repo.update_suggestion_status(suggestion_id, SuggestionStatus.QUEUED.value, item_id)
 
         return self._get_suggestion(suggestion_id)
 
     def reject_suggestion(self, suggestion_id: int) -> TranscriptSuggestion | None:
         """Reject a suggestion."""
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE transcript_suggestions SET status = ? WHERE id = ?",
-                (SuggestionStatus.REJECTED.value, suggestion_id),
-            )
-            conn.commit()
+        self._repo.update_suggestion_status(suggestion_id, SuggestionStatus.REJECTED.value)
         return self._get_suggestion(suggestion_id)
 
     async def accept_all_suggestions(
@@ -723,258 +416,3 @@ class TranscriptService:
             "append_mode": True,
             "append_content": append_html,
         }
-
-    # ------------------------------------------------------------------
-    # Risk / Decision refinement
-    # ------------------------------------------------------------------
-
-    MAX_REFINE_ROUNDS = 5
-
-    async def start_risk_refinement(
-        self, suggestion_id: int, project: Any
-    ) -> dict[str, Any]:
-        """Start iterative refinement for a risk/decision suggestion.
-
-        Extracts the current draft from the suggestion payload, gathers
-        dedup context, and runs round 1 of the refine agent.
-
-        Returns the LLM result dict (satisfied, quality_assessment, questions, refined_risk).
-        """
-        from src.engine.agent import RiskRefineAgent, get_provider
-
-        sug = self._get_suggestion(suggestion_id)
-        if sug is None:
-            raise ValueError(f"Suggestion {suggestion_id} not found")
-        if sug.suggestion_type not in (SuggestionType.RISK, SuggestionType.DECISION):
-            raise ValueError("Refinement is only available for risk/decision suggestions")
-
-        current_draft = self._extract_risk_draft(sug)
-        context = await self.gather_project_context(project)
-
-        existing_items = (
-            context.existing_risks
-            if sug.suggestion_type == SuggestionType.RISK
-            else context.existing_decisions
-        )
-
-        provider = get_provider(self._settings.llm)
-        agent = RiskRefineAgent(provider)
-        try:
-            result = await agent.refine(
-                suggestion_type=sug.suggestion_type.value,
-                current_draft=current_draft,
-                existing_items=existing_items,
-                qa_history=[],
-                round_number=1,
-                max_rounds=self.MAX_REFINE_ROUNDS,
-            )
-        finally:
-            await provider.close()
-
-        return result
-
-    async def continue_risk_refinement(
-        self,
-        suggestion_id: int,
-        project: Any,
-        risk_draft: dict[str, str],
-        qa_history: list[dict[str, str]],
-        round_number: int,
-    ) -> dict[str, Any]:
-        """Continue refinement with accumulated Q&A state.
-
-        If round_number >= MAX_REFINE_ROUNDS, forces satisfaction with
-        current draft (no LLM call).
-        """
-        from src.engine.agent import RiskRefineAgent, get_provider
-
-        sug = self._get_suggestion(suggestion_id)
-        if sug is None:
-            raise ValueError(f"Suggestion {suggestion_id} not found")
-
-        if round_number >= self.MAX_REFINE_ROUNDS:
-            return {
-                "satisfied": True,
-                "quality_assessment": "Maximum refinement rounds reached. Finalising with current draft.",
-                "questions": [],
-                "refined_risk": risk_draft,
-            }
-
-        context = await self.gather_project_context(project)
-        existing_items = (
-            context.existing_risks
-            if sug.suggestion_type == SuggestionType.RISK
-            else context.existing_decisions
-        )
-
-        provider = get_provider(self._settings.llm)
-        agent = RiskRefineAgent(provider)
-        try:
-            result = await agent.refine(
-                suggestion_type=sug.suggestion_type.value,
-                current_draft=risk_draft,
-                existing_items=existing_items,
-                qa_history=qa_history,
-                round_number=round_number,
-                max_rounds=self.MAX_REFINE_ROUNDS,
-            )
-        finally:
-            await provider.close()
-
-        return result
-
-    def apply_refinement(
-        self,
-        suggestion_id: int,
-        refined_risk: dict[str, Any],
-        context: ProjectContext | None = None,
-    ) -> TranscriptSuggestion | None:
-        """Apply a refined draft back to the suggestion row.
-
-        Rebuilds the Jira payload from the refined fields and updates
-        the suggestion in the DB.
-        """
-        sug = self._get_suggestion(suggestion_id)
-        if sug is None:
-            return None
-
-        # Rebuild payload using the same builder
-        raw_sug = {
-            "type": sug.suggestion_type.value,
-            "title": refined_risk.get("title", sug.title),
-            "background": refined_risk.get("background", ""),
-            "impact_analysis": refined_risk.get("impact_analysis", ""),
-            "mitigation": refined_risk.get("mitigation", ""),
-            "priority": refined_risk.get("priority", "Medium"),
-            "timeline_impact_days": refined_risk.get("timeline_impact_days", 0),
-            "evidence": refined_risk.get("evidence", ""),
-            "confidence": 1.0,
-        }
-
-        if context:
-            payload = self._build_jira_payload(raw_sug, context)
-        else:
-            # Rebuild from existing payload, updating summary + fields
-            payload = json.loads(sug.proposed_payload)
-            from src.engine.prompts.transcript import (
-                build_adf_description,
-                build_adf_decision_description,
-                build_adf_field,
-            )
-
-            is_decision = sug.suggestion_type == SuggestionType.DECISION
-            background = raw_sug["background"]
-            evidence = raw_sug["evidence"]
-
-            if is_decision:
-                description = build_adf_decision_description(
-                    background=background,
-                    decision_text=raw_sug["title"],
-                    evidence=evidence,
-                )
-            else:
-                description = build_adf_description(
-                    background=background,
-                    evidence=evidence,
-                )
-
-            payload["summary"] = raw_sug["title"]
-            fields = payload.setdefault("fields", {})
-            fields["description"] = description
-            fields["priority"] = {"name": raw_sug["priority"]}
-
-            impact = raw_sug.get("impact_analysis", "")
-            if impact:
-                fields["customfield_11166"] = build_adf_field(impact)
-            mitigation = raw_sug.get("mitigation", "")
-            if mitigation:
-                fields["customfield_11342"] = build_adf_field(mitigation)
-            timeline_days = raw_sug.get("timeline_impact_days")
-            if timeline_days:
-                fields["customfield_13267"] = timeline_days
-
-        preview = self._build_preview(raw_sug, sug.suggestion_type)
-
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                """UPDATE transcript_suggestions
-                   SET title = ?, detail = ?, evidence = ?,
-                       proposed_payload = ?, proposed_preview = ?,
-                       confidence = ?
-                   WHERE id = ?""",
-                (
-                    raw_sug["title"],
-                    raw_sug["background"],
-                    raw_sug["evidence"],
-                    json.dumps(payload),
-                    preview,
-                    1.0,
-                    suggestion_id,
-                ),
-            )
-            conn.commit()
-
-        return self._get_suggestion(suggestion_id)
-
-    @staticmethod
-    def _extract_adf_text(adf_doc: dict[str, Any] | None) -> str:
-        """Extract plain text from an ADF document structure."""
-        if not adf_doc or not isinstance(adf_doc, dict):
-            return ""
-        texts: list[str] = []
-        for node in adf_doc.get("content", []):
-            if node.get("type") == "paragraph":
-                for child in node.get("content", []):
-                    if child.get("type") == "text":
-                        text = child.get("text", "")
-                        # Skip section headers (bold-only paragraphs)
-                        marks = child.get("marks", [])
-                        is_heading = any(m.get("type") == "strong" for m in marks)
-                        if not is_heading:
-                            texts.append(text)
-        return " ".join(texts).strip()
-
-    def _extract_risk_draft(self, sug: TranscriptSuggestion) -> dict[str, str]:
-        """Parse a suggestion's payload back into plain-text draft fields."""
-        payload = json.loads(sug.proposed_payload)
-        fields = payload.get("fields", {})
-
-        # Extract description text
-        description_adf = fields.get("description")
-        background = self._extract_adf_text(description_adf) if description_adf else ""
-        if not background:
-            background = sug.detail or ""
-
-        # Extract custom fields
-        impact_analysis = self._extract_adf_text(fields.get("customfield_11166"))
-        mitigation = self._extract_adf_text(fields.get("customfield_11342"))
-
-        priority_obj = fields.get("priority", {})
-        priority = priority_obj.get("name", "Medium") if isinstance(priority_obj, dict) else "Medium"
-
-        timeline_days = fields.get("customfield_13267", 0)
-
-        return {
-            "title": sug.title,
-            "background": background,
-            "impact_analysis": impact_analysis,
-            "mitigation": mitigation,
-            "priority": priority,
-            "timeline_impact_days": str(timeline_days or 0),
-            "evidence": sug.evidence or "",
-        }
-
-    def _build_preview(self, suggestion: dict[str, Any], stype: SuggestionType) -> str:
-        """Build a human-readable preview string for a suggestion."""
-        lines: list[str] = []
-        lines.append(f"Type: {stype.value}")
-        lines.append(f"Title: {suggestion.get('title', 'Untitled')}")
-        if suggestion.get("priority"):
-            lines.append(f"Priority: {suggestion['priority']}")
-        if suggestion.get("confidence"):
-            lines.append(f"Confidence: {suggestion['confidence']:.0%}")
-        if suggestion.get("background"):
-            lines.append(f"Background: {suggestion['background'][:200]}")
-        if suggestion.get("evidence"):
-            lines.append(f"Evidence: {suggestion['evidence'][:200]}")
-        return "\n".join(lines)

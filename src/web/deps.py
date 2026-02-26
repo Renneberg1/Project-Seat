@@ -21,7 +21,10 @@ from src.services.release import ReleaseService
 from src.services.spinup import SpinUpService
 from src.services.team_progress import TeamProgressService
 from src.services.team_snapshot import TeamSnapshotService
-from src.services.transcript import TranscriptParser, TranscriptService
+from src.services.project_context import ProjectContextService
+from src.services.risk_refinement import RiskRefinementService
+from src.services.transcript import TranscriptService
+from src.services.transcript_parser import TranscriptParser
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -169,6 +172,14 @@ def get_team_snapshot_service() -> TeamSnapshotService:
 
 def get_jira_connector() -> JiraConnector:
     return JiraConnector()
+
+
+def get_project_context_service() -> ProjectContextService:
+    return ProjectContextService()
+
+
+def get_risk_refinement_service() -> RiskRefinementService:
+    return RiskRefinementService()
 
 
 def get_confluence_connector() -> ConfluenceConnector:

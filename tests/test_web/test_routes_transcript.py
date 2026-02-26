@@ -202,9 +202,9 @@ def test_start_refinement_returns_panel(client, tmp_db):
     }
 
     with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptService") as MockTS:
+         patch("src.web.deps.RiskRefinementService") as MockRS:
         MockDS.return_value.get_project_by_id.return_value = project
-        mock_service = MockTS.return_value
+        mock_service = MockRS.return_value
         mock_service.start_risk_refinement = AsyncMock(return_value=refine_result)
         mock_service.get_suggestion.return_value = sug
         result = client.post(f"/project/{pid}/transcript/1/suggestions/1/refine")
@@ -239,9 +239,9 @@ def test_refine_answer_returns_updated_panel(client, tmp_db):
     }
 
     with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptService") as MockTS:
+         patch("src.web.deps.RiskRefinementService") as MockRS:
         MockDS.return_value.get_project_by_id.return_value = project
-        mock_service = MockTS.return_value
+        mock_service = MockRS.return_value
         mock_service.continue_risk_refinement = AsyncMock(return_value=satisfied_result)
         mock_service.get_suggestion.return_value = sug
         result = client.post(
@@ -266,9 +266,9 @@ def test_apply_refinement_returns_suggestion_row(client, tmp_db):
     sug = _make_suggestion()
 
     with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptService") as MockTS:
+         patch("src.web.deps.RiskRefinementService") as MockRS:
         MockDS.return_value.get_project_by_id.return_value = project
-        mock_service = MockTS.return_value
+        mock_service = MockRS.return_value
         mock_service.apply_refinement.return_value = sug
         result = client.post(
             f"/project/{pid}/transcript/1/suggestions/1/refine/apply",
@@ -294,9 +294,9 @@ def test_apply_refinement_404_when_suggestion_missing(client, tmp_db):
     project = _make_project(pid)
 
     with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptService") as MockTS:
+         patch("src.web.deps.RiskRefinementService") as MockRS:
         MockDS.return_value.get_project_by_id.return_value = project
-        MockTS.return_value.apply_refinement.return_value = None
+        MockRS.return_value.apply_refinement.return_value = None
         result = client.post(
             f"/project/{pid}/transcript/1/suggestions/999/refine/apply",
             data={"refined_risk": json.dumps({"title": "X"})},

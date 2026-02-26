@@ -3,12 +3,14 @@
 from __future__ import annotations
 
 import json
-from unittest.mock import patch
+from unittest.mock import AsyncMock, patch
 
 import pytest
 
+from src.config import AtlassianSettings, LLMSettings, Settings
 from src.database import init_db, get_db
 from src.models.project import Project
+from src.web.routes.settings import _DisplayValues
 
 
 @pytest.fixture
@@ -36,21 +38,24 @@ def project(tmp_db):
 def client(tmp_db):
     from starlette.testclient import TestClient
 
-    with patch("src.main.init_db"), \
-         patch("src.main.orchestrator"), \
-         patch("src.web.deps.DashboardService") as MockDash, \
-         patch("src.web.routes.settings.app_settings") as MockSettings:
-        MockDash.return_value.list_projects.return_value = []
-        MockSettings.db_path = tmp_db
-        from src.main import app
-        app.state.testing = True
-        yield TestClient(app, raise_server_exceptions=False)
+    from src.main import app
+
+    with patch("src.config.settings", Settings(
+        atlassian=AtlassianSettings(
+            domain="test-company",
+            email="test@example.com",
+            api_token="fake-token",
+        ),
+        llm=LLMSettings(),
+        db_path=tmp_db,
+    )):
+        with TestClient(app, raise_server_exceptions=False) as c:
+            yield c
 
 
 class TestSettingsPage:
     def test_get_settings(self, client, tmp_db, project):
-        with patch("src.web.deps.DashboardService") as MockDash:
-            MockDash.return_value.get_project_by_id.return_value = project
+        with patch("src.web.routes.settings._resolve_display_values", new_callable=AsyncMock, return_value=_DisplayValues()):
             resp = client.get(f"/project/{project.id}/settings/")
             assert resp.status_code == 200
             assert "Project Settings" in resp.text
@@ -58,15 +63,11 @@ class TestSettingsPage:
             assert "Test Project" in resp.text
 
     def test_get_settings_not_found(self, client, tmp_db):
-        with patch("src.web.deps.DashboardService") as MockDash:
-            MockDash.return_value.get_project_by_id.return_value = None
-            resp = client.get("/project/999/settings/")
-            assert resp.status_code == 404
+        resp = client.get("/project/999/settings/")
+        assert resp.status_code == 404
 
     def test_save_settings(self, client, tmp_db, project):
-        with patch("src.web.deps.DashboardService") as MockDash:
-            MockDash.return_value.get_project_by_id.return_value = project
-
+        with patch("src.web.routes.settings._resolve_display_values", new_callable=AsyncMock, return_value=_DisplayValues()):
             resp = client.post(
                 f"/project/{project.id}/settings/",
                 data={
@@ -99,9 +100,7 @@ class TestSettingsPage:
 
     def test_save_clears_optional_fields(self, client, tmp_db, project):
         """Empty optional fields should be set to NULL."""
-        with patch("src.web.deps.DashboardService") as MockDash:
-            MockDash.return_value.get_project_by_id.return_value = project
-
+        with patch("src.web.routes.settings._resolve_display_values", new_callable=AsyncMock, return_value=_DisplayValues()):
             resp = client.post(
                 f"/project/{project.id}/settings/",
                 data={

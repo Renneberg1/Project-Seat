@@ -15,7 +15,6 @@ logger = logging.getLogger(__name__)
 from src.cache import cache
 from src.config import settings as app_settings
 from src.connectors.base import ConnectorError
-from src.database import get_db
 from src.engine.approval import ApprovalEngine
 from src.services.import_project import ImportService
 from src.models.approval import ApprovalStatus
@@ -353,15 +352,10 @@ async def save_pi_config(
     request: Request,
     id: int,
     pi_version: str = Form(""),
+    dashboard: DashboardService = Depends(get_dashboard_service),
 ) -> RedirectResponse:
     """Save PI version for a project."""
-    import src.config
-    with get_db(src.config.settings.db_path) as conn:
-        conn.execute(
-            "UPDATE projects SET pi_version = ? WHERE id = ?",
-            (pi_version.strip() or None, id),
-        )
-        conn.commit()
+    dashboard.update_project(id, pi_version=pi_version.strip() or None)
     return RedirectResponse(f"/project/{id}/dashboard", status_code=303)
 
 
@@ -370,20 +364,15 @@ async def save_plan_config(
     request: Request,
     id: int,
     jira_plan_url: str = Form(""),
+    dashboard: DashboardService = Depends(get_dashboard_service),
 ) -> RedirectResponse:
     """Save Jira Plan URL for a project.
 
     Accepts either a bare URL or a full ``<iframe src="...">`` snippet
     (which is what Jira Plans "Share > Embed" copies to the clipboard).
     """
-    import src.config
     url = _extract_plan_url(jira_plan_url)
-    with get_db(src.config.settings.db_path) as conn:
-        conn.execute(
-            "UPDATE projects SET jira_plan_url = ? WHERE id = ?",
-            (url or None, id),
-        )
-        conn.commit()
+    dashboard.update_project(id, jira_plan_url=url or None)
     return RedirectResponse(f"/project/{id}/dashboard", status_code=303)
 
 
@@ -419,15 +408,10 @@ async def save_dhf_config(
     id: int,
     dhf_draft_root_id: str = Form(""),
     dhf_released_root_id: str = Form(""),
+    dashboard: DashboardService = Depends(get_dashboard_service),
 ) -> RedirectResponse:
     """Save DHF root page IDs for a project."""
-    import src.config
-    with get_db(src.config.settings.db_path) as conn:
-        conn.execute(
-            "UPDATE projects SET dhf_draft_root_id = ?, dhf_released_root_id = ? WHERE id = ?",
-            (dhf_draft_root_id.strip() or None, dhf_released_root_id.strip() or None, id),
-        )
-        conn.commit()
+    dashboard.update_project(id, dhf_draft_root_id=dhf_draft_root_id.strip() or None, dhf_released_root_id=dhf_released_root_id.strip() or None)
     return RedirectResponse(f"/project/{id}/documents", status_code=303)
 
 
@@ -595,7 +579,6 @@ async def save_team_projects_config(
 ) -> RedirectResponse:
     """Save team project keys for a project."""
     import json
-    import src.config
     # Parse KEY:VERSION pairs (e.g. "AIM:HOP Drop 2, CTCV:HOP Drop 2")
     # Allows duplicate keys with different versions.
     team_list: list[list[str]] = []
@@ -611,12 +594,7 @@ async def save_team_projects_config(
             team_list.append([key.strip().upper(), version.strip()])
         else:
             team_list.append([entry.upper(), default_version])
-    with get_db(src.config.settings.db_path) as conn:
-        conn.execute(
-            "UPDATE projects SET team_projects = ? WHERE id = ?",
-            (json.dumps(team_list) if team_list else None, id),
-        )
-        conn.commit()
+    service_dash.update_project(id, team_projects=team_list if team_list else None)
     # Invalidate any cached team progress for this project
     project = service_dash.get_project_by_id(id)
     if project:

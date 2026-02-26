@@ -6,10 +6,10 @@ import asyncio
 import logging
 
 from src.cache import cache
-from src.config import Settings, settings as default_settings
+import src.config
+from src.config import Settings
 from src.connectors.base import ConnectorError
 from src.connectors.jira import JiraConnector
-from src.database import get_db
 from src.models.dashboard import (
     VALID_PHASES,
     EpicWithTasks,
@@ -31,9 +31,13 @@ class DashboardService:
         self,
         db_path: str | None = None,
         settings: Settings | None = None,
+        project_repo: "ProjectRepository | None" = None,
     ) -> None:
-        self._settings = settings or default_settings
+        self._settings = settings or src.config.settings
         self._db_path = db_path or self._settings.db_path
+
+        from src.repositories.project_repo import ProjectRepository
+        self._repo = project_repo or ProjectRepository(self._db_path)
 
     # ------------------------------------------------------------------
     # Local DB queries
@@ -41,30 +45,21 @@ class DashboardService:
 
     def list_projects(self) -> list[Project]:
         """Return all projects from the local database."""
-        with get_db(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM projects ORDER BY created_at DESC"
-            ).fetchall()
-        return [Project.from_row(r) for r in rows]
+        return self._repo.list_all()
 
     def get_project_by_id(self, project_id: int) -> Project | None:
         """Return a single project by ID, or None if not found."""
-        with get_db(self._db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM projects WHERE id = ?", (project_id,)
-            ).fetchone()
-        return Project.from_row(row) if row else None
+        return self._repo.get_by_id(project_id)
 
     def update_phase(self, project_id: int, phase: str) -> None:
         """Update the pipeline phase for a project."""
         if phase not in VALID_PHASES:
             raise ValueError(f"Invalid phase '{phase}'. Must be one of: {VALID_PHASES}")
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE projects SET phase = ? WHERE id = ?",
-                (phase, project_id),
-            )
-            conn.commit()
+        self._repo.update(project_id, phase=phase)
+
+    def update_project(self, project_id: int, **fields) -> None:
+        """Update one or more fields on a project row."""
+        self._repo.update(project_id, **fields)
 
     # ------------------------------------------------------------------
     # Live Jira enrichment

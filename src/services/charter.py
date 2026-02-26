@@ -8,7 +8,6 @@ from typing import Any
 
 from src.config import Settings, settings as default_settings
 from src.connectors.jira import JiraConnector
-from src.database import get_db
 from src.engine.mentions import resolve_confluence_mentions
 from src.models.charter import CharterSuggestion, CharterSuggestionStatus
 
@@ -22,9 +21,13 @@ class CharterService:
         self,
         db_path: str | None = None,
         settings: Settings | None = None,
+        charter_repo: "CharterRepository | None" = None,
     ) -> None:
         self._settings = settings or default_settings
         self._db_path = db_path or self._settings.db_path
+
+        from src.repositories.charter_repo import CharterRepository
+        self._repo = charter_repo or CharterRepository(self._db_path)
 
     # ------------------------------------------------------------------
     # Fetch Charter sections
@@ -140,28 +143,18 @@ class CharterService:
                 f"Proposed text: {proposed_text[:300]}"
             )
 
-            with get_db(self._db_path) as conn:
-                cursor = conn.execute(
-                    """INSERT INTO charter_suggestions
-                       (project_id, section_name, current_text, proposed_text,
-                        rationale, confidence, proposed_payload, proposed_preview,
-                        analysis_summary, status)
-                       VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)""",
-                    (
-                        project.id,
-                        section_name,
-                        current_text,
-                        proposed_text,
-                        rationale,
-                        confidence,
-                        json.dumps(payload),
-                        preview,
-                        summary,
-                        CharterSuggestionStatus.PENDING.value,
-                    ),
-                )
-                conn.commit()
-                sug_id = cursor.lastrowid
+            sug_id = self._repo.insert_suggestion(
+                project_id=project.id,
+                section_name=section_name,
+                current_text=current_text,
+                proposed_text=proposed_text,
+                rationale=rationale,
+                confidence=confidence,
+                proposed_payload=json.dumps(payload),
+                proposed_preview=preview,
+                analysis_summary=summary,
+                status=CharterSuggestionStatus.PENDING.value,
+            )
 
             sug = self._get_suggestion(sug_id)
             if sug:
@@ -175,20 +168,10 @@ class CharterService:
 
     def list_suggestions(self, project_id: int) -> list[CharterSuggestion]:
         """List all charter suggestions for a project, newest first."""
-        with get_db(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT * FROM charter_suggestions WHERE project_id = ? ORDER BY id DESC",
-                (project_id,),
-            ).fetchall()
-        return [CharterSuggestion.from_row(r) for r in rows]
+        return self._repo.list_suggestions(project_id)
 
     def _get_suggestion(self, suggestion_id: int) -> CharterSuggestion | None:
-        with get_db(self._db_path) as conn:
-            row = conn.execute(
-                "SELECT * FROM charter_suggestions WHERE id = ?",
-                (suggestion_id,),
-            ).fetchone()
-        return CharterSuggestion.from_row(row) if row else None
+        return self._repo.get_suggestion(suggestion_id)
 
     def get_suggestion(self, suggestion_id: int) -> CharterSuggestion | None:
         return self._get_suggestion(suggestion_id)
@@ -242,23 +225,13 @@ class CharterService:
             project_id=sug.project_id,
         )
 
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE charter_suggestions SET status = ?, approval_item_id = ? WHERE id = ?",
-                (CharterSuggestionStatus.QUEUED.value, item_id, suggestion_id),
-            )
-            conn.commit()
+        self._repo.update_status(suggestion_id, CharterSuggestionStatus.QUEUED.value, item_id)
 
         return self._get_suggestion(suggestion_id)
 
     def reject_suggestion(self, suggestion_id: int) -> CharterSuggestion | None:
         """Reject a suggestion."""
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "UPDATE charter_suggestions SET status = ? WHERE id = ?",
-                (CharterSuggestionStatus.REJECTED.value, suggestion_id),
-            )
-            conn.commit()
+        self._repo.update_status(suggestion_id, CharterSuggestionStatus.REJECTED.value)
         return self._get_suggestion(suggestion_id)
 
     async def accept_all_suggestions(

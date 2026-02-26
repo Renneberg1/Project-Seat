@@ -6,7 +6,10 @@ import pytest
 
 from src.database import init_db
 from src.models.transcript import SuggestionStatus, SuggestionType
-from src.services.transcript import TranscriptParser, TranscriptService
+from src.services._transcript_helpers import extract_adf_text
+from src.services.risk_refinement import RiskRefinementService
+from src.services.transcript import TranscriptService
+from src.services.transcript_parser import TranscriptParser
 
 
 # ---------------------------------------------------------------------------
@@ -426,7 +429,6 @@ class TestRiskRefinement:
         return sug_id
 
     def test_extract_adf_text(self, db_path):
-        service = TranscriptService(db_path=db_path)
         adf = {
             "type": "doc", "version": 1,
             "content": [
@@ -438,17 +440,16 @@ class TestRiskRefinement:
                 ]},
             ],
         }
-        result = service._extract_adf_text(adf)
+        result = extract_adf_text(adf)
         assert result == "Some actual content"
 
     def test_extract_adf_text_none_input(self, db_path):
-        service = TranscriptService(db_path=db_path)
-        assert service._extract_adf_text(None) == ""
-        assert service._extract_adf_text({}) == ""
+        assert extract_adf_text(None) == ""
+        assert extract_adf_text({}) == ""
 
     def test_extract_risk_draft(self, db_path):
         sug_id = self._insert_risk_suggestion(db_path)
-        service = TranscriptService(db_path=db_path)
+        service = RiskRefinementService(db_path=db_path)
         sug = service.get_suggestion(sug_id)
 
         draft = service._extract_risk_draft(sug)
@@ -463,7 +464,7 @@ class TestRiskRefinement:
 
     def test_apply_refinement_updates_suggestion(self, db_path):
         sug_id = self._insert_risk_suggestion(db_path)
-        service = TranscriptService(db_path=db_path)
+        service = RiskRefinementService(db_path=db_path)
 
         refined = {
             "title": "Refined Risk Title",
@@ -491,13 +492,13 @@ class TestRiskRefinement:
         assert payload["fields"]["priority"]["name"] == "High"
 
     def test_apply_refinement_nonexistent_returns_none(self, db_path):
-        service = TranscriptService(db_path=db_path)
+        service = RiskRefinementService(db_path=db_path)
         result = service.apply_refinement(999, {"title": "X"})
         assert result is None
 
     async def test_continue_risk_refinement_max_rounds_forces_satisfied(self, db_path):
         sug_id = self._insert_risk_suggestion(db_path)
-        service = TranscriptService(db_path=db_path)
+        service = RiskRefinementService(db_path=db_path)
 
         from src.models.project import Project
         project = Project(

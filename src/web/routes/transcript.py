@@ -9,9 +9,12 @@ from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
 from fastapi.responses import HTMLResponse
 
 from src.services.dashboard import DashboardService
-from src.services.transcript import TranscriptParser, TranscriptService
+from src.services.risk_refinement import RiskRefinementService
+from src.services.transcript import TranscriptService
+from src.services.transcript_parser import TranscriptParser
 from src.web.deps import (
     get_dashboard_service,
+    get_risk_refinement_service,
     get_transcript_parser,
     get_transcript_service,
     render_project_page,
@@ -295,14 +298,14 @@ async def start_refinement(
     tid: int,
     sid: int,
     dashboard: DashboardService = Depends(get_dashboard_service),
-    service: TranscriptService = Depends(get_transcript_service),
+    refine_service: RiskRefinementService = Depends(get_risk_refinement_service),
 ) -> HTMLResponse:
     """Start iterative refinement for a risk/decision suggestion."""
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
     try:
-        result = await service.start_risk_refinement(sid, project)
+        result = await refine_service.start_risk_refinement(sid, project)
     except ValueError as exc:
         return HTMLResponse(
             f'<div class="error-banner">{html.escape(str(exc))}</div>',
@@ -314,7 +317,7 @@ async def start_refinement(
             status_code=500,
         )
 
-    sug = service.get_suggestion(sid)
+    sug = refine_service.get_suggestion(sid)
 
     return templates.TemplateResponse(
         request,
@@ -339,7 +342,7 @@ async def refine_answer(
     tid: int,
     sid: int,
     dashboard: DashboardService = Depends(get_dashboard_service),
-    service: TranscriptService = Depends(get_transcript_service),
+    refine_service: RiskRefinementService = Depends(get_risk_refinement_service),
 ) -> HTMLResponse:
     """Submit answers to refinement questions and continue the loop."""
     project = dashboard.get_project_by_id(id)
@@ -368,7 +371,7 @@ async def refine_answer(
     next_round = round_number + 1
 
     try:
-        result = await service.continue_risk_refinement(
+        result = await refine_service.continue_risk_refinement(
             suggestion_id=sid,
             project=project,
             risk_draft=risk_draft,
@@ -381,7 +384,7 @@ async def refine_answer(
             status_code=500,
         )
 
-    sug = service.get_suggestion(sid)
+    sug = refine_service.get_suggestion(sid)
 
     return templates.TemplateResponse(
         request,
@@ -406,7 +409,7 @@ async def apply_refinement(
     tid: int,
     sid: int,
     dashboard: DashboardService = Depends(get_dashboard_service),
-    service: TranscriptService = Depends(get_transcript_service),
+    refine_service: RiskRefinementService = Depends(get_risk_refinement_service),
 ) -> HTMLResponse:
     """Apply the refined draft to the suggestion."""
     project = dashboard.get_project_by_id(id)
@@ -415,7 +418,7 @@ async def apply_refinement(
 
     form = await request.form()
     refined_risk = json.loads(form.get("refined_risk", "{}"))
-    sug = service.apply_refinement(sid, refined_risk)
+    sug = refine_service.apply_refinement(sid, refined_risk)
     if sug is None:
         return HTMLResponse("Suggestion not found", status_code=404)
 

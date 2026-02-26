@@ -89,6 +89,16 @@ project-seat/
 │   │       ├── ceo_review.py        # CEO review: questions + review prompts, JSON schemas
 │   │       ├── risk_refine.py       # Risk/decision refinement: quality criteria, Q&A loop schema
 │   │       └── (planned: release_plan.py, estimate_check.py — see docs/feature-backlog.md)
+│   ├── repositories/            # Data access layer (all raw SQL lives here)
+│   │   ├── __init__.py
+│   │   ├── project_repo.py      # projects table CRUD
+│   │   ├── approval_repo.py     # approval_queue + approval_log tables
+│   │   ├── transcript_repo.py   # transcript_cache + transcript_suggestions tables
+│   │   ├── charter_repo.py      # charter_suggestions table
+│   │   ├── review_repo.py       # health_reviews + ceo_reviews tables
+│   │   ├── release_repo.py      # releases + release_documents tables
+│   │   ├── snapshot_repo.py     # team_progress_snapshots table
+│   │   └── config_repo.py       # config table (if used)
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── spinup.py            # Project spin-up wizard logic
@@ -96,7 +106,11 @@ project-seat/
 │   │   ├── dhf.py               # DHF/EQMS document tracking (draft vs released)
 │   │   ├── import_project.py    # Import existing projects from Jira/Confluence
 │   │   ├── release.py           # Release scope-freeze and document tracking
-│   │   ├── transcript.py        # Transcript parsing, LLM analysis, suggestion management
+│   │   ├── transcript.py        # LLM analysis, suggestion management (delegates parsing to transcript_parser)
+│   │   ├── transcript_parser.py # File format parsing (.vtt/.txt/.docx), no async/DB/service deps
+│   │   ├── _transcript_helpers.py # Shared helpers for transcript + risk refinement services
+│   │   ├── risk_refinement.py   # Iterative risk/decision refinement via LLM Q&A
+│   │   ├── project_context.py   # Centralised parallel context-gathering for all LLM services
 │   │   ├── charter.py           # Charter section fetch, LLM Q&A, edit proposals, suggestion management
 │   │   ├── health_review.py     # Health review: context gathering, LLM Q&A, review persistence
 │   │   ├── ceo_review.py        # CEO review: data gathering, LLM Q&A, XHTML render, publish
@@ -287,6 +301,23 @@ pytest
 - **Page progress bar** — `<div id="page-progress">` in `base.html` with inline JS: animates on `<a>` clicks (non-HTMX, non-external) and on `htmx:beforeRequest`/`htmx:afterRequest` events. CSS in `style.css` (`.page-progress`, `.active`, `.done`).
 - **Navigation tab grouping** — Analysis tabs (Transcripts, Charter, Health, CEO Review) are wrapped in `.nav-dropdown`. On desktop (`>1024px`), `.nav-dropdown-menu` uses `display: contents` so children render flat in the flex row. On `≤1024px`, it becomes a positioned dropdown via `:focus-within`/`:hover`. No JS needed.
 - **Dependency injection** — All service/connector instantiation in routes uses `Depends()` with factory functions from `src/web/deps.py`. Never instantiate services directly in route functions. When adding a new service, add a factory in `deps.py` and use `Depends(get_new_service)` in the route signature.
+
+### Repository Layer
+- All raw SQL lives in `src/repositories/` — services and routes never call `get_db()` directly
+- Each repository class takes an optional `db_path` constructor argument, defaulting to `src.config.settings.db_path` (lazy lookup for test compatibility)
+- Services accept optional repository parameters in their constructors for dependency injection in tests:
+  ```python
+  class TranscriptService:
+      def __init__(self, repo: TranscriptRepository | None = None, ...):
+          self._repo = repo or TranscriptRepository(self._settings.db_path)
+  ```
+- Route-level project updates go through `DashboardService.update_project()` (DI-injected) rather than creating repositories directly
+
+### ProjectContextService
+- `src/services/project_context.py` centralises parallel context-gathering used by transcript, health review, CEO review, and risk refinement services
+- Callers pass boolean flags to select which data sources to fetch (e.g., `risks=True, charter=True, snapshots=True`)
+- Each source fails independently — one connector error does not block the others
+- Individual services retain thin `gather_*_context()` wrappers that call `ProjectContextService.gather()` and adapt the result
 
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM

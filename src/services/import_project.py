@@ -8,7 +8,6 @@ from dataclasses import dataclass, field
 
 from src.config import settings
 from src.connectors.jira import JiraConnector
-from src.database import get_db
 
 logger = logging.getLogger(__name__)
 
@@ -135,8 +134,15 @@ def _detect_team_projects(
 class ImportService:
     """Fetch an existing Jira Goal and import it into the local DB."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        project_repo: "ProjectRepository | None" = None,
+    ) -> None:
         self._db_path = db_path or settings.db_path
+
+        from src.repositories.project_repo import ProjectRepository
+        self._repo = project_repo or ProjectRepository(self._db_path)
 
     async def fetch_preview(self, goal_key: str) -> ImportPreview:
         """Fetch a PROG Goal from Jira and build an import preview."""
@@ -223,23 +229,22 @@ class ImportService:
 
         Raises ValueError if a project with the same goal_key already exists.
         """
-        import json
+        existing_id = self._repo.exists_by_goal_key(goal_key)
+        if existing_id is not None:
+            raise ValueError(f"Project with goal key '{goal_key}' already exists (id={existing_id})")
 
-        with get_db(self._db_path) as conn:
-            existing = conn.execute(
-                "SELECT id FROM projects WHERE jira_goal_key = ?",
-                (goal_key,),
-            ).fetchone()
-            if existing:
-                raise ValueError(f"Project with goal key '{goal_key}' already exists (id={existing['id']})")
-
-            cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, confluence_charter_id, confluence_xft_id, status, phase, pi_version, team_projects, jira_plan_url, confluence_ceo_review_id) "
-                "VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)",
-                (goal_key, name, charter_id or None, xft_id or None, "active", "planning", pi_version, json.dumps(team_projects) if team_projects else None, jira_plan_url or None, ceo_review_id or None),
-            )
-            conn.commit()
-            return cursor.lastrowid
+        return self._repo.create(
+            jira_goal_key=goal_key,
+            name=name,
+            confluence_charter_id=charter_id or None,
+            confluence_xft_id=xft_id or None,
+            status="active",
+            phase="planning",
+            pi_version=pi_version,
+            team_projects=team_projects or None,
+            jira_plan_url=jira_plan_url or None,
+            confluence_ceo_review_id=ceo_review_id or None,
+        )
 
     def delete_project(self, project_id: int) -> None:
         """Remove a project and all related data from the local DB.
@@ -247,6 +252,4 @@ class ImportService:
         All child rows are removed automatically via ON DELETE CASCADE.
         Does NOT touch Jira or Confluence.
         """
-        with get_db(self._db_path) as conn:
-            conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
-            conn.commit()
+        self._repo.delete(project_id)

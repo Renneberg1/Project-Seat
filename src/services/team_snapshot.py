@@ -7,7 +7,6 @@ import logging
 from datetime import date, timedelta
 
 from src.config import settings as app_settings
-from src.database import get_db
 from src.models.project import Project
 from src.services.team_progress import TeamVersionReport
 
@@ -17,8 +16,15 @@ logger = logging.getLogger(__name__)
 class TeamSnapshotService:
     """Persist and retrieve daily team-progress snapshots."""
 
-    def __init__(self, db_path: str | None = None) -> None:
+    def __init__(
+        self,
+        db_path: str | None = None,
+        snapshot_repo: "SnapshotRepository | None" = None,
+    ) -> None:
         self._db_path = db_path or app_settings.db_path
+
+        from src.repositories.snapshot_repo import SnapshotRepository
+        self._repo = snapshot_repo or SnapshotRepository(self._db_path)
 
     def save_snapshot(
         self,
@@ -40,13 +46,7 @@ class TeamSnapshotService:
         data = {"sp_total": sp_total, "sp_done": sp_done, "per_team": per_team}
 
         today = date.today().isoformat()
-        with get_db(self._db_path) as conn:
-            conn.execute(
-                "INSERT OR REPLACE INTO team_progress_snapshots "
-                "(project_id, snapshot_date, data_json) VALUES (?, ?, ?)",
-                (project.id, today, json.dumps(data)),
-            )
-            conn.commit()
+        self._repo.save(project.id, today, json.dumps(data))
 
     def get_snapshots(
         self,
@@ -54,24 +54,7 @@ class TeamSnapshotService:
         days: int = 90,
     ) -> list[dict]:
         """Return [{date, sp_total, sp_done}] ordered by date, last N days."""
-        cutoff = (date.today() - timedelta(days=days)).isoformat()
-        with get_db(self._db_path) as conn:
-            rows = conn.execute(
-                "SELECT snapshot_date, data_json FROM team_progress_snapshots "
-                "WHERE project_id = ? AND snapshot_date >= ? "
-                "ORDER BY snapshot_date",
-                (project_id, cutoff),
-            ).fetchall()
-        result = []
-        for row in rows:
-            data = json.loads(row["data_json"])
-            result.append({
-                "date": row["snapshot_date"],
-                "sp_total": data["sp_total"],
-                "sp_done": data["sp_done"],
-                "per_team": data.get("per_team", []),
-            })
-        return result
+        return self._repo.get_snapshots(project_id, days)
 
 
 async def snapshot_all_projects() -> None:

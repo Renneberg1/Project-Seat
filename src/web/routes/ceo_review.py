@@ -47,13 +47,7 @@ async def ceo_review_page(
         try:
             page_id = await service.discover_ceo_review_page(project)
             if page_id:
-                from src.database import get_db
-                with get_db() as conn:
-                    conn.execute(
-                        "UPDATE projects SET confluence_ceo_review_id = ? WHERE id = ?",
-                        (page_id, project.id),
-                    )
-                    conn.commit()
+                dashboard.update_project(project.id, confluence_ceo_review_id=page_id)
                 project.confluence_ceo_review_id = page_id
                 logger.info("Auto-discovered CEO Review page %s for project %d", page_id, id)
         except Exception as exc:

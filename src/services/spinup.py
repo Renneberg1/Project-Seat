@@ -8,7 +8,6 @@ import re
 
 from src.config import settings
 from src.connectors.confluence import ConfluenceConnector
-from src.database import get_db
 from src.engine.approval import ApprovalEngine
 from src.models.approval import ApprovalAction, ApprovalItem, ApprovalStatus
 
@@ -34,6 +33,11 @@ class SpinUpService:
     def __init__(self, db_path: str | None = None) -> None:
         self._db_path = db_path or settings.db_path
         self._engine = ApprovalEngine(db_path=self._db_path)
+
+        from src.repositories.project_repo import ProjectRepository
+        from src.repositories.approval_repo import ApprovalRepository
+        self._project_repo = ProjectRepository(self._db_path)
+        self._approval_repo = ApprovalRepository(self._db_path)
 
     # ------------------------------------------------------------------
     # Main entry point
@@ -183,12 +187,7 @@ class SpinUpService:
 
         if resolved_payload != payload:
             # Update the payload in the queue before executing
-            with get_db(self._db_path) as conn:
-                conn.execute(
-                    "UPDATE approval_queue SET payload = ? WHERE id = ?",
-                    (json.dumps(resolved_payload), item_id),
-                )
-                conn.commit()
+            self._approval_repo.update_payload(item_id, json.dumps(resolved_payload))
 
         result_item = await self._engine.approve_and_execute(item_id)
 
@@ -207,12 +206,7 @@ class SpinUpService:
         if item.action_type == ApprovalAction.CREATE_JIRA_ISSUE:
             key = result.get("key", "")
             if key.startswith(PROG_PROJECT_KEY):
-                with get_db(self._db_path) as conn:
-                    conn.execute(
-                        "UPDATE projects SET jira_goal_key = ? WHERE id = ?",
-                        (key, item.project_id),
-                    )
-                    conn.commit()
+                self._project_repo.update(item.project_id, jira_goal_key=key)
                 logger.info("Synced Goal key %s to project %d", key, item.project_id)
 
         elif item.action_type == ApprovalAction.CREATE_CONFLUENCE_PAGE:
@@ -221,20 +215,10 @@ class SpinUpService:
             if not page_id:
                 return
             if "Charter" in title and "XFT" not in title:
-                with get_db(self._db_path) as conn:
-                    conn.execute(
-                        "UPDATE projects SET confluence_charter_id = ? WHERE id = ?",
-                        (page_id, item.project_id),
-                    )
-                    conn.commit()
+                self._project_repo.update(item.project_id, confluence_charter_id=page_id)
                 logger.info("Synced Charter page %s to project %d", page_id, item.project_id)
             elif "XFT" in title:
-                with get_db(self._db_path) as conn:
-                    conn.execute(
-                        "UPDATE projects SET confluence_xft_id = ? WHERE id = ?",
-                        (page_id, item.project_id),
-                    )
-                    conn.commit()
+                self._project_repo.update(item.project_id, confluence_xft_id=page_id)
                 logger.info("Synced XFT page %s to project %d", page_id, item.project_id)
 
     # ------------------------------------------------------------------
@@ -303,13 +287,14 @@ class SpinUpService:
 
     def _create_local_project(self, req) -> int:
         """Insert a placeholder project row. Returns the project ID."""
-        with get_db(self._db_path) as conn:
-            cursor = conn.execute(
-                "INSERT INTO projects (jira_goal_key, name, status, pi_version, team_projects, jira_plan_url) VALUES (?, ?, ?, ?, ?, ?)",
-                ("pending", req.project_name, "spinning_up", req.pi_version or None, json.dumps(req.team_projects) if req.team_projects else None, req.jira_plan_url or None),
-            )
-            conn.commit()
-            return cursor.lastrowid
+        return self._project_repo.create(
+            jira_goal_key="pending",
+            name=req.project_name,
+            status="spinning_up",
+            pi_version=req.pi_version or None,
+            team_projects=req.team_projects or None,
+            jira_plan_url=req.jira_plan_url or None,
+        )
 
     async def _fetch_template_body(self, page_id: str) -> str:
         """Fetch the storage-format body of a Confluence template page."""

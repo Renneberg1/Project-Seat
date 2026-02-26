@@ -153,3 +153,4 @@ The `projects` table could further benefit from:
 - [x] Bundle CDN Assets — Offline Resilience (HTMX 2.0.4 and Chart.js 4.x bundled in `static/vendor/` for air-gapped operation)
 - [x] Page Navigation Loading State (animated progress bar at top of page for regular navigation and HTMX requests)
 - [x] Navigation Tab Grouping (Analysis tabs collapse into dropdown on ≤1024px, flat on desktop; pure CSS via `:focus-within`)
+- [x] Service Layer Refactor — Split `transcript.py` (980→450 lines) into `transcript_parser.py`, `_transcript_helpers.py`, and `risk_refinement.py`; extracted `ProjectContextService` consolidating duplicated context-gathering across 3 services; extracted 8 repository files centralising ~60 raw SQL queries (no `get_db()` calls in services/engine/routes)
