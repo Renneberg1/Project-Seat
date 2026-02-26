@@ -90,54 +90,7 @@ HTMX and Chart.js are loaded from CDN (`unpkg.com`, `jsdelivr.net`). If the CDN 
 
 ## Infrastructure & Technical Debt
 
-### Tier 1 — High Impact
-
-#### Extract BaseAgent Class **(NEW)**
-`_generate_with_retry()` and `_strip_fences()` are copy-pasted identically across `CharterAgent`, `HealthReviewAgent`, `CeoReviewAgent`, and `RiskRefineAgent` (~200 lines of duplication). Extract a `BaseAgent` class with the shared methods; concrete agents inherit from it.
-
-#### Fix Leaked Connector in `gather_project_context()` **(NEW)**
-`src/services/transcript.py` line ~324 creates a `JiraConnector` to fetch labels/components but never calls `.close()`, leaking an `httpx.AsyncClient` connection on every transcript analysis.
-
-#### Add Database Indexes **(NEW)**
-No secondary indexes exist beyond primary keys and UNIQUE constraints. Add indexes on the most-queried columns:
-- `transcript_suggestions(transcript_id)`
-- `transcript_suggestions(project_id, status)`
-- `approval_queue(project_id, status)`
-- `approval_queue(status)`
-- `charter_suggestions(project_id)`
-- `health_reviews(project_id)`
-- `ceo_reviews(project_id)`
-
-#### Enable TLS Verification by Default **(NEW)**
-`verify=False` is hardcoded in `src/connectors/base.py` and `src/engine/providers/gemini.py`. Make it configurable via an env var (`VERIFY_SSL=true` default), with `false` as an opt-in escape hatch for corporate proxy environments.
-
-#### Run Orchestrator Task Immediately on Startup **(NEW)**
-The orchestrator's `_run_loop` sleeps first (24 hours for the daily snapshot task), then runs. The first snapshot is not taken until a full day after app start. Execute the task once immediately, then enter the sleep loop.
-
-### Tier 2 — Medium Impact
-
-#### Extract Shared `_render()` Helper **(NEW)**
-6 route files define an identical `_render()` function (merge nav context, render template, set project cookie). Extract into `src/web/deps.py` as a single shared function.
-
-#### Extract Q&A Pair Collection Utility **(NEW)**
-The pattern for collecting `question_0`/`answer_0` pairs from form data is duplicated in 4 route files (charter, health_review, ceo_review, transcript). Extract into a shared helper.
-
-#### HTML-Escape Exception Messages **(NEW)**
-Error banners in transcript, charter, health_review, and ceo_review routes embed `str(exc)` directly in HTML without escaping. Use `html.escape()` for defense-in-depth against XSS via crafted error messages.
-
-#### Enable SQLite WAL Mode **(NEW)**
-SQLite defaults to journal mode `delete`, which locks the entire DB during writes. Enable WAL mode (`PRAGMA journal_mode = WAL`) for better concurrent read/write performance. One-line change in `get_db()`.
-
-#### Versioned Database Migrations **(NEW)**
-The current migration strategy runs every `ALTER TABLE` attempt wrapped in `try/except OperationalError: pass` on every startup. Implement a `schema_version` table with numbered migration functions so each runs exactly once, and support data migrations.
-
-#### Cache Context Between Q&A Steps **(NEW)**
-In CEO Review and Health Review workflows, `gather_ceo_context()` / `gather_all_context()` is called separately for both the questions step and the review step. The context is fetched twice per review. Either pass context through the form (like Q&A state) or cache with a short TTL keyed by project + timestamp.
-
-#### Add ON DELETE CASCADE to Foreign Keys **(NEW)**
-Only `release_documents` has `ON DELETE CASCADE`. Other project-child tables rely on manual deletion in `delete_project()`. Adding cascade to all FK constraints simplifies cleanup and prevents orphaned rows when new tables are added.
-
-### Tier 3 — Nice to Have
+### Nice to Have
 
 #### Automatic CSS Cache-Busting **(NEW)**
 `style.css?v=12` is manually incremented. Use a file hash or git commit short-hash for automatic cache-busting.
@@ -206,3 +159,15 @@ The `projects` table could further benefit from:
 - [x] CEO Review Output (fortnightly CEO-level status updates with last-2-weeks lens, hybrid deterministic data tables + LLM commentary, two-step Q&A flow, Confluence append via approval queue, auto-discovery of CEO Review page from Charter ancestors)
 - [x] Iterative Risk/Decision Refinement (multi-round LLM Q&A loop to refine transcript-extracted risks/decisions against ISO 14971 quality criteria, max 5 rounds, early bail-out with Apply Current Draft, stateless via hidden form fields)
 - [x] Typeahead Resource Linking (search-as-you-type for Confluence pages and Jira issues/projects/versions, reusable Jinja2 macro, vanilla JS keyboard nav, HTMX debounced search, TTL cache, display value resolution on page load, migrated across Settings/Import/Documents pages)
+- [x] Extract BaseAgent Class (shared `_generate_with_retry()` and `_strip_fences()` in base class, eliminating ~200 lines of duplication across 5 agents)
+- [x] Fix Leaked Connector in `gather_project_context()` (proper `async with` for JiraConnector in transcript service)
+- [x] Add Database Indexes (secondary indexes on 8 frequently-queried columns across 7 tables)
+- [x] Enable TLS Verification by Default (configurable `VERIFY_SSL` env var, defaults to true)
+- [x] Run Orchestrator Task Immediately on Startup (`run_immediately` param fires task before first sleep interval)
+- [x] Extract Shared `_render()` Helper (`render_project_page()` in `src/web/deps.py`, removed from 6 route files)
+- [x] Extract Q&A Pair Collection Utility (`collect_qa_pairs()` in `src/web/deps.py`, removed from 4 route files)
+- [x] HTML-Escape Exception Messages (`html.escape()` on all error banners in 4 route files)
+- [x] Enable SQLite WAL Mode (`PRAGMA journal_mode = WAL` in database init)
+- [x] Versioned Database Migrations (`schema_versions` table with numbered migration functions, each runs exactly once)
+- [x] Cache Context Between Q&A Steps (10-minute TTL cache in health_review and ceo_review services, Step 2 reuses Step 1 data)
+- [x] Add ON DELETE CASCADE to Foreign Keys (all FK constraints, simplified `delete_project()` to single DELETE)
