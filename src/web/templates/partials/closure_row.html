@@ -1,0 +1,32 @@
+<details class="health-review-history-item">
+    <summary>
+        <span class="ceo-review-status badge-{{ report.status.value }}">{{ report.status.value }}</span>
+        {{ report.created_at }}
+    </summary>
+    <div class="health-review-detail">
+        {% set outcome = report.report_json.get('final_delivery_outcome', '') if report.report_json.get is defined else '' %}
+        {% if outcome %}
+        <p><strong>Delivery Outcome:</strong> {{ outcome }}</p>
+        {% endif %}
+
+        {% set criteria = report.report_json.get('success_criteria_assessments', []) if report.report_json.get is defined else [] %}
+        {% if criteria %}
+        <h4>Success Criteria</h4>
+        <ul>
+            {% for c in criteria %}
+            <li><strong>{{ c.criterion }}</strong>: {{ c.status }} — {{ c.comments }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+
+        {% set lessons = report.report_json.get('lessons_learned', []) if report.report_json.get is defined else [] %}
+        {% if lessons %}
+        <h4>Lessons Learned</h4>
+        <ul>
+            {% for ll in lessons %}
+            <li><strong>[{{ ll.category }}]</strong> {{ ll.description }} — {{ ll.recommendations }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+</details>

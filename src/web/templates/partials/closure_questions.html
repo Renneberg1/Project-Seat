@@ -1,0 +1,46 @@
+{% if questions %}
+<div class="charter-questions">
+    <h3>Clarifying Questions</h3>
+    <p>The LLM identified some things it cannot determine from the data alone. Please answer to improve the closure report accuracy.</p>
+
+    <form hx-post="/project/{{ project.id }}/closure/analyze"
+          hx-target="#closure-result"
+          hx-indicator="#closure-analyze-spinner"
+          hx-disabled-elt="find button">
+
+        <input type="hidden" name="pm_notes" value="{{ pm_notes }}">
+
+        {% for q in questions %}
+        <div class="charter-question-item">
+            <label>
+                <strong>{{ q.question }}</strong>
+                <span class="charter-question-section">{{ q.category }}</span>
+                {% if q.why_needed %}
+                <span class="charter-question-why">{{ q.why_needed }}</span>
+                {% endif %}
+            </label>
+            <input type="hidden" name="question_{{ loop.index0 }}" value="{{ q.question }}">
+            <textarea name="answer_{{ loop.index0 }}" rows="2"
+                      placeholder="Your answer..."></textarea>
+        </div>
+        {% endfor %}
+
+        <button type="submit">Submit Answers &amp; Generate Report</button>
+        <span id="closure-analyze-spinner" class="htmx-indicator"> Generating closure report...</span>
+    </form>
+</div>
+{% else %}
+<div class="charter-questions">
+    <h3>No Questions Needed</h3>
+    <p>The data is comprehensive. Generating report directly...</p>
+
+    <form hx-post="/project/{{ project.id }}/closure/analyze"
+          hx-target="#closure-result"
+          hx-indicator="#closure-direct-spinner"
+          hx-trigger="load"
+          hx-disabled-elt="find button">
+        <input type="hidden" name="pm_notes" value="{{ pm_notes }}">
+        <span id="closure-direct-spinner" class="htmx-indicator"> Generating closure report...</span>
+    </form>
+</div>
+{% endif %}

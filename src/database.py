@@ -158,6 +158,17 @@ CREATE TABLE IF NOT EXISTS charter_suggestions (
     FOREIGN KEY (approval_item_id) REFERENCES approval_queue(id)
 );
 
+CREATE TABLE IF NOT EXISTS closure_reports (
+    id               INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id       INTEGER NOT NULL,
+    report_json      TEXT NOT NULL DEFAULT '{}',
+    confluence_body  TEXT NOT NULL DEFAULT '',
+    approval_item_id INTEGER,
+    status           TEXT NOT NULL DEFAULT 'draft',
+    created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
 CREATE TABLE IF NOT EXISTS schema_versions (
     version    INTEGER PRIMARY KEY,
     applied_at TEXT NOT NULL DEFAULT (datetime('now'))
@@ -433,6 +444,25 @@ def _migrate_10_add_cascade(conn: sqlite3.Connection) -> None:
         conn.execute("PRAGMA foreign_keys = ON")
 
 
+def _migrate_11_add_closure_reports(conn: sqlite3.Connection) -> None:
+    """Create closure_reports table and index for databases created before it was in _SCHEMA."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS closure_reports (
+            id               INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id       INTEGER NOT NULL,
+            report_json      TEXT NOT NULL DEFAULT '{}',
+            confluence_body  TEXT NOT NULL DEFAULT '',
+            approval_item_id INTEGER,
+            status           TEXT NOT NULL DEFAULT 'draft',
+            created_at       TEXT NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )"""
+    )
+    conn.execute(
+        "CREATE INDEX IF NOT EXISTS idx_closure_reports_proj ON closure_reports(project_id)"
+    )
+
+
 _MIGRATIONS: list[tuple[int, callable]] = [
     (1, _migrate_1_add_phase),
     (2, _migrate_2_add_dhf_columns),
@@ -444,6 +474,7 @@ _MIGRATIONS: list[tuple[int, callable]] = [
     (8, _migrate_8_add_ceo_review_id),
     (9, _migrate_9_add_indexes),
     (10, _migrate_10_add_cascade),
+    (11, _migrate_11_add_closure_reports),
 ]
 
 

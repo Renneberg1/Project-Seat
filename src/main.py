@@ -22,6 +22,7 @@ from src.web.routes.transcript import router as transcript_router
 from src.web.routes.charter import router as charter_router
 from src.web.routes.health_review import router as health_review_router
 from src.web.routes.ceo_review import router as ceo_review_router
+from src.web.routes.closure import router as closure_router
 from src.web.routes.settings import router as settings_router
 from src.web.routes.health import router as health_router
 from src.web.routes.typeahead import router as typeahead_router
@@ -54,6 +55,7 @@ app.include_router(transcript_router)
 app.include_router(charter_router)
 app.include_router(health_review_router)
 app.include_router(ceo_review_router)
+app.include_router(closure_router)
 app.include_router(settings_router)
 app.include_router(typeahead_router)
 app.include_router(health_router)

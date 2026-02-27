@@ -13,6 +13,7 @@ from src.connectors.jira import JiraConnector
 from src.engine.approval import ApprovalEngine
 from src.services.ceo_review import CeoReviewService
 from src.services.charter import CharterService
+from src.services.closure import ClosureService
 from src.services.dashboard import DashboardService
 from src.services.dhf import DHFService
 from src.services.health_review import HealthReviewService
@@ -160,6 +161,10 @@ def get_health_review_service() -> HealthReviewService:
 
 def get_ceo_review_service() -> CeoReviewService:
     return CeoReviewService()
+
+
+def get_closure_service() -> ClosureService:
+    return ClosureService()
 
 
 def get_team_progress_service() -> TeamProgressService:

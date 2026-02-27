@@ -365,3 +365,55 @@ class RiskRefineAgent(BaseAgent):
             temperature=0.3,
             max_tokens=4096,
         )
+
+
+# ------------------------------------------------------------------
+# Closure Agent
+# ------------------------------------------------------------------
+
+class ClosureAgent(BaseAgent):
+    """Two-step Closure Report agent: ask questions, then produce report."""
+
+    async def ask_questions(
+        self,
+        metrics: dict[str, Any],
+        pm_notes: str,
+    ) -> dict[str, Any]:
+        """Step 1: Identify what can't be determined from data alone.
+
+        Returns parsed JSON with a ``questions`` list.
+        """
+        from src.engine.prompts.closure import (
+            QUESTIONS_SYSTEM_PROMPT,
+            CLOSURE_QUESTIONS_SCHEMA,
+            build_questions_prompt,
+        )
+
+        user_prompt = build_questions_prompt(metrics, pm_notes)
+        return await self._generate_with_retry(
+            QUESTIONS_SYSTEM_PROMPT, user_prompt, CLOSURE_QUESTIONS_SCHEMA,
+            max_tokens=16384,
+        )
+
+    async def generate_report(
+        self,
+        metrics: dict[str, Any],
+        pm_notes: str,
+        qa_pairs: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        """Step 2: Produce the closure report narrative sections.
+
+        Returns parsed JSON with final_delivery_outcome, success_criteria_assessments,
+        and lessons_learned.
+        """
+        from src.engine.prompts.closure import (
+            REPORT_SYSTEM_PROMPT,
+            CLOSURE_REPORT_SCHEMA,
+            build_report_prompt,
+        )
+
+        user_prompt = build_report_prompt(metrics, pm_notes, qa_pairs)
+        return await self._generate_with_retry(
+            REPORT_SYSTEM_PROMPT, user_prompt, CLOSURE_REPORT_SCHEMA,
+            max_tokens=16384,
+        )

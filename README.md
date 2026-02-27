@@ -24,7 +24,8 @@ A locally-run project management cockpit for medical device software engineering
 - **API Health Check** — `GET /api/health` returns JSON connectivity status for DB, Jira, and Confluence (200 if all pass, 503 if degraded)
 - **Offline CDN Assets** — HTMX and Chart.js bundled locally for air-gapped/offline resilience; automatic cache-busting via content-hash query strings
 - **Page Progress Bar** — Animated loading indicator at top of page for both regular navigation and HTMX requests
-- **Navigation Tab Grouping** — Analysis tabs (Transcripts, Charter, Health, CEO Review) collapse into a dropdown on narrow screens (≤1024px), flat on desktop
+- **Project Closure Report** — Generate formal project closure reports covering delivery outcome, timeline adherence, scope completion, risk/issue closure, success criteria assessment, and lessons learned. Uses the two-step LLM Q&A pattern with hybrid deterministic data tables and LLM narrative, published to Confluence via the approval queue.
+- **Navigation Tab Grouping** — Analysis tabs (Transcripts, Charter, Health, CEO Review, Closure) collapse into a dropdown on narrow screens (≤1024px), flat on desktop
 - **FastAPI Dependency Injection** — All service/connector instantiation in routes uses `Depends()` factory functions from `deps.py`
 
 ### Planned / Upcoming

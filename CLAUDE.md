@@ -16,12 +16,12 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update, Health Review, CEO Review.
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update, Health Review, CEO Review, Closure Report.
 2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output), Orchestrator (task scheduling framework, wired into lifespan).
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and (future) Salesforce REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, LLM-powered project closure report with full lifecycle data + lessons learned, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking.
 
 See `docs/architecture.pdf` and `docs/workflow.pdf` for visual diagrams.
 
@@ -87,6 +87,7 @@ project-seat/
 │   │       ├── charter.py           # Charter update: questions + edits prompts, JSON schemas
 │   │       ├── health_review.py     # Health review: questions + review prompts, JSON schemas
 │   │       ├── ceo_review.py        # CEO review: questions + review prompts, JSON schemas
+│   │       ├── closure.py           # Closure report: questions + report prompts, JSON schemas
 │   │       ├── risk_refine.py       # Risk/decision refinement: quality criteria, Q&A loop schema
 │   │       └── (planned: release_plan.py, estimate_check.py — see docs/feature-backlog.md)
 │   ├── repositories/            # Data access layer (all raw SQL lives here)
@@ -96,6 +97,7 @@ project-seat/
 │   │   ├── transcript_repo.py   # transcript_cache + transcript_suggestions tables
 │   │   ├── charter_repo.py      # charter_suggestions table
 │   │   ├── review_repo.py       # health_reviews + ceo_reviews tables
+│   │   ├── closure_repo.py      # closure_reports table
 │   │   ├── release_repo.py      # releases + release_documents tables
 │   │   ├── snapshot_repo.py     # team_progress_snapshots table
 │   │   └── config_repo.py       # config table (if used)
@@ -114,6 +116,7 @@ project-seat/
 │   │   ├── charter.py           # Charter section fetch, LLM Q&A, edit proposals, suggestion management
 │   │   ├── health_review.py     # Health review: context gathering, LLM Q&A, review persistence
 │   │   ├── ceo_review.py        # CEO review: data gathering, LLM Q&A, XHTML render, publish
+│   │   ├── closure.py           # Closure report: data gathering, LLM Q&A, XHTML render, publish
 │   │   ├── team_progress.py     # Per-team version progress tracking (JQL-based)
 │   │   └── team_snapshot.py     # Daily team progress snapshots for burnup charts
 │   ├── web/
@@ -129,6 +132,7 @@ project-seat/
 │   │   │   ├── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
 │   │   │   ├── health_review.py    # Health review page, LLM Q&A, review output
 │   │   │   ├── ceo_review.py      # CEO review page, LLM Q&A, preview, accept/reject
+│   │   │   ├── closure.py        # Closure report page, LLM Q&A, preview, accept/reject
 │   │   │   ├── settings.py        # Project settings page
 │   │   │   ├── health.py          # API health check endpoint (/api/health)
 │   │   │   └── typeahead.py       # Typeahead search endpoints for Atlassian resources
@@ -150,6 +154,7 @@ project-seat/
 │   │   │   ├── project_team_progress.html       # Per-team version progress + burnup chart
 │   │   │   ├── project_health_review.html      # Health review page + past reviews
 │   │   │   ├── project_ceo_review.html         # CEO review page + PM notes + past reviews
+│   │   │   ├── project_closure.html           # Closure report page + PM notes + past reports
 │   │   │   └── partials/
 │   │   │       ├── approval_pending.html
 │   │   │       ├── approval_row.html
@@ -166,6 +171,9 @@ project-seat/
 │   │   │       ├── ceo_review_questions.html   # CEO review clarifying questions form
 │   │   │       ├── ceo_review_preview.html     # CEO review preview with accept/reject
 │   │   │       ├── ceo_review_row.html         # Individual past CEO review row
+│   │   │       ├── closure_questions.html     # Closure report clarifying questions form
+│   │   │       ├── closure_preview.html       # Closure report preview with accept/reject
+│   │   │       ├── closure_row.html           # Individual past closure report row
 │   │   │       ├── risk_refine_panel.html      # Risk/decision refinement Q&A panel
 │   │   │       ├── typeahead_input.html       # Reusable typeahead input macro
 │   │   │       └── typeahead_results.html     # Typeahead search results partial
@@ -185,7 +193,8 @@ project-seat/
 │       ├── release.py           # Release and scope-freeze models
 │       ├── transcript.py        # Transcript, suggestion, and project context models
 │       ├── charter.py           # Charter suggestion status and dataclass
-│       └── ceo_review.py       # CEO review status and dataclass
+│       ├── ceo_review.py       # CEO review status and dataclass
+│       └── closure.py          # Closure report status and dataclass
 └── tests/
     ├── __init__.py
     ├── conftest.py              # Shared fixtures
@@ -202,6 +211,7 @@ project-seat/
     │   ├── test_charter_agent.py    # CharterAgent questions + edits tests
     │   ├── test_health_review_agent.py  # HealthReviewAgent questions + review tests
     │   ├── test_risk_refine_agent.py   # RiskRefineAgent refinement loop tests
+    │   ├── test_closure_agent.py    # ClosureAgent questions + report tests
     │   ├── test_orchestrator.py
     │   └── test_providers/
     │       ├── __init__.py
@@ -223,6 +233,7 @@ project-seat/
     │   ├── test_charter.py          # Charter service + suggestion workflow tests
     │   ├── test_health_review.py    # Health review service tests
     │   ├── test_ceo_review.py       # CEO review service + agent + route tests
+    │   ├── test_closure.py          # Closure report service tests
     │   ├── test_team_progress.py    # Team progress service tests
     │   └── test_team_snapshot.py    # Snapshot service tests
     └── test_web/
@@ -235,6 +246,7 @@ project-seat/
         ├── test_routes_charter.py   # Charter route contract tests
         ├── test_routes_health_review.py  # Health review route tests
         ├── test_routes_team_progress.py  # Team progress route tests
+        ├── test_routes_closure.py      # Closure report route tests
         ├── test_routes_typeahead.py     # Typeahead search route tests
         └── test_routes_health.py       # API health check route tests
 ```
@@ -273,6 +285,7 @@ pytest
 - `CharterAgent` orchestrates Charter updates via two-step LLM interaction: `ask_questions()` identifies gaps, `propose_edits()` returns section replacements — both retry on JSON parse failure
 - `HealthReviewAgent` orchestrates project health reviews via two-step LLM interaction: `ask_questions()` identifies data gaps, `generate_review()` returns structured assessment — read-only, no approval queue needed
 - `CeoReviewAgent` orchestrates CEO status updates via two-step LLM interaction: `ask_questions()` identifies gaps in 2-week data, `generate_review()` returns structured update with health indicator, commentary, escalations, and milestones — publishes to Confluence via approval queue
+- `ClosureAgent` orchestrates project closure reports via two-step LLM interaction: `ask_questions()` identifies gaps in lessons learned/delivery assessment/success criteria, `generate_report()` returns narrative sections (delivery outcome, success criteria, lessons learned) — deterministic data tables pre-computed, published to Confluence via approval queue
 - `RiskRefineAgent` iteratively refines transcript-extracted risks/decisions via a single `refine()` method: evaluates against ISO 14971 quality criteria, asks targeted questions, incorporates answers, repeats until satisfied (max 5 rounds)
 - All LLM responses that result in write actions must pass through the Approval Engine first
 - Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
@@ -322,7 +335,7 @@ pytest
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
 - Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
-- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`, `health_reviews`, `ceo_reviews`
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`, `health_reviews`, `ceo_reviews`, `closure_reports`
 
 ### Testing
 - Use pytest
@@ -571,6 +584,50 @@ User clicks "Refine" on a risk/decision suggestion
 - **ADF round-trip:** `_extract_risk_draft()` parses the Jira ADF payload back to plain text for the LLM; `apply_refinement()` rebuilds ADF from the refined fields
 - **Max 5 rounds:** `continue_risk_refinement()` forces `satisfied=true` at round 5 without an LLM call
 - **Bail-out options:** "Apply Current Draft" applies partial refinement at any point; "Discard" removes the panel without changes
+
+## Closure Report Workflow
+
+The closure report is the fifth LLM-powered feature. It uses the same two-step Q&A pattern as CEO Review, with **full project lifecycle data** and **Confluence page creation** via the approval queue.
+
+### Flow
+
+```
+PM enters optional notes → POST /closure/ask
+  → ClosureService.generate_questions()
+      → gather_closure_context() (parallel: ALL risks, ALL decisions, Charter, XFT,
+        initiatives, team reports, full snapshots (365d), DHF docs, releases, meetings)
+      → compute_closure_metrics() (deterministic: timeline, scope, risk/decision tables,
+        DHF final status, team progress)
+      → ClosureAgent.ask_questions() (LLM call #1: identify gaps in lessons learned,
+        delivery assessment, success criteria, stakeholder satisfaction)
+  → UI shows clarifying questions (or auto-submits if none)
+  → PM answers → POST /closure/analyze
+      → ClosureAgent.generate_report() (LLM call #2: narrative sections)
+  → render_confluence_xhtml() → save to closure_reports table
+  → PM reviews preview (data tables + LLM narrative)
+  → Accept → ClosureService.accept_report()
+      → ApprovalEngine.propose(CREATE_CONFLUENCE_PAGE) — child of Charter page
+  → PM approves in Approval Queue → Confluence page created
+```
+
+### Output Structure
+
+- **final_delivery_outcome**: 3-5 sentence narrative (LLM)
+- **success_criteria_assessments**: Table with criterion/expected/actual/status/comments (LLM)
+- **lessons_learned**: Categorised table with description/triggers/recommendations/owner (LLM)
+- **timeline**: Planned vs Actual vs Deviation table (deterministic)
+- **scope_delivered / scope_not_delivered**: Lists from initiative status (deterministic)
+- **all_risks / all_decisions**: Full lifecycle tables (deterministic)
+- **team_progress**: Final per-team SP breakdown (deterministic)
+- **dhf_total / dhf_released**: Final document completion (deterministic)
+
+### Key Design Decisions
+
+- **Full lifecycle data:** Unlike CEO Review (2-week lens), closure gathers ALL risks/decisions (no date filter), 365 days of snapshots, and up to 20 meeting summaries
+- **Hybrid output:** Deterministic data tables (timeline, scope, risks, DHF) combined with LLM-generated narrative (delivery outcome, success criteria, lessons learned)
+- **Confluence page creation:** Uses `CREATE_CONFLUENCE_PAGE` (not update) — the closure report is a new child page of the Charter page, alongside the XFT page
+- **Stateless Q&A:** Same pattern as CEO Review — no DB storage for intermediate Q&A state
+- **Lessons learned categories:** Planning, Team, Technical, Implementation, Commercial, Testing, Change Management, Vendor, Documentation
 
 ## Feature Backlog & Technical Debt
 

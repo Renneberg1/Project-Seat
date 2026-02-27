@@ -1,0 +1,42 @@
+{% extends "base.html" %}
+{% block title %}Closure Report — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Closure Report — {{ project.name }}</h1>
+</div>
+
+{% if not project.confluence_charter_id %}
+<div class="warning-banner">
+    No Charter page found. You can still generate a report, but publishing to Confluence will not be available. Set the Charter page ID in <a href="/project/{{ project.id }}/settings/">Project Settings</a>.
+</div>
+{% endif %}
+
+<div class="charter-update-section">
+    <p>Generate a formal project closure report. The LLM will review all project lifecycle data, ask any clarifying questions, then produce a structured closure report ready for Confluence.</p>
+
+    <form hx-post="/project/{{ project.id }}/closure/ask"
+          hx-target="#closure-result"
+          hx-indicator="#closure-spinner"
+          hx-disabled-elt="find button">
+
+        <label for="pm_notes"><strong>PM Notes</strong> (optional — add context about lessons learned, delivery assessment, stakeholder feedback, or success criteria):</label>
+        <textarea id="pm_notes" name="pm_notes" rows="4"
+                  placeholder="e.g. Project delivered on time. Key lesson: early vendor engagement critical. Success criteria for regulatory submission met..."></textarea>
+
+        <button type="submit">Generate Closure Report</button>
+        <span id="closure-spinner" class="htmx-indicator"> Analyzing project data...</span>
+    </form>
+</div>
+
+<div id="closure-result"></div>
+
+{% if past_reports %}
+<h2>Past Reports</h2>
+<div class="suggestions-list">
+    {% for report in past_reports %}
+    {% include "partials/closure_row.html" %}
+    {% endfor %}
+</div>
+{% endif %}
+{% endblock %}

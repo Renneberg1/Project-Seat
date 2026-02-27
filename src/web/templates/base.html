@@ -49,28 +49,42 @@
             {% if selected_project_id is defined and selected_project_id %}
             <a href="/project/{{ selected_project_id }}/dashboard"
                class="nav-link {% if request.url.path == '/project/' ~ selected_project_id|string ~ '/dashboard' %}active{% endif %}">Dashboard</a>
-            <a href="/project/{{ selected_project_id }}/features"
-               class="nav-link {% if '/features' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Features</a>
-            <a href="/project/{{ selected_project_id }}/documents"
-               class="nav-link {% if '/documents' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Documents</a>
             <a href="/project/{{ selected_project_id }}/approvals"
                class="nav-link {% if request.url.path == '/project/' ~ selected_project_id|string ~ '/approvals' %}active{% endif %}">Approvals</a>
-            {% set analysis_active = request.url.path.startswith('/project/') and ('/transcript' in request.url.path or '/charter' in request.url.path or '/health-review' in request.url.path or '/ceo-review' in request.url.path) %}
+            {% set monitoring_active = request.url.path.startswith('/project/') and ('/features' in request.url.path or '/documents' in request.url.path or '/team-progress' in request.url.path) %}
+            <div class="nav-dropdown" tabindex="-1">
+                <button type="button" class="nav-link nav-dropdown-toggle {% if monitoring_active %}active{% endif %}">Monitoring <span class="caret">&#x25BE;</span></button>
+                <div class="nav-dropdown-menu">
+                    <a href="/project/{{ selected_project_id }}/features"
+                       class="nav-link {% if '/features' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Features</a>
+                    <a href="/project/{{ selected_project_id }}/documents"
+                       class="nav-link {% if '/documents' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Documents</a>
+                    <a href="/project/{{ selected_project_id }}/team-progress"
+                       class="nav-link {% if '/team-progress' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Development</a>
+                </div>
+            </div>
+            {% set analysis_active = request.url.path.startswith('/project/') and ('/transcript' in request.url.path or '/health-review' in request.url.path) %}
             <div class="nav-dropdown" tabindex="-1">
                 <button type="button" class="nav-link nav-dropdown-toggle {% if analysis_active %}active{% endif %}">Analysis <span class="caret">&#x25BE;</span></button>
                 <div class="nav-dropdown-menu">
                     <a href="/project/{{ selected_project_id }}/transcript/"
                        class="nav-link {% if '/transcript' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Transcripts</a>
-                    <a href="/project/{{ selected_project_id }}/charter/"
-                       class="nav-link {% if '/charter' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Charter</a>
                     <a href="/project/{{ selected_project_id }}/health-review/"
                        class="nav-link {% if '/health-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Health</a>
-                    <a href="/project/{{ selected_project_id }}/ceo-review/"
-                       class="nav-link {% if '/ceo-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">CEO Review</a>
                 </div>
             </div>
-            <a href="/project/{{ selected_project_id }}/team-progress"
-               class="nav-link {% if '/team-progress' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Teams</a>
+            {% set reports_active = request.url.path.startswith('/project/') and ('/charter' in request.url.path or '/ceo-review' in request.url.path or '/closure' in request.url.path) %}
+            <div class="nav-dropdown" tabindex="-1">
+                <button type="button" class="nav-link nav-dropdown-toggle {% if reports_active %}active{% endif %}">Reports <span class="caret">&#x25BE;</span></button>
+                <div class="nav-dropdown-menu">
+                    <a href="/project/{{ selected_project_id }}/charter/"
+                       class="nav-link {% if '/charter' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Charter</a>
+                    <a href="/project/{{ selected_project_id }}/ceo-review/"
+                       class="nav-link {% if '/ceo-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">CEO Review</a>
+                    <a href="/project/{{ selected_project_id }}/closure/"
+                       class="nav-link {% if '/closure' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Closure</a>
+                </div>
+            </div>
             <button class="nav-link refresh-btn"
                     hx-post="/project/{{ selected_project_id }}/refresh"
                     title="Refresh cached data">&#x21bb;</button>

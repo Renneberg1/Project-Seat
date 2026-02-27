@@ -1,0 +1,177 @@
+<div class="ceo-preview">
+    {# Delivery Outcome #}
+    <div class="ceo-section">
+        <h3>Final Delivery Outcome</h3>
+        {% set outcome = report.get('final_delivery_outcome', '') if report.get is defined else '' %}
+        {% if outcome %}
+        <p>{{ outcome }}</p>
+        {% endif %}
+    </div>
+
+    {# Timeline #}
+    {% set metrics = report.get('metrics', {}) if report.get is defined else {} %}
+    {% set timeline = metrics.get('timeline', {}) if metrics.get is defined else {} %}
+    {% if timeline %}
+    <div class="ceo-section">
+        <h3>Project Timeline</h3>
+        <table class="ceo-metrics-table">
+            <thead><tr><th>Milestone</th><th>Planned</th><th>Actual</th><th>Deviation</th></tr></thead>
+            <tbody>
+            <tr>
+                <td>Project Completion</td>
+                <td>{{ timeline.get('planned_end', 'N/A') }}</td>
+                <td>{{ timeline.get('actual_end', 'TBD') }}</td>
+                <td>{{ timeline.get('deviation', 'N/A') }}</td>
+            </tr>
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# Scope #}
+    {% set scope_delivered = metrics.get('scope_delivered', []) if metrics.get is defined else [] %}
+    {% set scope_not_delivered = metrics.get('scope_not_delivered', []) if metrics.get is defined else [] %}
+    {% if scope_delivered or scope_not_delivered %}
+    <div class="ceo-section">
+        <h3>Scope Delivered</h3>
+        {% if scope_delivered %}
+        <h4>Delivered ({{ scope_delivered|length }})</h4>
+        <ul>
+            {% for item in scope_delivered %}
+            <li>{{ item.key }}: {{ item.summary }}</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+        {% if scope_not_delivered %}
+        <h4>Not Delivered ({{ scope_not_delivered|length }})</h4>
+        <ul>
+            {% for item in scope_not_delivered %}
+            <li>{{ item.key }}: {{ item.summary }} [{{ item.status }}]</li>
+            {% endfor %}
+        </ul>
+        {% endif %}
+    </div>
+    {% endif %}
+
+    {# Success Criteria #}
+    {% set criteria = report.get('success_criteria_assessments', []) if report.get is defined else [] %}
+    {% if criteria %}
+    <div class="ceo-section">
+        <h3>Performance Against Success Criteria</h3>
+        <table class="ceo-metrics-table">
+            <thead><tr><th>Criterion</th><th>Expected</th><th>Actual</th><th>Status</th><th>Comments</th></tr></thead>
+            <tbody>
+            {% for c in criteria %}
+            <tr>
+                <td>{{ c.criterion }}</td>
+                <td>{{ c.expected_outcome }}</td>
+                <td>{{ c.actual_performance }}</td>
+                <td>
+                    {% if c.status == 'Met' %}
+                    <span class="health-badge health-green">{{ c.status }}</span>
+                    {% elif c.status == 'Not Met' %}
+                    <span class="health-badge health-red">{{ c.status }}</span>
+                    {% else %}
+                    <span class="health-badge health-amber">{{ c.status }}</span>
+                    {% endif %}
+                </td>
+                <td>{{ c.comments }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# Risks & Issues (collapsible) #}
+    {% set all_risks = metrics.get('all_risks', []) if metrics.get is defined else [] %}
+    {% set all_decisions = metrics.get('all_decisions', []) if metrics.get is defined else [] %}
+    {% if all_risks or all_decisions %}
+    <details class="ceo-data-details">
+        <summary>View Risks &amp; Decisions ({{ all_risks|length }} risks, {{ all_decisions|length }} decisions)</summary>
+
+        {% if all_risks %}
+        <h4>Risks ({{ all_risks|length }})</h4>
+        <table class="ceo-metrics-table">
+            <thead><tr><th>ID</th><th>Description</th><th>Priority</th><th>Status</th><th>Components</th></tr></thead>
+            <tbody>
+            {% for r in all_risks %}
+            <tr>
+                <td>{{ r.key }}</td>
+                <td>{{ r.summary }}</td>
+                <td>{{ r.priority }}</td>
+                <td>{{ r.status }}</td>
+                <td>{{ r.components }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+
+        {% if all_decisions %}
+        <h4>Decisions ({{ all_decisions|length }})</h4>
+        <table class="ceo-metrics-table">
+            <thead><tr><th>ID</th><th>Description</th><th>Status</th></tr></thead>
+            <tbody>
+            {% for d in all_decisions %}
+            <tr><td>{{ d.key }}</td><td>{{ d.summary }}</td><td>{{ d.status }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+        {% endif %}
+    </details>
+    {% endif %}
+
+    {# Lessons Learned #}
+    {% set lessons = report.get('lessons_learned', []) if report.get is defined else [] %}
+    {% if lessons %}
+    <div class="ceo-section">
+        <h3>Lessons Learned</h3>
+        <table class="ceo-metrics-table">
+            <thead><tr><th>Category</th><th>Description</th><th>Triggers</th><th>Recommendations</th><th>Owner</th></tr></thead>
+            <tbody>
+            {% for ll in lessons %}
+            <tr>
+                <td>{{ ll.category }}</td>
+                <td>{{ ll.description }}</td>
+                <td>{{ ll.effect_triggers }}</td>
+                <td>{{ ll.recommendations }}</td>
+                <td>{{ ll.owner }}</td>
+            </tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </div>
+    {% endif %}
+
+    {# Team Progress (collapsible) #}
+    {% set team_progress = metrics.get('team_progress', []) if metrics.get is defined else [] %}
+    {% if team_progress %}
+    <details class="ceo-data-details">
+        <summary>View Team Progress</summary>
+        <table class="ceo-metrics-table">
+            <thead><tr><th>Team</th><th>Progress</th><th>SP</th><th>Blockers</th></tr></thead>
+            <tbody>
+            {% for t in team_progress %}
+            <tr><td>{{ t.team }}</td><td>{{ t.pct_done }}%</td><td>{{ t.sp_done }}/{{ t.sp_total }}</td><td>{{ t.blockers }}</td></tr>
+            {% endfor %}
+            </tbody>
+        </table>
+    </details>
+    {% endif %}
+
+    {# Action buttons #}
+    <div class="ceo-actions">
+        {% if project.confluence_charter_id %}
+        <button hx-post="/project/{{ project.id }}/closure/{{ report_id }}/accept"
+                hx-target="#closure-result"
+                hx-confirm="Publish this Closure Report to Confluence?"
+                class="btn-accept">Accept &amp; Publish</button>
+        {% else %}
+        <button disabled title="No Charter page configured" class="btn-accept">Accept &amp; Publish</button>
+        {% endif %}
+        <button hx-post="/project/{{ project.id }}/closure/{{ report_id }}/reject"
+                hx-target="#closure-result"
+                class="btn-reject">Reject</button>
+    </div>
+</div>
