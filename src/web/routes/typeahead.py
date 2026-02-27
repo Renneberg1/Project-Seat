@@ -65,6 +65,22 @@ async def search_confluence_pages(
     cached = cache.get(cache_key)
     if cached is not None:
         return _render_results(request, cached)
+
+    # If the query is a numeric page ID, look it up directly
+    if q.strip().isdigit():
+        try:
+            page = await confluence.get_page(q.strip())
+            title = page.get("title", q.strip())
+            space_key = _extract_space_key(page)
+            results = [{"id": q.strip(), "label": title, "sublabel": space_key}]
+            cache.set(cache_key, results, _CACHE_SHORT)
+            return _render_results(request, results)
+        except ConnectorError:
+            # Not a valid page ID — fall through to title search
+            pass
+        finally:
+            await confluence.close()
+
     try:
         pages = await confluence.search_pages_by_title(q, space_key=space)
     except ConnectorError as exc:

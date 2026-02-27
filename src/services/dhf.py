@@ -79,6 +79,9 @@ class DHFService:
         Results are cached for 120 seconds.
         Raises ``ConnectorError`` on API failure (caller should handle).
         """
+        if not project.dhf_draft_root_id or not project.dhf_released_root_id:
+            return ([], [])
+
         cache_key = f"dhf:{project.dhf_draft_root_id}:{project.dhf_released_root_id}"
         cached = cache.get(cache_key)
         if cached is not None:

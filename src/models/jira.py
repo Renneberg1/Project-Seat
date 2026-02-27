@@ -62,6 +62,7 @@ class JiraIssue:
     risk_level: str | None = None
     timeline_impact: float | None = None
     components: list[str] | None = None
+    created: str | None = None
 
     @classmethod
     def from_api(cls, data: dict[str, Any]) -> JiraIssue:
@@ -112,4 +113,5 @@ class JiraIssue:
             risk_level=risk_level,
             timeline_impact=timeline_impact,
             components=components,
+            created=fields.get("created"),
         )

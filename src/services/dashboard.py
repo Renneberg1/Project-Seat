@@ -97,7 +97,8 @@ class DashboardService:
                             "customfield_13267", "components"],
                 ),
                 jira.search(
-                    f'parent = {project.jira_goal_key} AND project != RISK',
+                    f'parent = {project.jira_goal_key} AND project != RISK'
+                    f' AND statusCategory != Done',
                     fields=["status"],
                 ),
             )
@@ -174,7 +175,8 @@ class DashboardService:
                 f'project = PI AND "versions[checkboxes]" = "{project.pi_version}"'
                 f' AND issuetype != "Market Access"'
                 f' AND statusCategory != Done'
-                f' AND resolution = Unresolved',
+                f' AND resolution = Unresolved'
+                f' AND "Idea archived" is EMPTY',
                 fields=["summary", "status", "issuetype", "project", "labels",
                         "fixVersions", "duedate", "parent", "description",
                         "customfield_12812", "customfield_11054", "customfield_13530"],
@@ -227,9 +229,10 @@ class DashboardService:
 
         jira = JiraConnector(settings=self._settings)
         try:
-            # 1. Fetch all initiatives
+            # 1. Fetch all initiatives (exclude archived/done)
             initiatives = await jira.search(
-                f'parent = {project.jira_goal_key} AND project != RISK',
+                f'parent = {project.jira_goal_key} AND project != RISK'
+                f' AND statusCategory != Done',
                 fields=["summary", "status", "issuetype", "project", "labels",
                         "fixVersions", "duedate", "parent", "description"],
             )

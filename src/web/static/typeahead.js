@@ -54,10 +54,14 @@
             }
         });
 
-        // -- Clear hidden value when user edits the search field --
+        // -- Sync hidden value when user edits the search field --
         searchInput.addEventListener('input', function () {
-            if (searchInput.value === '') {
+            var val = searchInput.value.trim();
+            if (val === '') {
                 hiddenInput.value = '';
+            } else if (/^\d+$/.test(val)) {
+                // Numeric input — treat as a direct page ID
+                hiddenInput.value = val;
             }
         });
 
