@@ -24,8 +24,8 @@ def client(tmp_path):
 
 class TestHealthEndpoint:
     def test_all_healthy(self, client):
-        with patch("src.web.routes.health.JiraConnector") as MockJira, \
-             patch("src.web.routes.health.ConfluenceConnector") as MockConf:
+        with patch("src.web.deps.JiraConnector") as MockJira, \
+             patch("src.web.deps.ConfluenceConnector") as MockConf:
             MockJira.return_value.get_myself = AsyncMock(return_value={"accountId": "x"})
             MockJira.return_value.close = AsyncMock()
             MockConf.return_value.get_current_user = AsyncMock(return_value={"accountId": "x"})
@@ -40,8 +40,8 @@ class TestHealthEndpoint:
             assert data["confluence"] is True
 
     def test_jira_down(self, client):
-        with patch("src.web.routes.health.JiraConnector") as MockJira, \
-             patch("src.web.routes.health.ConfluenceConnector") as MockConf:
+        with patch("src.web.deps.JiraConnector") as MockJira, \
+             patch("src.web.deps.ConfluenceConnector") as MockConf:
             MockJira.return_value.get_myself = AsyncMock(side_effect=RuntimeError("timeout"))
             MockJira.return_value.close = AsyncMock()
             MockConf.return_value.get_current_user = AsyncMock(return_value={"accountId": "x"})
@@ -56,8 +56,8 @@ class TestHealthEndpoint:
             assert data["confluence"] is True
 
     def test_confluence_down(self, client):
-        with patch("src.web.routes.health.JiraConnector") as MockJira, \
-             patch("src.web.routes.health.ConfluenceConnector") as MockConf:
+        with patch("src.web.deps.JiraConnector") as MockJira, \
+             patch("src.web.deps.ConfluenceConnector") as MockConf:
             MockJira.return_value.get_myself = AsyncMock(return_value={"accountId": "x"})
             MockJira.return_value.close = AsyncMock()
             MockConf.return_value.get_current_user = AsyncMock(side_effect=RuntimeError("timeout"))
@@ -70,8 +70,8 @@ class TestHealthEndpoint:
             assert data["confluence"] is False
 
     def test_db_down(self, client):
-        with patch("src.web.routes.health.JiraConnector") as MockJira, \
-             patch("src.web.routes.health.ConfluenceConnector") as MockConf, \
+        with patch("src.web.deps.JiraConnector") as MockJira, \
+             patch("src.web.deps.ConfluenceConnector") as MockConf, \
              patch("src.web.routes.health.get_db", side_effect=RuntimeError("db error")):
             MockJira.return_value.get_myself = AsyncMock(return_value={"accountId": "x"})
             MockJira.return_value.close = AsyncMock()

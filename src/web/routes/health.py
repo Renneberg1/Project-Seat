@@ -4,13 +4,14 @@ from __future__ import annotations
 
 import logging
 
-from fastapi import APIRouter
+from fastapi import APIRouter, Depends
 from fastapi.responses import JSONResponse
 
 from src.config import settings
 from src.connectors.confluence import ConfluenceConnector
 from src.connectors.jira import JiraConnector
 from src.database import get_db
+from src.web.deps import get_confluence_connector, get_jira_connector
 
 logger = logging.getLogger(__name__)
 
@@ -18,14 +19,17 @@ router = APIRouter(tags=["health"])
 
 
 @router.get("/api/health")
-async def health_check() -> JSONResponse:
+async def health_check(
+    jira: JiraConnector = Depends(get_jira_connector),
+    confluence: ConfluenceConnector = Depends(get_confluence_connector),
+) -> JSONResponse:
     """Return connectivity status for DB, Jira, and Confluence.
 
     200 if all pass, 503 if any fail.
     """
     results: dict[str, bool] = {"db": False, "jira": False, "confluence": False}
 
-    # DB check
+    # DB check (direct get_db call — pragmatic exception for raw SELECT 1 ping)
     try:
         with get_db(settings.db_path) as conn:
             conn.execute("SELECT 1")
@@ -34,7 +38,6 @@ async def health_check() -> JSONResponse:
         logger.warning("Health check: DB unreachable", exc_info=True)
 
     # Jira check
-    jira = JiraConnector()
     try:
         await jira.get_myself()
         results["jira"] = True
@@ -44,7 +47,6 @@ async def health_check() -> JSONResponse:
         await jira.close()
 
     # Confluence check
-    confluence = ConfluenceConnector()
     try:
         await confluence.get_current_user()
         results["confluence"] = True

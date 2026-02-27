@@ -1,0 +1,87 @@
+---
+title: Project Seat — System Architecture
+---
+graph TB
+    subgraph cloud["☁️ External Cloud Services"]
+        direction LR
+        jira["<b>Jira Cloud</b><br/>Projects, Plans<br/>Risks, Decisions"]
+        confluence["<b>Confluence</b><br/>Softcomply, DHF<br/>Project Docs"]
+        llm["<b>Gemini API</b><br/>LLM Reasoning<br/><i>(or Ollama local)</i>"]
+    end
+
+    subgraph connectors["🔌 API Connectors"]
+        direction LR
+        jira_c["Jira<br/>Connector"]
+        conf_c["Confluence<br/>Connector"]
+    end
+
+    subgraph local["🖥️ Local Machine — Project Seat"]
+        direction TB
+
+        subgraph frontend["Web Frontend — FastAPI + HTMX + Chart.js"]
+            direction LR
+            f1["Pipeline<br/><i>Phase Overview</i>"]
+            f2["Dashboard<br/><i>Project Summary</i>"]
+            f3["Approval Queue<br/><i>Review &amp; Act</i>"]
+            f4["Spin-Up /<br/>Import"]
+            f5["Transcript<br/><i>Upload &amp; Analyze</i>"]
+            f6["Charter<br/><i>LLM Q&amp;A</i>"]
+            f7["Health Review<br/><i>LLM Assessment</i>"]
+            f8["CEO Review<br/><i>Status Update</i>"]
+            f9["Closure Report<br/><i>Lessons Learned</i>"]
+            f10["Team Progress<br/><i>Burnup Charts</i>"]
+        end
+
+        subgraph engine["Core Engine"]
+            direction LR
+            orch["<b>Orchestrator</b><br/>Task Scheduler<br/><i>(daily snapshots)</i>"]
+            agents["<b>LLM Agent Layer</b><br/>6 Agents + Prompts<br/><i>Provider-agnostic</i>"]
+            appr["<b>Approval Engine</b><br/>Queue, Gate &amp;<br/>Audit Trail"]
+        end
+
+        subgraph services["Service Layer"]
+            direction LR
+            ctx["<b>ProjectContextService</b><br/>Parallel Data Fetch"]
+            svc["<b>Domain Services</b><br/>Dashboard · DHF · Release<br/>Transcript · Charter · Health<br/>CEO Review · Closure<br/>Team Progress · Risk Refinement"]
+        end
+
+        subgraph data["Local Data Layer"]
+            direction LR
+            repos["<b>Repository Layer</b><br/>8 Repositories"]
+            sqlite["<b>SQLite</b><br/>13 Tables<br/><i>WAL mode, migrations</i>"]
+            cache_m["<b>TTL Cache</b><br/>In-Memory"]
+            env["<b>.env</b><br/>Jira, Confluence<br/>Gemini / Ollama keys"]
+        end
+    end
+
+    jira <--> jira_c
+    confluence <--> conf_c
+    llm <--> agents
+
+    jira_c <--> ctx
+    conf_c <--> ctx
+    jira_c <--> appr
+
+    frontend --> services
+    frontend --> engine
+    ctx --> svc
+    services --> repos
+    repos --> sqlite
+    svc --> cache_m
+    agents --> svc
+    appr --> repos
+    orch --> svc
+
+    classDef cloudStyle fill:#E8F0FE,stroke:#4285F4,stroke-width:2px,color:#1A73E8
+    classDef connStyle fill:#F3E8FD,stroke:#9334E6,stroke-width:2px,color:#7627BB
+    classDef frontStyle fill:#E6F4EA,stroke:#34A853,stroke-width:2px,color:#1E8E3E
+    classDef engineStyle fill:#FEF7E0,stroke:#F9AB00,stroke-width:2px,color:#E37400
+    classDef dataStyle fill:#FCE8E6,stroke:#EA4335,stroke-width:2px,color:#C5221F
+    classDef serviceStyle fill:#FFF8E1,stroke:#FF8F00,stroke-width:2px,color:#E65100
+
+    class jira,confluence,llm cloudStyle
+    class jira_c,conf_c connStyle
+    class f1,f2,f3,f4,f5,f6,f7,f8,f9,f10 frontStyle
+    class orch,agents,appr engineStyle
+    class ctx,svc serviceStyle
+    class repos,sqlite,cache_m,env dataStyle

@@ -1,0 +1,118 @@
+---
+title: Project Seat — Product Workflow
+---
+graph TB
+    trigger(["🟢 Project Requested<br/><i>New Product or New Release</i>"])
+
+    subgraph spinup["Project Spin-Up / Import"]
+        direction LR
+        s1["1. Select Type"]
+        s2["2. Choose Product"]
+        s3["3. Name Release"]
+        s4["4. Confirm"]
+        s5["5. Execute"]
+        s1 --> s2 --> s3 --> s4 --> s5
+    end
+
+    trigger --> spinup
+
+    subgraph created["Created in Jira &amp; Confluence"]
+        direction LR
+        j1["<b>Jira Structure</b><br/>Goal → Initiative →<br/>Epic → Task"]
+        j2["<b>Risk &amp; Decision</b><br/><b>Tickets</b><br/>Under project Goal"]
+        c1["<b>Confluence</b><br/><b>Page Tree</b><br/>Charter + XFT"]
+        j3["<b>Fix Versions</b><br/>Per-team release<br/>tags"]
+    end
+
+    spinup --> created
+
+    subgraph inputs["📥 Data Inputs"]
+        direction TB
+        i1["<b>PI Board</b><br/>Feature requests<br/>&amp; bug reports"]
+        i2["<b>Transcript Upload</b><br/>Paste or upload<br/>meeting notes"]
+        i3["<b>PM Notes</b><br/>Qualitative context<br/>for reviews"]
+    end
+
+    subgraph llm["🤖 LLM Agent Layer — Gemini 2.5 Flash / Ollama"]
+        direction LR
+        a1["<b>Transcript</b><br/><b>Analysis</b><br/>Extract risks,<br/>decisions, updates"]
+        a2["<b>Charter</b><br/><b>Update</b><br/>Section-level<br/>edits via Q&amp;A"]
+        a3["<b>Health</b><br/><b>Review</b><br/>Green/Amber/Red<br/>assessment"]
+        a4["<b>CEO Review</b><br/>Fortnightly<br/>status update"]
+        a5["<b>Closure</b><br/><b>Report</b><br/>Lessons learned<br/>&amp; delivery outcome"]
+        a6["<b>Risk</b><br/><b>Refinement</b><br/>ISO 14971 Q&amp;A<br/>multi-round loop"]
+    end
+
+    inputs --> llm
+
+    gate{"🔒 Approval Gate<br/><i>Review &amp; Approve</i>"}
+    llm --> gate
+    gate -- "Reject / Edit" --> llm
+
+    subgraph outputs["✅ Approved Outputs → Written to Cloud Services"]
+        direction LR
+        o1["<b>Risk Log</b><br/>Auto-generated<br/>risk tickets"]
+        o2["<b>Decision Log</b><br/>Auto-generated<br/>decision tickets"]
+        o3["<b>Charter Updates</b><br/>Section-level<br/>edits"]
+        o4["<b>XFT Minutes</b><br/>Appended meeting<br/>notes"]
+        o5["<b>CEO Review</b><br/><b>Page</b><br/>Confluence update"]
+        o6["<b>Closure Report</b><br/><b>Page</b><br/>New Confluence page"]
+    end
+
+    gate -- "Approve" --> outputs
+
+    subgraph readout["📊 Read-Only Outputs (no approval needed)"]
+        direction LR
+        r1["<b>Health Review</b><br/>Structured<br/>assessment"]
+        r2["<b>Risk Refinement</b><br/>Improved draft<br/>quality"]
+    end
+
+    llm --> readout
+
+    subgraph dashboard["📈 Dashboard — CI-Style Pipeline View"]
+        direction LR
+        p1["Planning"]
+        p2["Development"]
+        p3["DHF Update"]
+        p4["Verification"]
+        p5["Validation"]
+        p6["Release"]
+        p7["Closed"]
+        p1 --> p2 --> p3 --> p4 --> p5 --> p6 --> p7
+    end
+
+    outputs --> dashboard
+
+    subgraph monitoring["🔄 Ongoing Monitoring"]
+        direction LR
+        m1["<b>Document Tracking</b><br/>DHF completion<br/>draft vs released"]
+        m2["<b>Team Progress</b><br/>Per-team burnup<br/>&amp; velocity"]
+        m3["<b>Release Tracking</b><br/>Scope-freeze &amp;<br/>publish status"]
+    end
+
+    dashboard --> monitoring
+
+    classDef triggerStyle fill:#E6F4EA,stroke:#34A853,stroke-width:2px,color:#1E8E3E
+    classDef spinupStyle fill:#FFF8E1,stroke:#F9AB00,stroke-width:2px,color:#E65100
+    classDef createdStyle fill:#E8F0FE,stroke:#4285F4,stroke-width:2px,color:#1A73E8
+    classDef inputStyle fill:#F3E8FD,stroke:#9334E6,stroke-width:2px,color:#7627BB
+    classDef llmStyle fill:#FCE8E6,stroke:#EA4335,stroke-width:2px,color:#C5221F
+    classDef gateStyle fill:#FEF7E0,stroke:#F9AB00,stroke-width:3px,color:#E37400
+    classDef outputJira fill:#E8F0FE,stroke:#4285F4,stroke-width:2px,color:#1A73E8
+    classDef outputConf fill:#F3E8FD,stroke:#9334E6,stroke-width:2px,color:#7627BB
+    classDef dashStyle fill:#E6F4EA,stroke:#34A853,stroke-width:2px,color:#1E8E3E
+    classDef monitorStyle fill:#E0F7FA,stroke:#00ACC1,stroke-width:2px,color:#00838F
+    classDef readoutStyle fill:#F1F8E9,stroke:#7CB342,stroke-width:2px,color:#558B2F
+
+    class trigger triggerStyle
+    class s1,s2,s3,s4,s5 spinupStyle
+    class j1,j2,j3 createdStyle
+    class c1 outputConf
+    class i1,i2,i3 inputStyle
+    class a1,a2,a3,a4,a5,a6 llmStyle
+    class gate gateStyle
+    class o1,o2 outputJira
+    class o3,o4,o5,o6 outputConf
+    class r1,r2 readoutStyle
+    class p1,p2,p3,p4,p5,p6,p7 dashStyle
+    class m1,m2,m3 monitorStyle

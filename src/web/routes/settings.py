@@ -9,9 +9,16 @@ from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from src.cache import cache
-from src.config import settings as app_settings
+from src.connectors.confluence import ConfluenceConnector
+from src.connectors.jira import JiraConnector
 from src.services.dashboard import DashboardService
-from src.web.deps import get_dashboard_service, render_project_page, templates
+from src.web.deps import (
+    get_confluence_connector,
+    get_dashboard_service,
+    get_jira_connector,
+    render_project_page,
+    templates,
+)
 
 logger = logging.getLogger(__name__)
 
@@ -43,14 +50,15 @@ def _looks_like_issue_key(value: str | None) -> bool:
     return bool(value and re.match(r"^[A-Z]+-\d+$", value.strip(), re.IGNORECASE))
 
 
-async def _resolve_display_values(project) -> _DisplayValues:
+async def _resolve_display_values(
+    project,
+    confluence: ConfluenceConnector,
+    jira: JiraConnector,
+) -> _DisplayValues:
     """Resolve opaque IDs to human-readable display strings.
 
     Skips API calls for values that don't look like valid IDs/keys.
     """
-    from src.connectors.confluence import ConfluenceConnector
-    from src.connectors.jira import JiraConnector
-
     vals: dict[str, str] = {}
 
     # Confluence page IDs → titles (only for numeric IDs)
@@ -65,7 +73,6 @@ async def _resolve_display_values(project) -> _DisplayValues:
     ids_to_resolve = [(name, pid) for name, pid in page_fields if _looks_like_page_id(pid)]
 
     if ids_to_resolve:
-        confluence = ConfluenceConnector()
         try:
             for field_name, page_id in ids_to_resolve:
                 cache_key = f"display:confluence:{page_id}"
@@ -92,7 +99,6 @@ async def _resolve_display_values(project) -> _DisplayValues:
         if cached is not None:
             vals["jira_goal_key"] = cached
         else:
-            jira = JiraConnector()
             try:
                 issue = await jira.get_issue(goal_key, fields=["summary"])
                 summary = issue.get("fields", {}).get("summary", "")
@@ -112,13 +118,15 @@ async def settings_page(
     request: Request,
     id: int,
     dashboard: DashboardService = Depends(get_dashboard_service),
+    confluence: ConfluenceConnector = Depends(get_confluence_connector),
+    jira: JiraConnector = Depends(get_jira_connector),
 ) -> HTMLResponse:
     """Display the project settings form."""
     project = dashboard.get_project_by_id(id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
-    display_values = await _resolve_display_values(project)
+    display_values = await _resolve_display_values(project, confluence, jira)
 
     return render_project_page(request, "project_settings.html", {
         "project": project,
@@ -131,6 +139,8 @@ async def settings_save(
     request: Request,
     id: int,
     dashboard: DashboardService = Depends(get_dashboard_service),
+    confluence: ConfluenceConnector = Depends(get_confluence_connector),
+    jira: JiraConnector = Depends(get_jira_connector),
 ) -> HTMLResponse:
     """Save updated project settings."""
     project = dashboard.get_project_by_id(id)
@@ -177,7 +187,7 @@ async def settings_save(
 
     # Reload project and resolve display values
     project = dashboard.get_project_by_id(id)
-    display_values = await _resolve_display_values(project)
+    display_values = await _resolve_display_values(project, confluence, jira)
 
     return render_project_page(request, "project_settings.html", {
         "project": project,
