@@ -24,6 +24,28 @@
     </div>
 
     <div class="transcript-actions">
+        {% if unassigned is defined and unassigned %}
+        {# Uploaded from /meetings/ — needs project assignment before analysis #}
+        <form hx-post="/meetings/{{ transcript_id }}/assign-and-analyze"
+              hx-target="#upload-result"
+              hx-indicator="#analyze-spinner"
+              hx-disabled-elt="find button">
+            <div class="form-group" style="margin-bottom: 0.5rem;">
+                <label for="project-select-assign">Assign to project:</label>
+                <select name="project_ids" id="project-select-assign" required>
+                    <option value="">Select project...</option>
+                    {% for p in all_projects %}
+                    <option value="{{ p.id }}">{{ p.name }}</option>
+                    {% endfor %}
+                </select>
+            </div>
+            <button type="submit" class="btn btn-approve">
+                Assign & Analyze
+            </button>
+            <span id="analyze-spinner" class="htmx-indicator"> Analyzing (this may take a moment)...</span>
+        </form>
+        {% elif project is defined and project %}
+        {# Uploaded from project-scoped route — analyze directly #}
         <button class="btn btn-approve"
                 hx-post="/project/{{ project.id }}/transcript/{{ transcript_id }}/analyze"
                 hx-target="#analysis-result"
@@ -32,6 +54,7 @@
             Analyze with LLM
         </button>
         <span id="analyze-spinner" class="htmx-indicator"> Analyzing (this may take a moment)...</span>
+        {% endif %}
     </div>
     <div id="analysis-result"></div>
 </div>

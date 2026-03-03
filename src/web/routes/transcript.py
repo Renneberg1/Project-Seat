@@ -1,138 +1,28 @@
-"""Transcript routes — upload, parse, analyze, review suggestions."""
+"""Transcript routes — analysis, suggestion review, accept/reject, refinement.
+
+Upload, paste, and delete routes have moved to ``meetings.py``.
+"""
 
 from __future__ import annotations
 
 import html
 import json
 
-from fastapi import APIRouter, Depends, Form, Request, UploadFile, File
+from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
 
 from src.services.dashboard import DashboardService
 from src.services.risk_refinement import RiskRefinementService
 from src.services.transcript import TranscriptService
-from src.services.transcript_parser import TranscriptParser
 from src.web.deps import (
     get_dashboard_service,
     get_risk_refinement_service,
-    get_transcript_parser,
     get_transcript_service,
     render_project_page,
     templates,
 )
 
 router = APIRouter(prefix="/project/{id}/transcript", tags=["transcript"])
-
-
-@router.get("/", response_class=HTMLResponse)
-async def transcript_page(
-    request: Request,
-    id: int,
-    dashboard: DashboardService = Depends(get_dashboard_service),
-    service: TranscriptService = Depends(get_transcript_service),
-) -> HTMLResponse:
-    """Upload form + past transcripts list."""
-    project = dashboard.get_project_by_id(id)
-    if project is None:
-        return HTMLResponse("Project not found", status_code=404)
-    transcripts = service.list_transcripts(id)
-
-    return render_project_page(request, "transcript.html", {
-        "project": project,
-        "transcripts": transcripts,
-    }, id)
-
-
-@router.post("/upload", response_class=HTMLResponse)
-async def upload_transcript(
-    request: Request,
-    id: int,
-    file: UploadFile = File(...),
-    dashboard: DashboardService = Depends(get_dashboard_service),
-    parser: TranscriptParser = Depends(get_transcript_parser),
-    service: TranscriptService = Depends(get_transcript_service),
-) -> HTMLResponse:
-    """Parse uploaded file, store, return parsed preview partial."""
-    project = dashboard.get_project_by_id(id)
-    if project is None:
-        return HTMLResponse("Project not found", status_code=404)
-
-    content = await file.read()
-    filename = file.filename or "transcript.txt"
-    try:
-        parsed = parser.parse(filename, content)
-    except (ValueError, ImportError) as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">{html.escape(str(exc))}</div>',
-            status_code=400,
-        )
-
-    if not parsed.segments:
-        return HTMLResponse(
-            '<div class="error-banner">No speech segments found in transcript.</div>',
-            status_code=400,
-        )
-
-    transcript_id = service.store_transcript(id, parsed)
-
-    return templates.TemplateResponse(request, "partials/transcript_parsed.html", {
-        "project": project,
-        "parsed": parsed,
-        "transcript_id": transcript_id,
-    })
-
-
-@router.post("/paste", response_class=HTMLResponse)
-async def paste_transcript(
-    request: Request,
-    id: int,
-    transcript_text: str = Form(...),
-    dashboard: DashboardService = Depends(get_dashboard_service),
-    parser: TranscriptParser = Depends(get_transcript_parser),
-    service: TranscriptService = Depends(get_transcript_service),
-) -> HTMLResponse:
-    """Parse pasted text, store, return parsed preview partial."""
-    project = dashboard.get_project_by_id(id)
-    if project is None:
-        return HTMLResponse("Project not found", status_code=404)
-
-    text = transcript_text.strip()
-    if not text:
-        return HTMLResponse(
-            '<div class="error-banner">Please enter some text.</div>',
-            status_code=400,
-        )
-    parsed = parser.parse("pasted-input.txt", text.encode("utf-8"))
-
-    if not parsed.segments:
-        return HTMLResponse(
-            '<div class="error-banner">No speech segments found in the text.</div>',
-            status_code=400,
-        )
-
-    transcript_id = service.store_transcript(id, parsed)
-
-    return templates.TemplateResponse(request, "partials/transcript_parsed.html", {
-        "project": project,
-        "parsed": parsed,
-        "transcript_id": transcript_id,
-    })
-
-
-@router.delete("/{tid}", response_class=HTMLResponse)
-async def delete_transcript(
-    request: Request,
-    id: int,
-    tid: int,
-    service: TranscriptService = Depends(get_transcript_service),
-) -> HTMLResponse:
-    """Delete a transcript and redirect back."""
-    service.delete_transcript(tid)
-    return HTMLResponse(
-        headers={"HX-Redirect": f"/project/{id}/transcript/"},
-        content="",
-        status_code=200,
-    )
 
 
 # ------------------------------------------------------------------

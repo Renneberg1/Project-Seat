@@ -169,7 +169,7 @@ class TranscriptAgent(BaseAgent):
 
         return await self._generate_with_retry(
             SYSTEM_PROMPT, user_prompt, TRANSCRIPT_ANALYSIS_SCHEMA,
-            temperature=0.3, max_tokens=4096,
+            temperature=0.3, max_tokens=16384,
         )
 
 
@@ -416,4 +416,41 @@ class ClosureAgent(BaseAgent):
         return await self._generate_with_retry(
             REPORT_SYSTEM_PROMPT, user_prompt, CLOSURE_REPORT_SCHEMA,
             max_tokens=16384,
+        )
+
+
+# ------------------------------------------------------------------
+# Zoom Match Agent
+# ------------------------------------------------------------------
+
+class ZoomMatchAgent(BaseAgent):
+    """Classify Zoom meetings into projects via LLM."""
+
+    async def classify_meeting(
+        self,
+        topic: str,
+        host_email: str,
+        transcript_excerpt: str,
+        active_projects: list[dict],
+    ) -> dict[str, Any]:
+        """Classify a meeting into zero or more projects.
+
+        Returns parsed JSON with ``matches`` list.
+        """
+        from src.engine.prompts.zoom_match import (
+            SYSTEM_PROMPT,
+            ZOOM_MATCH_SCHEMA,
+            build_match_prompt,
+        )
+
+        user_prompt = build_match_prompt(
+            topic=topic,
+            host_email=host_email,
+            transcript_excerpt=transcript_excerpt,
+            active_projects=active_projects,
+        )
+
+        return await self._generate_with_retry(
+            SYSTEM_PROMPT, user_prompt, ZOOM_MATCH_SCHEMA,
+            temperature=0.2, max_tokens=2048,
         )

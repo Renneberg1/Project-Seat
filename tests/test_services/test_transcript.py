@@ -166,6 +166,36 @@ class TestTranscriptService:
 
         assert service.get_transcript(tid) is None
 
+    def test_delete_non_accepted_suggestions_keeps_accepted_and_queued(self, db_path):
+        """delete_non_accepted_suggestions preserves accepted/queued, removes pending/rejected."""
+        from src.repositories.transcript_repo import TranscriptRepository
+        import sqlite3
+
+        # Store a transcript first
+        parser = TranscriptParser()
+        parsed = parser.parse("meeting.vtt", SAMPLE_VTT)
+        service = TranscriptService(db_path=db_path)
+        tid = service.store_transcript(1, parsed)
+
+        # Insert suggestions with all four statuses
+        repo = TranscriptRepository(db_path)
+        for status in ("pending", "rejected", "accepted", "queued"):
+            repo.insert_suggestion(
+                transcript_id=tid, project_id=1, suggestion_type="risk",
+                title=f"Sug {status}", detail="d", evidence="e",
+                proposed_payload="{}", proposed_action="create_jira_issue",
+                proposed_preview="preview", confidence=0.8, status=status,
+            )
+
+        assert len(repo.list_suggestions(tid)) == 4
+
+        repo.delete_non_accepted_suggestions(tid)
+
+        remaining = repo.list_suggestions(tid)
+        assert len(remaining) == 2
+        remaining_statuses = {s.status.value for s in remaining}
+        assert remaining_statuses == {"accepted", "queued"}
+
     def test_get_transcript_summary(self, db_path):
         service = TranscriptService(db_path=db_path)
         summary = service.get_transcript_summary(1)
@@ -183,6 +213,69 @@ class TestTranscriptService:
 
         records = service.list_transcripts(1)
         assert len(records) == 2
+
+    def test_store_transcript_with_source(self, db_path):
+        parser = TranscriptParser()
+        parsed = parser.parse("zoom.vtt", SAMPLE_VTT)
+
+        service = TranscriptService(db_path=db_path)
+        tid = service.store_transcript(1, parsed, source="zoom")
+
+        record = service.get_transcript(tid)
+        assert record is not None
+        assert record.source == "zoom"
+
+    def test_store_transcript_unassigned(self, db_path):
+        parser = TranscriptParser()
+        parsed = parser.parse("upload.vtt", SAMPLE_VTT)
+
+        service = TranscriptService(db_path=db_path)
+        tid = service.store_transcript(None, parsed)
+
+        record = service.get_transcript(tid)
+        assert record is not None
+        assert record.project_id is None
+        assert record.source == "manual"
+
+    def test_assign_transcript(self, db_path):
+        parser = TranscriptParser()
+        parsed = parser.parse("upload.vtt", SAMPLE_VTT)
+
+        service = TranscriptService(db_path=db_path)
+        tid = service.store_transcript(None, parsed)
+
+        service.assign_transcript(tid, 1)
+
+        record = service.get_transcript(tid)
+        assert record.project_id == 1
+
+    def test_list_all_transcripts(self, db_path):
+        parser = TranscriptParser()
+        service = TranscriptService(db_path=db_path)
+
+        service.store_transcript(1, parser.parse("m1.vtt", SAMPLE_VTT))
+        service.store_transcript(1, parser.parse("m2.txt", SAMPLE_TXT), source="zoom")
+        service.store_transcript(None, parser.parse("m3.txt", SAMPLE_TXT))
+
+        # All
+        all_records = service.list_all_transcripts()
+        assert len(all_records) == 3
+
+        # By source
+        manual = service.list_all_transcripts(source="manual")
+        assert len(manual) == 2  # m1 + m3
+
+        zoom = service.list_all_transcripts(source="zoom")
+        assert len(zoom) == 1
+
+        # By project
+        proj1 = service.list_all_transcripts(project_id=1)
+        assert len(proj1) == 2
+
+        # Unassigned
+        unassigned = service.list_all_transcripts(unassigned=True)
+        assert len(unassigned) == 1
+        assert unassigned[0].project_id is None
 
 
 # ---------------------------------------------------------------------------

@@ -26,6 +26,11 @@ from src.services.project_context import ProjectContextService
 from src.services.risk_refinement import RiskRefinementService
 from src.services.transcript import TranscriptService
 from src.services.transcript_parser import TranscriptParser
+from src.services.zoom_ingestion import ZoomIngestionService
+from src.services.zoom_matching import ZoomMatchingService
+from src.services.knowledge import KnowledgeService
+from src.repositories.zoom_repo import ZoomRepository
+from src.repositories.knowledge_repo import KnowledgeRepository
 
 _TEMPLATES_DIR = Path(__file__).resolve().parent / "templates"
 _STATIC_DIR = Path(__file__).resolve().parent / "static"
@@ -189,3 +194,23 @@ def get_risk_refinement_service() -> RiskRefinementService:
 
 def get_confluence_connector() -> ConfluenceConnector:
     return ConfluenceConnector()
+
+
+def get_zoom_repo() -> ZoomRepository:
+    return ZoomRepository()
+
+
+def get_zoom_ingestion_service() -> ZoomIngestionService:
+    return ZoomIngestionService()
+
+
+def get_zoom_matching_service() -> ZoomMatchingService:
+    return ZoomMatchingService()
+
+
+def get_knowledge_repo() -> KnowledgeRepository:
+    return KnowledgeRepository()
+
+
+def get_knowledge_service() -> KnowledgeService:
+    return KnowledgeService()

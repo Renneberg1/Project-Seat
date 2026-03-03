@@ -1,0 +1,118 @@
+{% if row.kind == "transcript" %}
+{% set t = row.transcript %}
+<tr id="meeting-row-t{{ t.id }}">
+    <td>{{ t.created_at[:10] if t.created_at else '' }}</td>
+    <td><span class="source-badge source-{{ t.source }}">{{ t.source|capitalize }}</span></td>
+    <td title="{{ t.filename }}">{{ t.filename[:60] }}{% if t.filename|length > 60 %}...{% endif %}</td>
+    <td>
+        {% if t.project_id %}
+            <a href="/project/{{ t.project_id }}/dashboard" class="project-link">{{ project_names.get(t.project_id, t.project_id) }}</a>
+        {% else %}
+            <span class="text-muted">Unassigned</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if t.meeting_summary %}
+            <span class="status-badge status-complete">Analyzed</span>
+        {% else %}
+            <span class="status-badge status-new">Not analyzed</span>
+        {% endif %}
+    </td>
+    <td>
+        {% if t.meeting_summary %}
+            {{ t.meeting_summary[:100] }}{% if t.meeting_summary|length > 100 %}...{% endif %}
+        {% else %}
+            <span class="text-muted">—</span>
+        {% endif %}
+    </td>
+    <td class="actions-cell">
+        {% if t.project_id and t.meeting_summary %}
+        <a href="/project/{{ t.project_id }}/transcript/{{ t.id }}/suggestions" class="btn-sm">View</a>
+        {% endif %}
+        {% if not t.project_id %}
+        <form style="display:inline;" hx-post="/meetings/{{ t.id }}/assign-and-analyze" hx-target="#meeting-row-t{{ t.id }}" hx-swap="outerHTML">
+            <select name="project_ids" class="select-sm" required>
+                <option value="">Assign...</option>
+                {% for p in all_projects %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn-sm btn-primary" hx-disabled-elt="this" hx-indicator="#assign-spinner-t{{ t.id }}">Assign & Analyze</button>
+            <span id="assign-spinner-t{{ t.id }}" class="htmx-indicator spinner-sm"></span>
+        </form>
+        {% endif %}
+        <button class="btn-sm btn-muted"
+                hx-post="/meetings/{{ t.id }}/delete"
+                hx-confirm="Delete this transcript and all its suggestions?"
+                hx-target="#meeting-row-t{{ t.id }}"
+                hx-swap="outerHTML">Delete</button>
+    </td>
+</tr>
+{% elif row.kind == "zoom" %}
+{% set rec = row.recording %}
+{% set maps = row.mappings %}
+<tr id="meeting-row-z{{ rec.id }}">
+    <td>{{ rec.start_time[:10] if rec.start_time else '' }}</td>
+    <td><span class="source-badge source-zoom">Zoom</span></td>
+    <td title="{{ rec.topic }}">{{ rec.topic[:60] }}{% if rec.topic|length > 60 %}...{% endif %}</td>
+    <td>
+        {% if maps %}
+            {% for m in maps %}
+            <span class="project-mapping">
+                <a href="/project/{{ m.project_id }}/dashboard" class="project-link">{{ project_names.get(m.project_id, m.project_id) }}</a>
+                {%- if m.transcript_id and m.analysis_status == 'complete' %}
+                <a href="/project/{{ m.project_id }}/transcript/{{ m.transcript_id }}/suggestions" class="btn-xs">View</a>
+                {%- endif %}
+            </span>
+            {%- if not loop.last %}, {% endif %}
+            {% endfor %}
+        {% else %}
+            <span class="text-muted">Unmatched</span>
+        {% endif %}
+    </td>
+    <td>
+        <span class="status-badge status-{{ rec.processing_status }}">{{ rec.processing_status }}</span>
+    </td>
+    <td>
+        {% if rec.error_message %}
+            <span class="text-muted" title="{{ rec.error_message }}">{{ rec.error_message[:80] }}{% if rec.error_message|length > 80 %}...{% endif %}</span>
+        {% else %}
+            <span class="text-muted">—</span>
+        {% endif %}
+    </td>
+    <td class="actions-cell">
+        {% if rec.processing_status == 'unmatched' %}
+        <form style="display:inline;" hx-post="/meetings/zoom/{{ rec.id }}/assign" hx-target="#meeting-row-z{{ rec.id }}" hx-swap="outerHTML">
+            <select name="project_ids" class="select-sm" required>
+                <option value="">Assign...</option>
+                {% for p in all_projects %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn-sm btn-primary" hx-disabled-elt="this">Assign</button>
+        </form>
+        {% endif %}
+        {% if rec.processing_status == 'complete' and maps %}
+        <button class="btn-sm"
+                hx-post="/meetings/zoom/{{ rec.id }}/reanalyse"
+                hx-target="#meeting-row-z{{ rec.id }}"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-indicator="#reanalyse-spinner-{{ rec.id }}">Re-analyse</button>
+        <span id="reanalyse-spinner-{{ rec.id }}" class="htmx-indicator spinner-sm"></span>
+        {% endif %}
+        {% if rec.processing_status == 'failed' %}
+        <button class="btn-sm"
+                hx-post="/meetings/zoom/{{ rec.id }}/retry"
+                hx-target="#meeting-row-z{{ rec.id }}"
+                hx-swap="outerHTML">Retry</button>
+        {% endif %}
+        {% if rec.processing_status in ('unmatched', 'new', 'failed') %}
+        <button class="btn-sm btn-muted"
+                hx-post="/meetings/zoom/{{ rec.id }}/dismiss"
+                hx-target="#meeting-row-z{{ rec.id }}"
+                hx-swap="delete">Dismiss</button>
+        {% endif %}
+    </td>
+</tr>
+{% endif %}

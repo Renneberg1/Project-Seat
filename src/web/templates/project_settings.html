@@ -99,6 +99,14 @@
     </fieldset>
 
     <fieldset>
+        <legend>Zoom Matching</legend>
+        <div class="form-group">
+            <label for="aliases">Project Aliases <span class="text-muted">(comma-separated, used for Zoom title matching)</span></label>
+            <input type="text" id="aliases" name="aliases" value="{{ aliases|join(', ') if aliases is defined and aliases else '' }}" placeholder="e.g. HOP, Handoffs Platform, Drop 4">
+        </div>
+    </fieldset>
+
+    <fieldset>
         <legend>Links</legend>
         <div class="form-group">
             <label for="jira_plan_url">Jira Plans Timeline URL</label>

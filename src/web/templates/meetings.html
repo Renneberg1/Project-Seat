@@ -1,0 +1,132 @@
+{% extends "base.html" %}
+{% block title %}Meetings — Project Seat{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Meetings</h1>
+    <div class="header-actions">
+        {% if zoom_connected is defined and zoom_connected %}
+            {% if last_sync %}
+            <span class="text-muted">Last sync: {{ last_sync }}</span>
+            {% endif %}
+            <button class="btn-primary"
+                    hx-post="/meetings/zoom/sync"
+                    hx-target="#meetings-content"
+                    hx-select="#meetings-content"
+                    hx-indicator="#sync-spinner"
+                    hx-disabled-elt="this">
+                Sync Zoom
+            </button>
+            <span id="sync-spinner" class="htmx-indicator spinner"></span>
+        {% else %}
+            <a href="/zoom/authorize" class="btn-primary">Connect Zoom</a>
+        {% endif %}
+    </div>
+</div>
+
+{% if connected is defined and connected %}
+<div class="success-banner">
+    Zoom connected successfully. Click "Sync Zoom" to fetch your recordings.
+</div>
+{% endif %}
+
+{% if error is defined and error %}
+<div class="error-banner">
+    Zoom authorization failed: {{ error }}
+</div>
+{% endif %}
+
+<div id="meetings-content">
+{% if sync_stats is defined and sync_stats %}
+<div class="success-banner">
+    Sync complete: {{ sync_stats.fetched }} fetched, {{ sync_stats.downloaded }} downloaded,
+    {{ sync_stats.matched }} matched, {{ sync_stats.analyzed }} analyzed
+    {% if sync_stats.errors %}, {{ sync_stats.errors }} errors{% endif %}
+</div>
+{% endif %}
+
+{# --- Upload section --- #}
+<details class="transcript-upload-section">
+    <summary><h2 style="display:inline;">Add Transcript</h2></summary>
+    <p>Upload a meeting transcript file or paste text directly.</p>
+
+    <div class="input-mode-tabs">
+        <button class="input-mode-tab active" onclick="switchInputMode('file', this)">Upload File</button>
+        <button class="input-mode-tab" onclick="switchInputMode('text', this)">Paste Text</button>
+    </div>
+
+    <form id="transcript-file-form"
+          hx-post="/meetings/upload"
+          hx-target="#upload-result"
+          hx-encoding="multipart/form-data"
+          hx-indicator="#upload-spinner">
+        <div class="form-group">
+            <label for="file">Transcript file (.vtt, .txt, or .docx)</label>
+            <input type="file" id="file" name="file"
+                   accept=".vtt,.txt,.docx"
+                   required>
+        </div>
+        <button type="submit">Upload & Parse</button>
+        <span id="upload-spinner" class="htmx-indicator"> Parsing...</span>
+    </form>
+
+    <form id="transcript-text-form" style="display: none;"
+          hx-post="/meetings/paste"
+          hx-target="#upload-result"
+          hx-indicator="#paste-spinner">
+        <div class="form-group">
+            <label for="transcript_text">Meeting notes or transcript</label>
+            <textarea id="transcript_text" name="transcript_text"
+                      rows="12"
+                      placeholder="Paste meeting notes here...&#10;&#10;You can use 'Speaker: text' format, or just plain text."
+                      required></textarea>
+        </div>
+        <button type="submit">Parse Text</button>
+        <span id="paste-spinner" class="htmx-indicator"> Parsing...</span>
+    </form>
+</details>
+
+<script>
+function switchInputMode(mode, btn) {
+    document.getElementById('transcript-file-form').style.display = mode === 'file' ? '' : 'none';
+    document.getElementById('transcript-text-form').style.display = mode === 'text' ? '' : 'none';
+    document.querySelectorAll('.input-mode-tab').forEach(t => t.classList.remove('active'));
+    btn.classList.add('active');
+}
+</script>
+
+<div id="upload-result"></div>
+
+{# --- Filter tabs --- #}
+<div class="filter-bar">
+    <a href="/meetings/" class="btn-tab {% if filter_source == 'all' and not filter_assigned and not filter_status %}active{% endif %}">All</a>
+    <a href="/meetings/?source=zoom" class="btn-tab {% if filter_source == 'zoom' %}active{% endif %}">Zoom</a>
+    <a href="/meetings/?source=manual" class="btn-tab {% if filter_source == 'manual' %}active{% endif %}">Manual</a>
+    <a href="/meetings/?assigned=false" class="btn-tab {% if filter_assigned == 'false' %}active{% endif %}">Unassigned</a>
+    <a href="/meetings/?status=failed" class="btn-tab {% if filter_status == 'failed' %}active{% endif %}">Failed</a>
+</div>
+
+{# --- Unified table --- #}
+<table class="data-table">
+    <thead>
+        <tr>
+            <th>Date</th>
+            <th>Source</th>
+            <th>Name</th>
+            <th>Project(s)</th>
+            <th>Status</th>
+            <th>Summary</th>
+            <th>Actions</th>
+        </tr>
+    </thead>
+    <tbody>
+        {% for row in rows %}
+        {% include "partials/meeting_row.html" %}
+        {% endfor %}
+        {% if not rows %}
+        <tr><td colspan="7" class="text-muted" style="text-align:center;">No meetings found.</td></tr>
+        {% endif %}
+    </tbody>
+</table>
+</div>
+{% endblock %}

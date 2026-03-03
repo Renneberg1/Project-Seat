@@ -36,6 +36,11 @@ incomplete sentences. Content should read as polished documentation, not rough m
 10. If a speaker's full name can be determined from the transcript, reference them with \
 @FirstName LastName syntax in evidence, background, and confluence_content fields.
 11. Respond with valid JSON only — no markdown, no explanation.
+12. **Action items**: tasks explicitly assigned to people during the meeting. Include \
+who is responsible (owner_name) and any mentioned deadline (due_date_hint).
+13. **Notes**: important observations, status updates, factual statements worth preserving.
+14. **Insights**: analytical observations, lessons learned, strategic points.
+15. Prioritize: risks and decisions first (regulatory), then action items, then notes/insights.
 """
 
 # JSON schema for structured LLM output
@@ -53,7 +58,7 @@ TRANSCRIPT_ANALYSIS_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "type": {
                         "type": "string",
-                        "enum": ["risk", "decision", "xft_update", "charter_update"],
+                        "enum": ["risk", "decision", "xft_update", "charter_update", "action_item", "note", "insight"],
                     },
                     "title": {
                         "type": "string",
@@ -95,12 +100,26 @@ TRANSCRIPT_ANALYSIS_SCHEMA: dict[str, Any] = {
                         "type": "string",
                         "description": "For xft/charter: content to publish on the Confluence page. Write clearly and professionally — this will be published as-is to a document visible to the project team. Use separate paragraphs (newlines) for distinct points. Empty string if not applicable.",
                     },
+                    "owner_name": {
+                        "type": "string",
+                        "description": "For action_item: person responsible. Empty string if unknown or not applicable.",
+                    },
+                    "due_date_hint": {
+                        "type": "string",
+                        "description": "For action_item: mentioned deadline (YYYY-MM-DD if possible). Empty string if none mentioned or not applicable.",
+                    },
+                    "tags": {
+                        "type": "array",
+                        "items": {"type": "string"},
+                        "description": "For note/insight: relevant topic tags. Empty array if not applicable.",
+                    },
                 },
                 "required": [
                     "type", "title", "background", "impact_analysis",
                     "mitigation", "evidence", "priority",
                     "timeline_impact_days", "confidence",
                     "confluence_section_title", "confluence_content",
+                    "owner_name", "due_date_hint", "tags",
                 ],
             },
         },

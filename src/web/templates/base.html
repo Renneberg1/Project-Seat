@@ -32,6 +32,7 @@
             <a href="/phases/" class="nav-link {% if request.url.path.startswith('/phases') %}active{% endif %}">Phase Gates</a>
             <a href="/spinup/" class="nav-link {% if request.url.path.startswith('/spinup') %}active{% endif %}">Spin Up</a>
             <a href="/import/" class="nav-link {% if request.url.path.startswith('/import') %}active{% endif %}">Import</a>
+            <a href="/meetings/" class="nav-link {% if request.url.path.startswith('/meetings') %}active{% endif %}">Meetings</a>
         </div>
         <div class="nav-project-selector">
             {% if nav_projects is defined and nav_projects %}
@@ -63,12 +64,14 @@
                        class="nav-link {% if '/team-progress' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Development</a>
                 </div>
             </div>
-            {% set analysis_active = request.url.path.startswith('/project/') and ('/transcript' in request.url.path or '/health-review' in request.url.path) %}
+            {% set analysis_active = request.url.path.startswith('/project/') and ('/transcript' in request.url.path or '/health-review' in request.url.path or '/knowledge' in request.url.path) %}
             <div class="nav-dropdown" tabindex="-1">
                 <button type="button" class="nav-link nav-dropdown-toggle {% if analysis_active %}active{% endif %}">Analysis <span class="caret">&#x25BE;</span></button>
                 <div class="nav-dropdown-menu">
-                    <a href="/project/{{ selected_project_id }}/transcript/"
-                       class="nav-link {% if '/transcript' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Transcripts</a>
+                    <a href="/meetings/?project={{ selected_project_id }}"
+                       class="nav-link {% if '/meetings' in request.url.path %}active{% endif %}">Transcripts</a>
+                    <a href="/project/{{ selected_project_id }}/knowledge/"
+                       class="nav-link {% if '/knowledge' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Knowledge</a>
                     <a href="/project/{{ selected_project_id }}/health-review/"
                        class="nav-link {% if '/health-review' in request.url.path and request.url.path.startswith('/project/') %}active{% endif %}">Health</a>
                 </div>

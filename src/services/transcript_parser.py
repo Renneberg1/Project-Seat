@@ -66,8 +66,15 @@ class TranscriptParser:
                 speaker = speaker_match.group(1).strip()
                 spoken = speaker_re.sub(r"\2", full_text).strip()
             else:
-                speaker = "Unknown"
-                spoken = full_text
+                # Fallback: Zoom VTT uses "Name: text" format (no <v> tags)
+                txt_speaker_re = re.compile(r"^([A-Za-z][A-Za-z .'-]{0,40}):\s+(.+)$")
+                txt_match = txt_speaker_re.match(full_text)
+                if txt_match:
+                    speaker = txt_match.group(1).strip()
+                    spoken = txt_match.group(2).strip()
+                else:
+                    speaker = "Unknown"
+                    spoken = full_text
 
             speakers.add(speaker)
             segments.append(TranscriptSegment(

@@ -12,10 +12,12 @@ from src.cache import cache
 from src.connectors.confluence import ConfluenceConnector
 from src.connectors.jira import JiraConnector
 from src.services.dashboard import DashboardService
+from src.repositories.zoom_repo import ZoomRepository
 from src.web.deps import (
     get_confluence_connector,
     get_dashboard_service,
     get_jira_connector,
+    get_zoom_repo,
     render_project_page,
     templates,
 )
@@ -120,6 +122,7 @@ async def settings_page(
     dashboard: DashboardService = Depends(get_dashboard_service),
     confluence: ConfluenceConnector = Depends(get_confluence_connector),
     jira: JiraConnector = Depends(get_jira_connector),
+    zoom_repo: ZoomRepository = Depends(get_zoom_repo),
 ) -> HTMLResponse:
     """Display the project settings form."""
     project = dashboard.get_project_by_id(id)
@@ -127,10 +130,12 @@ async def settings_page(
         return HTMLResponse("Project not found", status_code=404)
 
     display_values = await _resolve_display_values(project, confluence, jira)
+    aliases = zoom_repo.get_aliases(id)
 
     return render_project_page(request, "project_settings.html", {
         "project": project,
         "display_values": display_values,
+        "aliases": aliases,
     }, id)
 
 
@@ -141,6 +146,7 @@ async def settings_save(
     dashboard: DashboardService = Depends(get_dashboard_service),
     confluence: ConfluenceConnector = Depends(get_confluence_connector),
     jira: JiraConnector = Depends(get_jira_connector),
+    zoom_repo: ZoomRepository = Depends(get_zoom_repo),
 ) -> HTMLResponse:
     """Save updated project settings."""
     project = dashboard.get_project_by_id(id)
@@ -185,6 +191,11 @@ async def settings_save(
         team_projects=team_projects,
     )
 
+    # Save project aliases
+    aliases_raw = str(form.get("aliases", "")).strip()
+    aliases = [a.strip() for a in aliases_raw.split(",") if a.strip()]
+    zoom_repo.set_aliases(id, aliases)
+
     # Reload project and resolve display values
     project = dashboard.get_project_by_id(id)
     display_values = await _resolve_display_values(project, confluence, jira)
@@ -192,5 +203,6 @@ async def settings_save(
     return render_project_page(request, "project_settings.html", {
         "project": project,
         "display_values": display_values,
+        "aliases": aliases,
         "saved": True,
     }, id)

@@ -60,10 +60,20 @@ class EQMSSettings:
 
 
 @dataclass(frozen=True)
+class ZoomSettings:
+    client_id: str = os.getenv("ZOOM_CLIENT_ID", "")
+    client_secret: str = os.getenv("ZOOM_CLIENT_SECRET", "")
+    redirect_uri: str = os.getenv("ZOOM_REDIRECT_URI", "http://localhost:8000/zoom/callback")
+    user_id: str = os.getenv("ZOOM_USER_ID", "me")
+    enabled: bool = _env_bool("ZOOM_ENABLED", False)
+
+
+@dataclass(frozen=True)
 class Settings:
     atlassian: AtlassianSettings = field(default_factory=AtlassianSettings)
     llm: LLMSettings = field(default_factory=LLMSettings)
     eqms: EQMSSettings = field(default_factory=EQMSSettings)
+    zoom: ZoomSettings = field(default_factory=ZoomSettings)
     db_path: str = os.getenv("DB_PATH", "seat.db")
     jira_field_map: dict[str, str] = field(default_factory=_load_field_map)
 

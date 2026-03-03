@@ -5,7 +5,10 @@ An AI-assisted project management cockpit for medical device software engineerin
 ## What It Does
 
 - **Manages projects** across their lifecycle — spin-up, release tracking, DHF document monitoring, team progress, and closure
+- **Unified Meetings page** — manual transcript upload and Zoom recording ingestion in a single view, with source/project/status filtering, inline project assignment, and LLM analysis
 - **Analyses meeting transcripts** using an LLM to extract risks, decisions, and action items, with iterative refinement against ISO 14971 quality criteria
+- **Ingests Zoom recordings** automatically via OAuth — fetches new recordings on demand, matches them to projects (title match + LLM fallback), and queues unmatched meetings for manual triage
+- **Builds a project knowledge base** — action items, notes, and insights extracted by the LLM during transcript analysis are stored per-project in a searchable knowledge database
 - **Generates structured reports** — project health reviews, CEO status updates, and closure reports — combining deterministic data tables with LLM-written narrative
 - **Enforces governance** — every automated write action to Jira or Confluence passes through a human-approval queue with a full audit trail
 

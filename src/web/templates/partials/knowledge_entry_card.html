@@ -1,0 +1,27 @@
+<div class="knowledge-card" id="knowledge-entry-{{ entry.id }}">
+    <div class="knowledge-card-header">
+        <h3>{{ entry.title }}</h3>
+        <span class="badge badge-{{ entry.entry_type }}">{{ entry.entry_type }}</span>
+    </div>
+    {% if entry.content %}
+    <p class="knowledge-card-content">{{ entry.content[:300] }}{% if entry.content|length > 300 %}...{% endif %}</p>
+    {% endif %}
+    {% if entry.tags %}
+    <div class="tag-list">
+        {% for tag in entry.tags %}
+        <span class="tag-pill">{{ tag }}</span>
+        {% endfor %}
+    </div>
+    {% endif %}
+    <div class="knowledge-card-footer">
+        <span class="text-muted">{{ entry.created_at[:10] }} &middot; {{ entry.source }}</span>
+        {% if not entry.published %}
+        <button class="btn-sm"
+                hx-post="/project/{{ project_id if project_id is defined else entry.project_id }}/knowledge/entries/{{ entry.id }}/publish"
+                hx-target="#knowledge-entry-{{ entry.id }}"
+                hx-swap="outerHTML">Publish</button>
+        {% else %}
+        <span class="status-badge status-complete">Published</span>
+        {% endif %}
+    </div>
+</div>

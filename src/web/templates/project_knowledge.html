@@ -1,0 +1,122 @@
+{% extends "base.html" %}
+{% block title %}Knowledge — {{ project.name }}{% endblock %}
+
+{% block content %}
+<div class="dashboard-header">
+    <h1>Knowledge Base</h1>
+    <div class="header-actions">
+        <form method="get" action="/project/{{ project.id }}/knowledge/search" class="search-inline">
+            <input type="text" name="q" value="{{ search_query if search_query is defined else '' }}" placeholder="Search knowledge...">
+            <button type="submit" class="btn-sm">Search</button>
+        </form>
+    </div>
+</div>
+
+<div class="tab-bar">
+    <a href="/project/{{ project.id }}/knowledge/?tab=actions"
+       class="btn-tab {% if active_tab == 'actions' %}active{% endif %}">
+        Action Items {% if action_counts is defined and action_counts.open %}<span class="badge">{{ action_counts.open }}</span>{% endif %}
+    </a>
+    <a href="/project/{{ project.id }}/knowledge/?tab=notes"
+       class="btn-tab {% if active_tab == 'notes' %}active{% endif %}">Notes</a>
+    <a href="/project/{{ project.id }}/knowledge/?tab=insights"
+       class="btn-tab {% if active_tab == 'insights' %}active{% endif %}">Insights</a>
+</div>
+
+{% if active_tab == 'search' and search_results is defined %}
+<div class="knowledge-section">
+    <h2>Search Results for "{{ search_query }}"</h2>
+    {% if search_results %}
+    <div class="knowledge-grid">
+        {% for entry in search_results %}
+        {% include "partials/knowledge_entry_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No results found.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if active_tab == 'actions' %}
+<div class="knowledge-section">
+    <h2>Action Items</h2>
+
+    <form method="post" action="/project/{{ project.id }}/knowledge/action-items/add" class="inline-add-form">
+        <input type="text" name="title" placeholder="New action item..." required>
+        <input type="text" name="owner" placeholder="Owner" style="width:120px;">
+        <input type="date" name="due_date" style="width:140px;">
+        <button type="submit" class="btn-sm btn-primary">Add</button>
+    </form>
+
+    {% if action_items %}
+    <table class="data-table">
+        <thead>
+            <tr>
+                <th>Title</th>
+                <th>Owner</th>
+                <th>Due</th>
+                <th>Status</th>
+                <th>Source</th>
+            </tr>
+        </thead>
+        <tbody>
+            {% for item in action_items %}
+            {% include "partials/action_item_row.html" %}
+            {% endfor %}
+        </tbody>
+    </table>
+    {% else %}
+    <p class="text-muted">No action items yet. They'll appear here when transcripts are analyzed.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if active_tab == 'notes' %}
+<div class="knowledge-section">
+    <h2>Notes</h2>
+
+    <form method="post" action="/project/{{ project.id }}/knowledge/entries/add" class="inline-add-form">
+        <input type="hidden" name="entry_type" value="note">
+        <input type="text" name="title" placeholder="Note title..." required>
+        <input type="text" name="content" placeholder="Content...">
+        <input type="text" name="tags" placeholder="Tags (comma-separated)" style="width:160px;">
+        <button type="submit" class="btn-sm btn-primary">Add</button>
+    </form>
+
+    {% if notes %}
+    <div class="knowledge-grid">
+        {% for entry in notes %}
+        {% include "partials/knowledge_entry_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No notes yet.</p>
+    {% endif %}
+</div>
+{% endif %}
+
+{% if active_tab == 'insights' %}
+<div class="knowledge-section">
+    <h2>Insights</h2>
+
+    <form method="post" action="/project/{{ project.id }}/knowledge/entries/add" class="inline-add-form">
+        <input type="hidden" name="entry_type" value="insight">
+        <input type="text" name="title" placeholder="Insight title..." required>
+        <input type="text" name="content" placeholder="Content...">
+        <input type="text" name="tags" placeholder="Tags (comma-separated)" style="width:160px;">
+        <button type="submit" class="btn-sm btn-primary">Add</button>
+    </form>
+
+    {% if insights %}
+    <div class="knowledge-grid">
+        {% for entry in insights %}
+        {% include "partials/knowledge_entry_card.html" %}
+        {% endfor %}
+    </div>
+    {% else %}
+    <p class="text-muted">No insights yet.</p>
+    {% endif %}
+</div>
+{% endif %}
+{% endblock %}

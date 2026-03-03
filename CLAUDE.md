@@ -16,12 +16,12 @@ An AI-assisted project management cockpit for medical device software engineerin
 
 The application has four layers:
 
-1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Transcript Analysis, Charter Update, Health Review, CEO Review, Closure Report.
+1. **Web Frontend** — FastAPI + HTMX. Current views: Pipeline (phases overview), Project Detail (dashboard/features/documents/approvals/team progress), Approval Queue, Project Spin-Up Wizard, Project Import, Meetings (unified transcript upload + Zoom inbox with source filtering), Transcript Suggestions (project-scoped suggestion review + refinement), Charter Update, Health Review, CEO Review, Closure Report, Knowledge Base.
 2. **Core Engine** — Approval Engine (queue + gate all write actions), LLM Agent Layer (provider-agnostic interface with prompt templates + structured output), Orchestrator (task scheduling framework, wired into lifespan).
-3. **API Connectors** — Thin wrappers around Jira and Confluence REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
+3. **API Connectors** — Thin wrappers around Jira, Confluence, and Zoom REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, LLM-powered project closure report with full lifecycle data + lessons learned, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking.
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, unified Meetings page (manual transcript upload + Zoom recording ingestion in a single view with source/project/status filtering), LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, LLM-powered project closure report with full lifecycle data + lessons learned, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking, Zoom OAuth authorization code flow with project matching, per-project knowledge database (action items, notes, insights).
 
 See `docs/architecture.mmd` and `docs/workflow.mmd` for visual diagrams (Mermaid source, renderable in any Mermaid-compatible viewer).
 
@@ -75,11 +75,12 @@ project-seat/
 │   │   ├── __init__.py
 │   │   ├── base.py              # Base connector class (auth, retry, pagination)
 │   │   ├── jira.py              # Jira REST API connector
-│   │   └── confluence.py        # Confluence REST API connector
+│   │   ├── confluence.py        # Confluence REST API connector
+│   │   └── zoom.py              # Zoom REST API connector (Server-to-Server OAuth)
 │   ├── engine/
 │   │   ├── __init__.py
 │   │   ├── approval.py          # Approval queue and gating logic
-│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent, HealthReviewAgent, CeoReviewAgent, ClosureAgent, RiskRefineAgent)
+│   │   ├── agent.py             # LLM agent layer (provider protocol, factory, TranscriptAgent, CharterAgent, HealthReviewAgent, CeoReviewAgent, ClosureAgent, RiskRefineAgent, ZoomMatchAgent)
 │   │   ├── charter_storage_utils.py  # Charter XHTML section extraction and replacement
 │   │   ├── mentions.py          # Mention resolver (Confluence XHTML + Jira ADF)
 │   │   ├── orchestrator.py      # Task queue and scheduling (daily team progress snapshots)
@@ -94,7 +95,8 @@ project-seat/
 │   │       ├── health_review.py     # Health review: questions + review prompts, JSON schemas
 │   │       ├── ceo_review.py        # CEO review: questions + review prompts, JSON schemas
 │   │       ├── closure.py           # Closure report: questions + report prompts, JSON schemas
-│   │       └── risk_refine.py       # Risk/decision refinement: quality criteria, Q&A loop schema
+│   │       ├── risk_refine.py       # Risk/decision refinement: quality criteria, Q&A loop schema
+│   │       └── zoom_match.py        # Zoom meeting-to-project classification prompt + schema
 │   ├── repositories/            # Data access layer (all raw SQL lives here)
 │   │   ├── __init__.py
 │   │   ├── project_repo.py      # projects table CRUD
@@ -104,7 +106,9 @@ project-seat/
 │   │   ├── review_repo.py       # health_reviews + ceo_reviews tables
 │   │   ├── closure_repo.py      # closure_reports table
 │   │   ├── release_repo.py      # releases + release_documents tables
-│   │   └── snapshot_repo.py     # team_progress_snapshots table
+│   │   ├── snapshot_repo.py     # team_progress_snapshots table
+│   │   ├── zoom_repo.py         # zoom_recordings + project_meeting_map + project_aliases tables
+│   │   └── knowledge_repo.py    # action_items + knowledge_entries tables
 │   ├── services/
 │   │   ├── __init__.py
 │   │   ├── spinup.py            # Project spin-up wizard logic
@@ -122,7 +126,10 @@ project-seat/
 │   │   ├── ceo_review.py        # CEO review: data gathering, LLM Q&A, XHTML render, publish
 │   │   ├── closure.py           # Closure report: data gathering, LLM Q&A, XHTML render, publish
 │   │   ├── team_progress.py     # Per-team version progress tracking (JQL-based)
-│   │   └── team_snapshot.py     # Daily team progress snapshots for burnup charts
+│   │   ├── team_snapshot.py     # Daily team progress snapshots for burnup charts
+│   │   ├── zoom_ingestion.py    # Zoom recording fetch, transcript download, full sync pipeline
+│   │   ├── zoom_matching.py     # Hybrid title match + LLM fallback for Zoom-to-project matching
+│   │   └── knowledge.py         # Knowledge service: action items, notes, insights from analysis
 │   ├── web/
 │   │   ├── __init__.py
 │   │   ├── deps.py              # DI factories, shared helpers (render, Q&A pairs, cache-busting)
@@ -133,14 +140,17 @@ project-seat/
 │   │   │   ├── phases.py           # Pipeline/phases overview
 │   │   │   ├── project.py          # Project detail (dashboard/features/docs/approvals)
 │   │   │   ├── spinup.py
-│   │   │   ├── transcript.py       # Upload, analyze, accept/reject suggestions
+│   │   │   ├── meetings.py          # Unified Meetings page (upload, paste, assign, Zoom sync/dismiss/retry)
+│   │   │   ├── transcript.py       # Suggestion review, accept/reject, refinement (project-scoped)
 │   │   │   ├── charter.py          # Charter view, LLM Q&A, edit proposals, accept/reject
 │   │   │   ├── health_review.py    # Health review page, LLM Q&A, review output
 │   │   │   ├── ceo_review.py      # CEO review page, LLM Q&A, preview, accept/reject
 │   │   │   ├── closure.py        # Closure report page, LLM Q&A, preview, accept/reject
 │   │   │   ├── settings.py        # Project settings page
 │   │   │   ├── health.py          # API health check endpoint (/api/health)
-│   │   │   └── typeahead.py       # Typeahead search endpoints for Atlassian resources
+│   │   │   ├── typeahead.py       # Typeahead search endpoints for Atlassian resources
+│   │   │   ├── zoom.py            # Zoom OAuth authorize/callback + backward-compat redirects
+│   │   │   └── knowledge.py       # Knowledge base routes (action items, notes, insights)
 │   │   ├── templates/           # Jinja2 HTML templates
 │   │   │   ├── base.html
 │   │   │   ├── phases.html
@@ -153,7 +163,7 @@ project-seat/
 │   │   │   ├── project_documents.html
 │   │   │   ├── project_approvals.html
 │   │   │   ├── initiative_detail.html
-│   │   │   ├── transcript.html                  # Upload form + transcript history
+│   │   │   ├── meetings.html                    # Unified Meetings page (upload + Zoom + filters)
 │   │   │   ├── transcript_suggestions_page.html # Full-page suggestion review
 │   │   │   ├── charter.html                     # Charter sections view + LLM update form
 │   │   │   ├── project_team_progress.html       # Per-team version progress + burnup chart
@@ -161,6 +171,7 @@ project-seat/
 │   │   │   ├── project_ceo_review.html         # CEO review page + PM notes + past reviews
 │   │   │   ├── project_closure.html           # Closure report page + PM notes + past reports
 │   │   │   ├── project_settings.html          # Project settings form
+│   │   │   ├── project_knowledge.html         # Knowledge base: actions, notes, insights tabs
 │   │   │   └── partials/
 │   │   │       ├── approval_pending.html
 │   │   │       ├── approval_row.html
@@ -182,7 +193,10 @@ project-seat/
 │   │   │       ├── closure_row.html           # Individual past closure report row
 │   │   │       ├── risk_refine_panel.html      # Risk/decision refinement Q&A panel
 │   │   │       ├── typeahead_input.html       # Reusable typeahead input macro
-│   │   │       └── typeahead_results.html     # Typeahead search results partial
+│   │   │       ├── typeahead_results.html     # Typeahead search results partial
+│   │   │       ├── meeting_row.html            # Unified meeting row (transcript + Zoom)
+│   │   │       ├── action_item_row.html       # Action item table row with status selector
+│   │   │       └── knowledge_entry_card.html  # Knowledge entry card with tags + publish
 │   │   └── static/              # CSS + JS + bundled vendor libs
 │   │       ├── style.css
 │   │       ├── typeahead.js     # Typeahead keyboard nav and selection logic
@@ -200,7 +214,9 @@ project-seat/
 │       ├── transcript.py        # Transcript, suggestion, and project context models
 │       ├── charter.py           # Charter suggestion status and dataclass
 │       ├── ceo_review.py       # CEO review status and dataclass
-│       └── closure.py          # Closure report status and dataclass
+│       ├── closure.py          # Closure report status and dataclass
+│       ├── zoom.py             # ZoomRecording, ProjectMeetingMap dataclasses
+│       └── knowledge.py        # ActionItem, KnowledgeEntry dataclasses
 └── tests/
     ├── __init__.py
     ├── conftest.py              # Shared fixtures
@@ -210,7 +226,8 @@ project-seat/
     │   ├── test_base.py
     │   ├── test_jira.py
     │   ├── test_confluence.py
-    │   └── test_confluence_v2.py
+    │   ├── test_confluence_v2.py
+    │   └── test_zoom.py             # Zoom connector OAuth, pagination, download tests
     ├── test_engine/
     │   ├── test_approval.py
     │   ├── test_agent.py            # Provider factory + TranscriptAgent tests
@@ -219,6 +236,7 @@ project-seat/
     │   ├── test_health_review_agent.py  # HealthReviewAgent questions + review tests
     │   ├── test_risk_refine_agent.py   # RiskRefineAgent refinement loop tests
     │   ├── test_closure_agent.py    # ClosureAgent questions + report tests
+    │   ├── test_zoom_match_agent.py # ZoomMatchAgent classification + retry tests
     │   ├── test_mentions.py         # Mention resolver tests
     │   ├── test_orchestrator.py
     │   └── test_providers/
@@ -244,7 +262,10 @@ project-seat/
     │   ├── test_closure.py          # Closure report service tests
     │   ├── test_project_context.py  # ProjectContextService tests
     │   ├── test_team_progress.py    # Team progress service tests
-    │   └── test_team_snapshot.py    # Snapshot service tests
+    │   ├── test_team_snapshot.py    # Snapshot service tests
+    │   ├── test_zoom_ingestion.py   # Zoom ingestion: dedup, status, polling, sync tests
+    │   ├── test_zoom_matching.py    # Zoom matching: title, fuzzy, alias, LLM fallback tests
+    │   └── test_knowledge.py        # Knowledge service: action items, entries, search tests
     └── test_web/
         ├── test_routes_approval.py
         ├── test_routes_ceo_review.py    # CEO review route contract tests
@@ -258,8 +279,11 @@ project-seat/
         ├── test_routes_settings.py      # Project settings route tests
         ├── test_routes_spinup.py
         ├── test_routes_team_progress.py # Team progress route tests
-        ├── test_routes_transcript.py
-        └── test_routes_typeahead.py     # Typeahead search route tests
+        ├── test_routes_meetings.py      # Unified Meetings page route tests
+        ├── test_routes_transcript.py    # Suggestion review + refinement route tests
+        ├── test_routes_typeahead.py     # Typeahead search route tests
+        ├── test_routes_zoom.py          # Zoom OAuth + backward-compat redirect tests
+        └── test_routes_knowledge.py     # Knowledge base route tests
 ```
 
 ## How to Run
@@ -281,10 +305,11 @@ pytest
 ## Key Conventions
 
 ### Connectors
-- All connectors inherit from `BaseConnector` in `src/connectors/base.py`
+- Jira/Confluence connectors inherit from `BaseConnector` in `src/connectors/base.py`
 - Base class handles: authentication (Basic auth with API token), automatic retry with backoff, pagination, rate limit handling, error logging
+- Zoom connector (`src/connectors/zoom.py`) does NOT inherit from `BaseConnector` — uses OAuth authorization code flow (General App) with refresh_token grant, independent retry/backoff, proactive token refresh within 5 min of 1-hour expiry; stores/rotates refresh tokens in the `config` table via `ZoomRepository`
 - Connectors expose clean Python methods — no raw HTTP outside the connector layer
-- Never call Jira/Confluence APIs directly from services or engine code; always go through a connector
+- Never call Jira/Confluence/Zoom APIs directly from services or engine code; always go through a connector
 
 ### LLM Agent Layer
 - All LLM interactions go through `src/engine/agent.py` — never call the LLM API directly from other modules
@@ -298,6 +323,7 @@ pytest
 - `CeoReviewAgent` orchestrates CEO status updates via two-step LLM interaction: `ask_questions()` identifies gaps in 2-week data, `generate_review()` returns structured update with health indicator, commentary, escalations, and milestones — publishes to Confluence via approval queue
 - `ClosureAgent` orchestrates project closure reports via two-step LLM interaction: `ask_questions()` identifies gaps in lessons learned/delivery assessment/success criteria, `generate_report()` returns narrative sections (delivery outcome, success criteria, lessons learned) — deterministic data tables pre-computed, published to Confluence via approval queue
 - `RiskRefineAgent` iteratively refines transcript-extracted risks/decisions via a single `refine()` method: evaluates against ISO 14971 quality criteria, asks targeted questions, incorporates answers, repeats until satisfied (max 5 rounds)
+- `ZoomMatchAgent` classifies Zoom meetings into projects via a single `classify_meeting()` method: given topic, host email, transcript excerpt, and active projects list, returns confidence-scored matches
 - All LLM responses that result in write actions must pass through the Approval Engine first
 - Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
 - Gemini limitation: 2.5 Flash uses "thinking" tokens that count against `maxOutputTokens` — use 16384+ for structured output to avoid truncation
@@ -346,7 +372,7 @@ pytest
 ### Database
 - SQLite via stdlib `sqlite3` — no ORM
 - Schema and migrations in `src/database.py` (includes ALTER TABLE migrations run at startup)
-- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`, `health_reviews`, `ceo_reviews`, `closure_reports`
+- Tables: `projects`, `approval_log`, `approval_queue`, `transcript_cache`, `transcript_suggestions`, `charter_suggestions`, `releases`, `release_documents`, `config`, `team_progress_snapshots`, `health_reviews`, `ceo_reviews`, `closure_reports`, `zoom_recordings`, `project_meeting_map`, `project_aliases`, `action_items`, `knowledge_entries`
 
 ### Testing
 - Use pytest
@@ -416,6 +442,11 @@ LLM_BASE_URL=http://localhost:11434  # Only needed for Ollama
 EQMS_DRAFT_SPACE_ID=...           # Confluence space ID for draft DHF documents
 EQMS_RELEASED_SPACE_ID=...        # Confluence space ID for released DHF documents
 DB_PATH=seat.db                    # Optional, defaults to seat.db
+ZOOM_ENABLED=false                 # Enable Zoom integration
+ZOOM_CLIENT_ID=...                # Zoom General App OAuth client ID
+ZOOM_CLIENT_SECRET=...            # Zoom General App OAuth client secret
+ZOOM_REDIRECT_URI=http://localhost:8000/zoom/callback  # OAuth redirect URI
+ZOOM_USER_ID=me                    # Zoom user ID (email or "me")
 ```
 
 ## LLM Workflows
@@ -429,6 +460,7 @@ All six LLM-powered features follow a common pattern: gather project context in 
 | **Health Review** | `HealthReviewAgent` | Two-step Q&A → structured review | Read-only (persisted in SQLite) |
 | **CEO Review** | `CeoReviewAgent` | Two-step Q&A → hybrid tables + narrative | Confluence CEO Review page (append) |
 | **Risk Refinement** | `RiskRefineAgent` | Iterative Q&A (max 5 rounds) | Updates existing suggestion payload |
+| **Zoom Match** | `ZoomMatchAgent` | Single LLM call → classification | Project mapping (confidence-scored) |
 | **Closure Report** | `ClosureAgent` | Two-step Q&A → hybrid tables + narrative | New Confluence page (child of Charter) |
 
 **Shared patterns across all workflows:**

@@ -47,6 +47,9 @@ class ProjectContextData:
     releases: list[dict] = field(default_factory=list)
     # Meeting summaries
     meeting_summaries: list[dict] = field(default_factory=list)
+    # Knowledge
+    action_items: list[Any] = field(default_factory=list)
+    knowledge_entries: list[Any] = field(default_factory=list)
 
 
 class ProjectContextService:
@@ -85,6 +88,8 @@ class ProjectContextService:
         meeting_summaries: bool = False,
         meeting_summary_limit: int = 5,
         meeting_summary_since: str | None = None,
+        action_items: bool = False,
+        knowledge: bool = False,
         cache_key: str | None = None,
         cache_ttl: float = 0,
     ) -> ProjectContextData:
@@ -150,6 +155,12 @@ class ProjectContextService:
                 project, meeting_summary_limit, meeting_summary_since,
             )
 
+        # --- Knowledge ---
+        if action_items:
+            tasks["action_items"] = self._fetch_action_items(project)
+        if knowledge:
+            tasks["knowledge"] = self._fetch_knowledge_entries(project)
+
         # Run all tasks in parallel
         if tasks:
             keys = list(tasks.keys())
@@ -208,6 +219,10 @@ class ProjectContextService:
             data.releases = result
         elif key == "meeting_summaries":
             data.meeting_summaries = result
+        elif key == "action_items":
+            data.action_items = result
+        elif key == "knowledge":
+            data.knowledge_entries = result
 
     # ------------------------------------------------------------------
     # Individual fetch methods — each catches its own errors
@@ -413,4 +428,22 @@ class ProjectContextService:
             return repo.get_meeting_summaries(project.id, limit=limit, since=since)
         except Exception as exc:
             logger.warning("ProjectContext: failed to get meeting summaries: %s", exc)
+            return []
+
+    async def _fetch_action_items(self, project: Project) -> list:
+        try:
+            from src.repositories.knowledge_repo import KnowledgeRepository
+            repo = KnowledgeRepository(self._db_path)
+            return repo.list_action_items(project.id, status="open")
+        except Exception as exc:
+            logger.warning("ProjectContext: failed to get action items: %s", exc)
+            return []
+
+    async def _fetch_knowledge_entries(self, project: Project) -> list:
+        try:
+            from src.repositories.knowledge_repo import KnowledgeRepository
+            repo = KnowledgeRepository(self._db_path)
+            return repo.list_knowledge_entries(project.id)
+        except Exception as exc:
+            logger.warning("ProjectContext: failed to get knowledge entries: %s", exc)
             return []

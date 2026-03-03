@@ -25,14 +25,19 @@ class TranscriptRepository:
     # ------------------------------------------------------------------
 
     def insert_transcript(
-        self, project_id: int, filename: str, raw_text: str, processed_json: str,
+        self,
+        project_id: int | None,
+        filename: str,
+        raw_text: str,
+        processed_json: str,
+        source: str = "manual",
     ) -> int:
         with get_db(self._db_path) as conn:
             cursor = conn.execute(
                 """INSERT INTO transcript_cache
-                   (project_id, filename, raw_text, processed_json)
-                   VALUES (?, ?, ?, ?)""",
-                (project_id, filename, raw_text, processed_json),
+                   (project_id, filename, raw_text, processed_json, source)
+                   VALUES (?, ?, ?, ?, ?)""",
+                (project_id, filename, raw_text, processed_json, source),
             )
             conn.commit()
             return cursor.lastrowid
@@ -70,6 +75,40 @@ class TranscriptRepository:
             conn.execute(
                 "UPDATE transcript_cache SET meeting_summary = ? WHERE id = ?",
                 (summary, transcript_id),
+            )
+            conn.commit()
+
+    def list_all_transcripts(
+        self,
+        source: str | None = None,
+        project_id: int | None = None,
+        unassigned: bool = False,
+    ) -> list[TranscriptRecord]:
+        """List transcripts globally with optional filters."""
+        clauses: list[str] = []
+        params: list = []
+        if source:
+            clauses.append("source = ?")
+            params.append(source)
+        if project_id is not None:
+            clauses.append("project_id = ?")
+            params.append(project_id)
+        if unassigned:
+            clauses.append("project_id IS NULL")
+        where = f" WHERE {' AND '.join(clauses)}" if clauses else ""
+        with get_db(self._db_path) as conn:
+            rows = conn.execute(
+                f"SELECT * FROM transcript_cache{where} ORDER BY created_at DESC",
+                params,
+            ).fetchall()
+        return [TranscriptRecord.from_row(r) for r in rows]
+
+    def assign_project(self, transcript_id: int, project_id: int) -> None:
+        """Assign a transcript to a project."""
+        with get_db(self._db_path) as conn:
+            conn.execute(
+                "UPDATE transcript_cache SET project_id = ? WHERE id = ?",
+                (project_id, transcript_id),
             )
             conn.commit()
 
@@ -122,6 +161,15 @@ class TranscriptRepository:
             conn.execute(
                 "DELETE FROM transcript_suggestions WHERE transcript_id = ?",
                 (transcript_id,),
+            )
+            conn.commit()
+
+    def delete_non_accepted_suggestions(self, transcript_id: int) -> None:
+        """Delete only pending and rejected suggestions, preserving accepted and queued."""
+        with get_db(self._db_path) as conn:
+            conn.execute(
+                "DELETE FROM transcript_suggestions WHERE transcript_id = ? AND status IN (?, ?)",
+                (transcript_id, SuggestionStatus.PENDING.value, SuggestionStatus.REJECTED.value),
             )
             conn.commit()
 

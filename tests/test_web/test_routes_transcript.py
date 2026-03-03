@@ -1,12 +1,20 @@
-"""Tests for transcript routes — upload, paste, and analysis."""
+"""Tests for transcript suggestion routes — analysis, accept/reject, refinement.
+
+Upload, paste, page, and delete route tests have moved to ``test_routes_meetings.py``.
+"""
 
 from __future__ import annotations
 
-from unittest.mock import MagicMock, patch
+import json
+from unittest.mock import AsyncMock, patch
 
 from src.database import get_db
 from src.models.project import Project
-from src.models.transcript import ParsedTranscript, TranscriptSegment
+from src.models.transcript import (
+    SuggestionStatus,
+    SuggestionType,
+    TranscriptSuggestion,
+)
 
 
 def _insert_project(db_path, name="Test Project", goal_key="PROG-100"):
@@ -28,147 +36,6 @@ def _make_project(pid=1, name="Test Project", goal_key="PROG-100"):
     )
 
 
-def _make_parsed(filename="test.txt"):
-    return ParsedTranscript(
-        filename=filename,
-        segments=[
-            TranscriptSegment(speaker="Alice", text="We need to discuss risks."),
-            TranscriptSegment(speaker="Bob", text="Agreed."),
-        ],
-        raw_text="Alice: We need to discuss risks.\nBob: Agreed.",
-        speaker_list=["Alice", "Bob"],
-    )
-
-
-# ---------------------------------------------------------------------------
-# GET /project/{id}/transcript/ — page loads
-# ---------------------------------------------------------------------------
-
-
-def test_transcript_page_returns_200(client, tmp_db):
-    pid = _insert_project(tmp_db)
-    project = _make_project(pid)
-    with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptService") as MockTS:
-        MockDS.return_value.get_project_by_id.return_value = project
-        MockTS.return_value.list_transcripts.return_value = []
-        result = client.get(f"/project/{pid}/transcript/")
-    assert result.status_code == 200
-    assert "Upload File" in result.text
-    assert "Paste Text" in result.text
-
-
-def test_transcript_page_404_for_missing_project(client):
-    with patch("src.web.deps.DashboardService") as MockDS:
-        MockDS.return_value.get_project_by_id.return_value = None
-        result = client.get("/project/999/transcript/")
-    assert result.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# POST /project/{id}/transcript/upload — file upload
-# ---------------------------------------------------------------------------
-
-
-def test_upload_file_returns_parsed_preview(client, tmp_db):
-    pid = _insert_project(tmp_db)
-    project = _make_project(pid)
-    parsed = _make_parsed("test.txt")
-
-    with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptParser") as MockParser, \
-         patch("src.web.deps.TranscriptService") as MockTS:
-        MockDS.return_value.get_project_by_id.return_value = project
-        MockParser.return_value.parse.return_value = parsed
-        MockTS.return_value.store_transcript.return_value = 1
-        result = client.post(
-            f"/project/{pid}/transcript/upload",
-            files={"file": ("test.txt", b"Alice: We need to discuss risks.\nBob: Agreed.", "text/plain")},
-        )
-    assert result.status_code == 200
-    assert "Alice" in result.text
-    assert "Analyze with LLM" in result.text
-
-
-# ---------------------------------------------------------------------------
-# POST /project/{id}/transcript/paste — direct text input
-# ---------------------------------------------------------------------------
-
-
-def test_paste_text_returns_parsed_preview(client, tmp_db):
-    pid = _insert_project(tmp_db)
-    project = _make_project(pid)
-    parsed = _make_parsed("pasted-input.txt")
-
-    with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptParser") as MockParser, \
-         patch("src.web.deps.TranscriptService") as MockTS:
-        MockDS.return_value.get_project_by_id.return_value = project
-        MockParser.return_value.parse.return_value = parsed
-        MockTS.return_value.store_transcript.return_value = 1
-        result = client.post(
-            f"/project/{pid}/transcript/paste",
-            data={"transcript_text": "Alice: We should track this risk.\nBob: I agree."},
-        )
-    assert result.status_code == 200
-    assert "Alice" in result.text
-    assert "Analyze with LLM" in result.text
-
-
-def test_paste_empty_text_returns_400(client, tmp_db):
-    pid = _insert_project(tmp_db)
-    project = _make_project(pid)
-    with patch("src.web.deps.DashboardService") as MockDS:
-        MockDS.return_value.get_project_by_id.return_value = project
-        result = client.post(
-            f"/project/{pid}/transcript/paste",
-            data={"transcript_text": "   "},
-        )
-    assert result.status_code == 400
-    assert "enter some text" in result.text
-
-
-def test_paste_calls_parser_with_txt_extension(client, tmp_db):
-    """Paste route passes content to parser as a .txt file so _parse_txt is used."""
-    pid = _insert_project(tmp_db)
-    project = _make_project(pid)
-    parsed = _make_parsed("pasted-input.txt")
-    text = "Some meeting notes."
-
-    with patch("src.web.deps.DashboardService") as MockDS, \
-         patch("src.web.deps.TranscriptParser") as MockParser, \
-         patch("src.web.deps.TranscriptService") as MockTS:
-        MockDS.return_value.get_project_by_id.return_value = project
-        MockParser.return_value.parse.return_value = parsed
-        MockTS.return_value.store_transcript.return_value = 1
-        client.post(
-            f"/project/{pid}/transcript/paste",
-            data={"transcript_text": text},
-        )
-        MockParser.return_value.parse.assert_called_once_with(
-            "pasted-input.txt", text.encode("utf-8")
-        )
-
-
-def test_paste_404_for_missing_project(client):
-    with patch("src.web.deps.DashboardService") as MockDS:
-        MockDS.return_value.get_project_by_id.return_value = None
-        result = client.post(
-            "/project/999/transcript/paste",
-            data={"transcript_text": "some text"},
-        )
-    assert result.status_code == 404
-
-
-# ---------------------------------------------------------------------------
-# Risk refinement routes
-# ---------------------------------------------------------------------------
-
-import json
-from unittest.mock import AsyncMock
-from src.models.transcript import SuggestionStatus, SuggestionType, TranscriptSuggestion
-
-
 def _make_suggestion(sid=1):
     return TranscriptSuggestion(
         id=sid, transcript_id=1, project_id=1,
@@ -181,6 +48,11 @@ def _make_suggestion(sid=1):
         confidence=0.8, status=SuggestionStatus.PENDING,
         approval_item_id=None, created_at="2026-01-01",
     )
+
+
+# ---------------------------------------------------------------------------
+# Risk refinement routes
+# ---------------------------------------------------------------------------
 
 
 def test_start_refinement_returns_panel(client, tmp_db):

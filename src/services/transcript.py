@@ -42,7 +42,12 @@ class TranscriptService:
     # Storage
     # ------------------------------------------------------------------
 
-    def store_transcript(self, project_id: int, parsed: ParsedTranscript) -> int:
+    def store_transcript(
+        self,
+        project_id: int | None,
+        parsed: ParsedTranscript,
+        source: str = "manual",
+    ) -> int:
         """Save a parsed transcript to transcript_cache. Returns the record ID."""
         processed = json.dumps({
             "segments": [
@@ -57,7 +62,9 @@ class TranscriptService:
             "speaker_list": parsed.speaker_list,
             "duration_hint": parsed.duration_hint,
         })
-        return self._repo.insert_transcript(project_id, parsed.filename, parsed.raw_text, processed)
+        return self._repo.insert_transcript(
+            project_id, parsed.filename, parsed.raw_text, processed, source=source,
+        )
 
     def list_transcripts(self, project_id: int) -> list[TranscriptRecord]:
         """List all transcripts for a project, newest first."""
@@ -70,6 +77,21 @@ class TranscriptService:
     def delete_transcript(self, transcript_id: int) -> None:
         """Delete a transcript and its suggestions."""
         self._repo.delete_transcript(transcript_id)
+
+    def assign_transcript(self, transcript_id: int, project_id: int) -> None:
+        """Assign a transcript to a project."""
+        self._repo.assign_project(transcript_id, project_id)
+
+    def list_all_transcripts(
+        self,
+        source: str | None = None,
+        project_id: int | None = None,
+        unassigned: bool = False,
+    ) -> list[TranscriptRecord]:
+        """List all transcripts with optional filters."""
+        return self._repo.list_all_transcripts(
+            source=source, project_id=project_id, unassigned=unassigned,
+        )
 
     # ------------------------------------------------------------------
     # Project context gathering
@@ -108,7 +130,7 @@ class TranscriptService:
     # ------------------------------------------------------------------
 
     async def analyze_transcript(
-        self, transcript_id: int, project: Any
+        self, transcript_id: int, project: Any, *, preserve_accepted: bool = False,
     ) -> list[TranscriptSuggestion]:
         """Run LLM analysis on a transcript and store suggestions."""
         from src.engine.agent import TranscriptAgent, get_provider
@@ -141,15 +163,25 @@ class TranscriptService:
         self._repo.update_meeting_summary(transcript_id, summary)
 
         # Clear old suggestions for re-analysis
-        self._repo.delete_suggestions(transcript_id)
+        if preserve_accepted:
+            self._repo.delete_non_accepted_suggestions(transcript_id)
+        else:
+            self._repo.delete_suggestions(transcript_id)
 
         # Store new suggestions
         suggestions: list[TranscriptSuggestion] = []
+        knowledge_items: list[dict] = []
+
         for raw_sug in result.get("suggestions", []):
             sug_type = raw_sug.get("type", "risk")
             try:
                 stype = SuggestionType(sug_type)
             except ValueError:
+                continue
+
+            # Knowledge types go directly to knowledge DB (not approval queue)
+            if stype in (SuggestionType.ACTION_ITEM, SuggestionType.NOTE, SuggestionType.INSIGHT):
+                knowledge_items.append(raw_sug)
                 continue
 
             if stype in (SuggestionType.RISK, SuggestionType.DECISION):
@@ -181,6 +213,19 @@ class TranscriptService:
             sug = self._get_suggestion(sug_id)
             if sug:
                 suggestions.append(sug)
+
+        # Route knowledge items to the knowledge database
+        if knowledge_items:
+            try:
+                from src.services.knowledge import KnowledgeService
+                knowledge_svc = KnowledgeService(db_path=self._db_path, settings=self._settings)
+                counts = knowledge_svc.store_from_analysis(project.id, transcript_id, knowledge_items)
+                logger.info(
+                    "Knowledge items stored for transcript %d: %s",
+                    transcript_id, counts,
+                )
+            except Exception as exc:
+                logger.warning("Failed to store knowledge items: %s", exc)
 
         return suggestions
 

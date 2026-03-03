@@ -27,12 +27,13 @@ class ParsedTranscript:
 @dataclass
 class TranscriptRecord:
     id: int
-    project_id: int
+    project_id: int | None
     filename: str
     raw_text: str
     processed_json: str | None
     meeting_summary: str | None
-    created_at: str
+    source: str = "manual"
+    created_at: str = ""
 
     @classmethod
     def from_row(cls, row: Any) -> TranscriptRecord:
@@ -43,6 +44,7 @@ class TranscriptRecord:
             raw_text=row["raw_text"],
             processed_json=row["processed_json"],
             meeting_summary=row["meeting_summary"] if "meeting_summary" in row.keys() else None,
+            source=row["source"] if "source" in row.keys() else "manual",
             created_at=row["created_at"],
         )
 
@@ -56,6 +58,9 @@ class SuggestionType(str, enum.Enum):
     DECISION = "decision"
     XFT_UPDATE = "xft_update"
     CHARTER_UPDATE = "charter_update"
+    ACTION_ITEM = "action_item"
+    NOTE = "note"
+    INSIGHT = "insight"
 
 
 class SuggestionStatus(str, enum.Enum):

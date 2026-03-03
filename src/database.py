@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS transcript_cache (
     raw_text        TEXT    NOT NULL,
     processed_json  TEXT,
     meeting_summary TEXT,
+    source          TEXT    NOT NULL DEFAULT 'manual',
     created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
 );
@@ -167,6 +168,73 @@ CREATE TABLE IF NOT EXISTS closure_reports (
     status           TEXT NOT NULL DEFAULT 'draft',
     created_at       TEXT NOT NULL DEFAULT (datetime('now')),
     FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS zoom_recordings (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    zoom_meeting_uuid   TEXT    NOT NULL UNIQUE,
+    zoom_meeting_id     TEXT    NOT NULL,
+    topic               TEXT    NOT NULL DEFAULT '',
+    host_email          TEXT    NOT NULL DEFAULT '',
+    start_time          TEXT    NOT NULL,
+    duration_minutes    INTEGER NOT NULL DEFAULT 0,
+    transcript_url      TEXT    NOT NULL DEFAULT '',
+    processing_status   TEXT    NOT NULL DEFAULT 'new',
+    match_method        TEXT,
+    error_message       TEXT,
+    raw_metadata        TEXT    NOT NULL DEFAULT '{}',
+    created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+);
+
+CREATE TABLE IF NOT EXISTS project_meeting_map (
+    id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+    zoom_recording_id   INTEGER NOT NULL,
+    project_id          INTEGER NOT NULL,
+    transcript_id       INTEGER,
+    analysis_status     TEXT    NOT NULL DEFAULT 'pending',
+    created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (zoom_recording_id) REFERENCES zoom_recordings(id) ON DELETE CASCADE,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    UNIQUE (zoom_recording_id, project_id)
+);
+
+CREATE TABLE IF NOT EXISTS project_aliases (
+    id          INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id  INTEGER NOT NULL,
+    alias       TEXT    NOT NULL,
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+);
+
+CREATE TABLE IF NOT EXISTS action_items (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id      INTEGER NOT NULL,
+    transcript_id   INTEGER,
+    title           TEXT    NOT NULL,
+    owner           TEXT    NOT NULL DEFAULT '',
+    due_date        TEXT,
+    status          TEXT    NOT NULL DEFAULT 'open',
+    source          TEXT    NOT NULL DEFAULT 'transcript',
+    evidence        TEXT    NOT NULL DEFAULT '',
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (transcript_id) REFERENCES transcript_cache(id) ON DELETE SET NULL
+);
+
+CREATE TABLE IF NOT EXISTS knowledge_entries (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    project_id      INTEGER NOT NULL,
+    transcript_id   INTEGER,
+    entry_type      TEXT    NOT NULL DEFAULT 'note',
+    title           TEXT    NOT NULL,
+    content         TEXT    NOT NULL DEFAULT '',
+    tags            TEXT    NOT NULL DEFAULT '[]',
+    source          TEXT    NOT NULL DEFAULT 'transcript',
+    published       INTEGER NOT NULL DEFAULT 0,
+    approval_item_id INTEGER,
+    created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+    FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+    FOREIGN KEY (transcript_id) REFERENCES transcript_cache(id) ON DELETE SET NULL
 );
 
 CREATE TABLE IF NOT EXISTS schema_versions (
@@ -293,6 +361,7 @@ def _migrate_10_add_cascade(conn: sqlite3.Connection) -> None:
                 raw_text        TEXT    NOT NULL,
                 processed_json  TEXT,
                 meeting_summary TEXT,
+                source          TEXT    NOT NULL DEFAULT 'manual',
                 created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
                 FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
             )""",
@@ -463,6 +532,107 @@ def _migrate_11_add_closure_reports(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_12_add_zoom_and_knowledge(conn: sqlite3.Connection) -> None:
+    """Create zoom_recordings, project_meeting_map, project_aliases, action_items,
+    and knowledge_entries tables for databases created before they were in _SCHEMA."""
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS zoom_recordings (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            zoom_meeting_uuid   TEXT    NOT NULL UNIQUE,
+            zoom_meeting_id     TEXT    NOT NULL,
+            topic               TEXT    NOT NULL DEFAULT '',
+            host_email          TEXT    NOT NULL DEFAULT '',
+            start_time          TEXT    NOT NULL,
+            duration_minutes    INTEGER NOT NULL DEFAULT 0,
+            transcript_url      TEXT    NOT NULL DEFAULT '',
+            processing_status   TEXT    NOT NULL DEFAULT 'new',
+            match_method        TEXT,
+            error_message       TEXT,
+            raw_metadata        TEXT    NOT NULL DEFAULT '{}',
+            created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS project_meeting_map (
+            id                  INTEGER PRIMARY KEY AUTOINCREMENT,
+            zoom_recording_id   INTEGER NOT NULL,
+            project_id          INTEGER NOT NULL,
+            transcript_id       INTEGER,
+            analysis_status     TEXT    NOT NULL DEFAULT 'pending',
+            created_at          TEXT    NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (zoom_recording_id) REFERENCES zoom_recordings(id) ON DELETE CASCADE,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            UNIQUE (zoom_recording_id, project_id)
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS project_aliases (
+            id          INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id  INTEGER NOT NULL,
+            alias       TEXT    NOT NULL,
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS action_items (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id      INTEGER NOT NULL,
+            transcript_id   INTEGER,
+            title           TEXT    NOT NULL,
+            owner           TEXT    NOT NULL DEFAULT '',
+            due_date        TEXT,
+            status          TEXT    NOT NULL DEFAULT 'open',
+            source          TEXT    NOT NULL DEFAULT 'transcript',
+            evidence        TEXT    NOT NULL DEFAULT '',
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            updated_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (transcript_id) REFERENCES transcript_cache(id) ON DELETE SET NULL
+        )"""
+    )
+    conn.execute(
+        """CREATE TABLE IF NOT EXISTS knowledge_entries (
+            id              INTEGER PRIMARY KEY AUTOINCREMENT,
+            project_id      INTEGER NOT NULL,
+            transcript_id   INTEGER,
+            entry_type      TEXT    NOT NULL DEFAULT 'note',
+            title           TEXT    NOT NULL,
+            content         TEXT    NOT NULL DEFAULT '',
+            tags            TEXT    NOT NULL DEFAULT '[]',
+            source          TEXT    NOT NULL DEFAULT 'transcript',
+            published       INTEGER NOT NULL DEFAULT 0,
+            approval_item_id INTEGER,
+            created_at      TEXT    NOT NULL DEFAULT (datetime('now')),
+            FOREIGN KEY (project_id) REFERENCES projects(id) ON DELETE CASCADE,
+            FOREIGN KEY (transcript_id) REFERENCES transcript_cache(id) ON DELETE SET NULL
+        )"""
+    )
+    # Indexes
+    for ddl in [
+        "CREATE INDEX IF NOT EXISTS idx_zoom_recordings_status ON zoom_recordings(processing_status)",
+        "CREATE INDEX IF NOT EXISTS idx_project_meeting_map_rec ON project_meeting_map(zoom_recording_id)",
+        "CREATE INDEX IF NOT EXISTS idx_project_meeting_map_proj ON project_meeting_map(project_id)",
+        "CREATE INDEX IF NOT EXISTS idx_project_aliases_proj ON project_aliases(project_id)",
+        "CREATE INDEX IF NOT EXISTS idx_action_items_proj ON action_items(project_id, status)",
+        "CREATE INDEX IF NOT EXISTS idx_knowledge_entries_proj ON knowledge_entries(project_id, entry_type)",
+    ]:
+        conn.execute(ddl)
+
+
+def _migrate_13_add_transcript_source(conn: sqlite3.Connection) -> None:
+    """Add source column to transcript_cache for databases created before it was in _SCHEMA."""
+    try:
+        conn.execute("ALTER TABLE transcript_cache ADD COLUMN source TEXT NOT NULL DEFAULT 'manual'")
+    except sqlite3.OperationalError:
+        pass  # Column already exists (new databases)
+
+    # Backfill existing Zoom-originated transcripts
+    conn.execute(
+        """UPDATE transcript_cache SET source = 'zoom'
+           WHERE id IN (SELECT transcript_id FROM project_meeting_map WHERE transcript_id IS NOT NULL)"""
+    )
+
+
 _MIGRATIONS: list[tuple[int, callable]] = [
     (1, _migrate_1_add_phase),
     (2, _migrate_2_add_dhf_columns),
@@ -475,6 +645,8 @@ _MIGRATIONS: list[tuple[int, callable]] = [
     (9, _migrate_9_add_indexes),
     (10, _migrate_10_add_cascade),
     (11, _migrate_11_add_closure_reports),
+    (12, _migrate_12_add_zoom_and_knowledge),
+    (13, _migrate_13_add_transcript_source),
 ]
 
 

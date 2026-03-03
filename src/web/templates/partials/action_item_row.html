@@ -1,0 +1,23 @@
+<tr id="action-item-{{ item.id }}">
+    <td>{{ item.title }}</td>
+    <td>{{ item.owner or '—' }}</td>
+    <td>{{ item.due_date or '—' }}</td>
+    <td>
+        <form hx-post="/project/{{ project_id if project_id is defined else item.project_id }}/knowledge/action-items/{{ item.id }}/status"
+              hx-target="#action-item-{{ item.id }}"
+              hx-swap="outerHTML">
+            <select name="status" onchange="this.form.requestSubmit()">
+                {% for s in ['open', 'in_progress', 'done', 'cancelled'] %}
+                <option value="{{ s }}" {% if item.status == s %}selected{% endif %}>{{ s|replace('_', ' ')|title }}</option>
+                {% endfor %}
+            </select>
+        </form>
+    </td>
+    <td>
+        {% if item.transcript_id %}
+        <a href="/project/{{ project_id if project_id is defined else item.project_id }}/transcript/{{ item.transcript_id }}/suggestions" class="text-muted">transcript</a>
+        {% else %}
+        <span class="text-muted">{{ item.source }}</span>
+        {% endif %}
+    </td>
+</tr>
