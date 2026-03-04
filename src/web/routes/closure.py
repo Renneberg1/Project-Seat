@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import logging
 
 from fastapi import APIRouter, Depends, Request
@@ -14,6 +13,7 @@ from src.services.closure import ClosureService
 from src.services.dashboard import DashboardService
 from src.web.deps import (
     collect_qa_pairs,
+    error_banner,
     get_closure_service,
     get_dashboard_service,
     render_project_page,
@@ -69,10 +69,7 @@ async def closure_ask(
         questions, metrics = await service.generate_questions(project, pm_notes)
     except Exception as exc:
         logger.exception("Closure report /ask failed")
-        return HTMLResponse(
-            f'<div class="error-banner">Closure report failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"Closure report failed: {exc}", status_code=500)
 
     return templates.TemplateResponse(request, "partials/closure_questions.html", {
         "project": project,
@@ -104,10 +101,7 @@ async def closure_analyze(
         report = await service.generate_report(project, pm_notes, qa_pairs)
     except Exception as exc:
         logger.exception("Closure report /analyze failed")
-        return HTMLResponse(
-            f'<div class="error-banner">Closure report failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"Closure report failed: {exc}", status_code=500)
 
     xhtml = service.render_confluence_xhtml(report)
     report_id = service.save_report(project.id, report, xhtml)
@@ -139,20 +133,14 @@ async def closure_accept(
     try:
         result = service.accept_report(rid, project)
     except ValueError as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">{html.escape(str(exc))}</div>',
-            status_code=400,
-        )
+        return error_banner(str(exc), status_code=400)
 
     if result and result.status.value == "queued":
         return HTMLResponse(
             '<div class="success-banner">Closure Report queued for approval. '
             'Check the <a href="/approval/">Approval Queue</a>.</div>'
         )
-    return HTMLResponse(
-        '<div class="error-banner">Could not queue report. It may have already been processed.</div>',
-        status_code=400,
-    )
+    return error_banner("Could not queue report. It may have already been processed.", status_code=400)
 
 
 @router.post("/{rid}/reject", response_class=HTMLResponse)

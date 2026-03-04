@@ -18,9 +18,9 @@ class ReleaseService:
         self._db_path = db_path or src.config.settings.db_path
 
         from src.repositories.release_repo import ReleaseRepository
-        from src.repositories.approval_repo import ApprovalRepository
+        from src.engine.approval import ApprovalEngine
         self._repo = ReleaseRepository(self._db_path)
-        self._audit_repo = ApprovalRepository(self._db_path)
+        self._engine = ApprovalEngine(db_path=self._db_path)
 
     # ------------------------------------------------------------------
     # CRUD
@@ -93,7 +93,7 @@ class ReleaseService:
     def _log_audit(self, action: str, release_id: int, details: dict) -> None:
         """Write a release action to the audit log for traceability."""
         project_id = self._repo.get_project_id(release_id)
-        self._audit_repo.log_audit_raw(project_id, action, details)
+        self._engine.log_audit_raw(project_id, action, details)
 
     # ------------------------------------------------------------------
     # Release status computation

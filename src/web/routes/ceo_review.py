@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import logging
 
 from fastapi import APIRouter, Depends, Request
@@ -16,6 +15,7 @@ from src.services.ceo_review import CeoReviewService
 from src.services.dashboard import DashboardService
 from src.web.deps import (
     collect_qa_pairs,
+    error_banner,
     get_ceo_review_service,
     get_dashboard_service,
     get_jira_connector,
@@ -83,10 +83,7 @@ async def ceo_review_ask(
         questions, metrics = await service.generate_questions(project, pm_notes)
     except Exception as exc:
         logger.exception("CEO review /ask failed")
-        return HTMLResponse(
-            f'<div class="error-banner">CEO review failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"CEO review failed: {exc}", status_code=500)
 
     return templates.TemplateResponse(request, "partials/ceo_review_questions.html", {
         "project": project,
@@ -119,10 +116,7 @@ async def ceo_review_analyze(
         review = await service.generate_review(project, pm_notes, qa_pairs)
     except Exception as exc:
         logger.exception("CEO review /analyze failed")
-        return HTMLResponse(
-            f'<div class="error-banner">CEO review failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"CEO review failed: {exc}", status_code=500)
 
     # Render Confluence XHTML and resolve @mentions
     xhtml = service.render_confluence_xhtml(review)
@@ -159,20 +153,14 @@ async def ceo_review_accept(
     try:
         result = service.accept_review(rid, project)
     except ValueError as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">{html.escape(str(exc))}</div>',
-            status_code=400,
-        )
+        return error_banner(str(exc), status_code=400)
 
     if result and result.status.value == "queued":
         return HTMLResponse(
             '<div class="success-banner">CEO Review queued for approval. '
             'Check the <a href="/approval/">Approval Queue</a>.</div>'
         )
-    return HTMLResponse(
-        '<div class="error-banner">Could not queue review. It may have already been processed.</div>',
-        status_code=400,
-    )
+    return error_banner("Could not queue review. It may have already been processed.", status_code=400)
 
 
 @router.post("/{rid}/reject", response_class=HTMLResponse)

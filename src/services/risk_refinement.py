@@ -3,15 +3,19 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 from src.config import Settings, settings as default_settings
+from src.jira_constants import FIELD_IMPACT_ANALYSIS, FIELD_MITIGATION_CONTROL, FIELD_TIMELINE_IMPACT
 from src.models.transcript import (
     ProjectContext,
     SuggestionType,
     TranscriptSuggestion,
 )
 from src.services._transcript_helpers import build_preview, extract_adf_text, get_suggestion
+
+logger = logging.getLogger(__name__)
 
 
 class RiskRefinementService:
@@ -54,6 +58,7 @@ class RiskRefinementService:
         if sug.suggestion_type not in (SuggestionType.RISK, SuggestionType.DECISION):
             raise ValueError("Refinement is only available for risk/decision suggestions")
 
+        logger.info("Starting risk refinement for suggestion id=%s (type=%s)", suggestion_id, sug.suggestion_type.value)
         current_draft = self._extract_risk_draft(sug)
 
         transcript_svc = TranscriptService(db_path=self._db_path, settings=self._settings)
@@ -101,7 +106,9 @@ class RiskRefinementService:
         if sug is None:
             raise ValueError(f"Suggestion {suggestion_id} not found")
 
+        logger.info("Continuing refinement for suggestion id=%s, round=%d/%d", suggestion_id, round_number, self.MAX_REFINE_ROUNDS)
         if round_number >= self.MAX_REFINE_ROUNDS:
+            logger.info("Max refinement rounds reached for suggestion id=%s, finalising", suggestion_id)
             return {
                 "satisfied": True,
                 "quality_assessment": "Maximum refinement rounds reached. Finalising with current draft.",
@@ -198,13 +205,13 @@ class RiskRefinementService:
 
             impact = raw_sug.get("impact_analysis", "")
             if impact:
-                fields["customfield_11166"] = build_adf_field(impact)
+                fields[FIELD_IMPACT_ANALYSIS] = build_adf_field(impact)
             mitigation = raw_sug.get("mitigation", "")
             if mitigation:
-                fields["customfield_11342"] = build_adf_field(mitigation)
+                fields[FIELD_MITIGATION_CONTROL] = build_adf_field(mitigation)
             timeline_days = raw_sug.get("timeline_impact_days")
             if timeline_days:
-                fields["customfield_13267"] = timeline_days
+                fields[FIELD_TIMELINE_IMPACT] = timeline_days
 
         preview = build_preview(raw_sug, sug.suggestion_type)
 
@@ -240,13 +247,13 @@ class RiskRefinementService:
             background = sug.detail or ""
 
         # Extract custom fields
-        impact_analysis = extract_adf_text(fields.get("customfield_11166"))
-        mitigation = extract_adf_text(fields.get("customfield_11342"))
+        impact_analysis = extract_adf_text(fields.get(FIELD_IMPACT_ANALYSIS))
+        mitigation = extract_adf_text(fields.get(FIELD_MITIGATION_CONTROL))
 
         priority_obj = fields.get("priority", {})
         priority = priority_obj.get("name", "Medium") if isinstance(priority_obj, dict) else "Medium"
 
-        timeline_days = fields.get("customfield_13267", 0)
+        timeline_days = fields.get(FIELD_TIMELINE_IMPACT, 0)
 
         return {
             "title": sug.title,

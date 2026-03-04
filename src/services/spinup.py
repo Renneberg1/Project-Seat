@@ -9,13 +9,10 @@ import re
 from src.config import settings
 from src.connectors.confluence import ConfluenceConnector
 from src.engine.approval import ApprovalEngine
+from src.jira_constants import PROG_PROJECT_KEY, RISK_PROJECT_KEY
 from src.models.approval import ApprovalAction, ApprovalItem, ApprovalStatus
 
 logger = logging.getLogger(__name__)
-
-# Jira constants (from samples)
-PROG_PROJECT_KEY = "PROG"
-RISK_PROJECT_KEY = "RISK"
 GOAL_ISSUE_TYPE_ID = "10423"
 
 # Confluence template page IDs

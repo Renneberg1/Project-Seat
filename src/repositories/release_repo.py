@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import src.config
 from src.database import get_db
 from src.models.release import Release
+
+logger = logging.getLogger(__name__)
 
 
 class ReleaseRepository:
@@ -32,6 +35,7 @@ class ReleaseRepository:
         return Release.from_row(row)
 
     def delete_release(self, release_id: int) -> None:
+        logger.info("Deleting release id=%s and its documents", release_id)
         with get_db(self._db_path) as conn:
             conn.execute("DELETE FROM release_documents WHERE release_id = ?", (release_id,))
             conn.execute("DELETE FROM releases WHERE id = ?", (release_id,))
@@ -60,6 +64,7 @@ class ReleaseRepository:
         return row["project_id"] if row else None
 
     def lock_release(self, release_id: int, version_snapshot_json: str) -> None:
+        logger.info("Locking release id=%s (scope-freeze)", release_id)
         with get_db(self._db_path) as conn:
             conn.execute(
                 "UPDATE releases SET locked = 1, version_snapshot = ? WHERE id = ?",

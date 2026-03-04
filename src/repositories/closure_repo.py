@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import src.config
 from src.database import get_db
 from src.models.closure import ClosureReport, ClosureReportStatus
+
+logger = logging.getLogger(__name__)
 
 
 class ClosureReportRepository:
@@ -34,6 +37,8 @@ class ClosureReportRepository:
                 "SELECT * FROM closure_reports WHERE id = ?",
                 (report_id,),
             ).fetchone()
+        if not row:
+            logger.debug("Closure report id=%s not found", report_id)
         return ClosureReport.from_row(row) if row else None
 
     def list_reports(self, project_id: int, limit: int = 10) -> list[ClosureReport]:
@@ -47,6 +52,7 @@ class ClosureReportRepository:
     def update_status(
         self, report_id: int, status: str, approval_item_id: int | None = None,
     ) -> None:
+        logger.info("Closure report id=%s -> status=%s", report_id, status)
         with get_db(self._db_path) as conn:
             if approval_item_id is not None:
                 conn.execute(

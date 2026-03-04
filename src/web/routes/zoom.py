@@ -10,11 +10,11 @@ import secrets
 import time
 from urllib.parse import urlencode
 
-import httpx
 from fastapi import APIRouter, Depends, Query
 from fastapi.responses import RedirectResponse
 
 import src.config
+from src.connectors.zoom import ZoomConnector, ZoomConnectorError
 from src.repositories.zoom_repo import ZoomRepository
 from src.web.deps import get_zoom_repo
 
@@ -91,25 +91,17 @@ async def zoom_callback(
         return RedirectResponse(url="/meetings/?error=state_expired", status_code=302)
 
     # Exchange authorization code for tokens
-    zoom = src.config.settings.zoom
-    async with httpx.AsyncClient(timeout=15.0) as client:
-        resp = await client.post(
-            "https://zoom.us/oauth/token",
-            data={
-                "grant_type": "authorization_code",
-                "code": code,
-                "redirect_uri": zoom.redirect_uri,
-            },
-            auth=(zoom.client_id, zoom.client_secret),
-            headers={"Content-Type": "application/x-www-form-urlencoded"},
-        )
-
-    if resp.status_code != 200:
-        logger.error("Zoom OAuth code exchange failed: %s", resp.text[:500])
+    zoom_settings = src.config.settings.zoom
+    connector = ZoomConnector(zoom_settings)
+    try:
+        data = await connector.exchange_authorization_code(code, zoom_settings.redirect_uri)
+    except ZoomConnectorError as exc:
+        logger.error("Zoom OAuth code exchange failed: %s", exc)
         repo.delete_config("zoom_oauth_state")
         return RedirectResponse(url="/meetings/?error=token_exchange_failed", status_code=302)
+    finally:
+        await connector.close()
 
-    data = resp.json()
     refresh_token = data.get("refresh_token")
     if not refresh_token:
         logger.error("Zoom OAuth response missing refresh_token")

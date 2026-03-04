@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import src.config
 from src.database import get_db
 from src.models.ceo_review import CeoReview, CeoReviewStatus
+
+logger = logging.getLogger(__name__)
 
 
 class HealthReviewRepository:
@@ -49,6 +52,7 @@ class HealthReviewRepository:
                 (review_id,),
             ).fetchone()
         if not row:
+            logger.debug("Health review id=%s not found", review_id)
             return None
         review_data = json.loads(row["review_json"])
         review_data["id"] = row["id"]
@@ -94,6 +98,7 @@ class CeoReviewRepository:
     def update_status(
         self, review_id: int, status: str, approval_item_id: int | None = None,
     ) -> None:
+        logger.info("CEO review id=%s -> status=%s", review_id, status)
         with get_db(self._db_path) as conn:
             if approval_item_id is not None:
                 conn.execute(

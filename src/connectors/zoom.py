@@ -10,11 +10,9 @@ from typing import Any
 import httpx
 
 from src.config import ZoomSettings
+from src.connectors.retry import BACKOFF_BASE, MAX_RETRIES, retry_after_or_backoff
 
 logger = logging.getLogger(__name__)
-
-_MAX_RETRIES = 3
-_BACKOFF_BASE = 1.0
 _TOKEN_REFRESH_MARGIN = 300  # refresh 5 min before expiry
 
 
@@ -127,7 +125,7 @@ class ZoomConnector:
         client = await self._get_client()
         last_exc: Exception | None = None
 
-        for attempt in range(_MAX_RETRIES):
+        for attempt in range(MAX_RETRIES):
             token = await self._ensure_token()
             headers = {"Authorization": f"Bearer {token}", "Accept": accept}
 
@@ -141,13 +139,13 @@ class ZoomConnector:
                     continue
 
                 if response.status_code == 429:
-                    retry_after = float(response.headers.get("Retry-After", _BACKOFF_BASE * (2 ** attempt)))
+                    retry_after = retry_after_or_backoff(response.headers, attempt)
                     logger.warning("Zoom rate-limited (429). Retrying after %.1fs", retry_after)
                     await asyncio.sleep(retry_after)
                     continue
 
                 if response.status_code >= 500:
-                    wait = _BACKOFF_BASE * (2 ** attempt)
+                    wait = BACKOFF_BASE * (2 ** attempt)
                     logger.warning("Zoom server error %d. Retrying in %.1fs", response.status_code, wait)
                     await asyncio.sleep(wait)
                     continue
@@ -159,11 +157,11 @@ class ZoomConnector:
 
             except httpx.TransportError as exc:
                 last_exc = exc
-                wait = _BACKOFF_BASE * (2 ** attempt)
+                wait = BACKOFF_BASE * (2 ** attempt)
                 logger.warning("Zoom transport error: %s. Retrying in %.1fs", exc, wait)
                 await asyncio.sleep(wait)
 
-        msg = f"Zoom: failed after {_MAX_RETRIES} retries on {method} {url}"
+        msg = f"Zoom: failed after {MAX_RETRIES} retries on {method} {url}"
         logger.error(msg)
         if last_exc:
             raise ZoomConnectorError(0, msg) from last_exc
@@ -208,6 +206,32 @@ class ZoomConnector:
             params["next_page_token"] = next_token
 
         return all_meetings
+
+    async def exchange_authorization_code(
+        self, code: str, redirect_uri: str,
+    ) -> dict[str, Any]:
+        """Exchange an OAuth authorization code for tokens.
+
+        Returns the raw token response dict from Zoom.
+        Raises ZoomConnectorError on failure.
+        """
+        client = await self._get_client()
+        resp = await client.post(
+            "https://zoom.us/oauth/token",
+            data={
+                "grant_type": "authorization_code",
+                "code": code,
+                "redirect_uri": redirect_uri,
+            },
+            auth=(self._settings.client_id, self._settings.client_secret),
+            headers={"Content-Type": "application/x-www-form-urlencoded"},
+        )
+        if resp.status_code != 200:
+            raise ZoomConnectorError(
+                resp.status_code,
+                f"OAuth code exchange failed: {resp.text[:500]}",
+            )
+        return resp.json()
 
     async def download_transcript(self, download_url: str) -> bytes:
         """Download a transcript file (VTT) from its download URL.

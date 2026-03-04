@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import src.config
 from src.database import get_db
 from src.models.knowledge import ActionItem, KnowledgeEntry
+
+logger = logging.getLogger(__name__)
 
 
 class KnowledgeRepository:
@@ -64,6 +67,7 @@ class KnowledgeRepository:
         return ActionItem.from_row(row) if row else None
 
     def update_action_item_status(self, item_id: int, status: str) -> None:
+        logger.info("Action item id=%s -> status=%s", item_id, status)
         with get_db(self._db_path) as conn:
             conn.execute(
                 "UPDATE action_items SET status = ?, updated_at = datetime('now') WHERE id = ?",
@@ -129,6 +133,8 @@ class KnowledgeRepository:
             row = conn.execute(
                 "SELECT * FROM knowledge_entries WHERE id = ?", (entry_id,),
             ).fetchone()
+        if not row:
+            logger.debug("Knowledge entry id=%s not found", entry_id)
         return KnowledgeEntry.from_row(row) if row else None
 
     def update_published(self, entry_id: int, approval_item_id: int) -> None:

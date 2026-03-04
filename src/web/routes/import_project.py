@@ -7,7 +7,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 
 from src.connectors.base import ConnectorError
 from src.services.import_project import ImportService
-from src.web.deps import get_import_service, get_nav_context, templates
+from src.web.deps import error_banner, get_import_service, get_nav_context, templates
 
 router = APIRouter(prefix="/import", tags=["import"])
 
@@ -33,10 +33,7 @@ async def import_fetch(
     try:
         preview = await service.fetch_preview(goal_key)
     except ConnectorError as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">Failed to fetch {goal_key}: {exc}</div>',
-            status_code=200,
-        )
+        return error_banner(f"Failed to fetch {goal_key}: {exc}")
 
     return templates.TemplateResponse(
         request,

@@ -8,6 +8,7 @@ from dataclasses import dataclass, field
 
 from src.config import settings
 from src.connectors.jira import JiraConnector
+from src.jira_constants import PROG_PROJECT_KEY, RISK_PROJECT_KEY
 
 logger = logging.getLogger(__name__)
 
@@ -113,7 +114,7 @@ def _detect_team_projects(
     multiple times with different versions.  Duplicates are suppressed.
     """
     if exclude is None:
-        exclude = {"PROG", "RISK"}
+        exclude = {PROG_PROJECT_KEY, RISK_PROJECT_KEY}
 
     seen: set[tuple[str, str]] = set()
     teams: list[list[str]] = []

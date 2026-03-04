@@ -2,8 +2,12 @@
 
 from __future__ import annotations
 
+import logging
+
 from fastapi import APIRouter, Depends, Request
 from fastapi.responses import HTMLResponse
+
+logger = logging.getLogger(__name__)
 
 from src.engine.approval import ApprovalEngine
 from src.models.approval import ApprovalStatus
@@ -83,7 +87,7 @@ async def approve_all(
         try:
             await service.execute_approved_item(item.id)
         except Exception:
-            pass  # Individual failures are captured in the item status
+            logger.warning("approve_all: item %d failed", item.id, exc_info=True)
 
     # Return the refreshed pending list (should be empty) and history
     pending = engine.list_pending()

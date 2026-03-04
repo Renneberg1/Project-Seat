@@ -2,7 +2,6 @@
 
 from __future__ import annotations
 
-import html
 import logging
 
 from fastapi import APIRouter, Depends, Request
@@ -14,6 +13,7 @@ from src.services.dashboard import DashboardService
 from src.services.health_review import HealthReviewService
 from src.web.deps import (
     collect_qa_pairs,
+    error_banner,
     get_dashboard_service,
     get_health_review_service,
     render_project_page,
@@ -65,10 +65,7 @@ async def health_review_ask(
         questions = await service.generate_questions(project)
     except Exception as exc:
         logger.exception("Health review /ask failed")
-        return HTMLResponse(
-            f'<div class="error-banner">Health review failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"Health review failed: {exc}", status_code=500)
 
     return templates.TemplateResponse(request, "partials/health_review_questions.html", {
         "project": project,
@@ -97,10 +94,7 @@ async def health_review_analyze(
     try:
         review = await service.generate_review(project, qa_pairs)
     except Exception as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">Health review failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"Health review failed: {exc}", status_code=500)
 
     # Persist the review
     review_id = service.save_review(project.id, review)

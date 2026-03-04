@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 
 import src.config
 from src.database import get_db
 from src.models.charter import CharterSuggestion, CharterSuggestionStatus
+
+logger = logging.getLogger(__name__)
 
 
 class CharterRepository:
@@ -50,6 +53,8 @@ class CharterRepository:
                 "SELECT * FROM charter_suggestions WHERE id = ?",
                 (suggestion_id,),
             ).fetchone()
+        if not row:
+            logger.debug("Charter suggestion id=%s not found", suggestion_id)
         return CharterSuggestion.from_row(row) if row else None
 
     def list_suggestions(self, project_id: int) -> list[CharterSuggestion]:
@@ -63,6 +68,7 @@ class CharterRepository:
     def update_status(
         self, suggestion_id: int, status: str, approval_item_id: int | None = None,
     ) -> None:
+        logger.info("Charter suggestion id=%s -> status=%s", suggestion_id, status)
         with get_db(self._db_path) as conn:
             if approval_item_id is not None:
                 conn.execute(

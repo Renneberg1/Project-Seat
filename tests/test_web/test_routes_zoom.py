@@ -115,18 +115,11 @@ def test_callback_exchanges_code(client_with_zoom, zoom_repo: ZoomRepository) ->
         "expires_in": 3600,
     }
 
-    with patch("src.web.routes.zoom.httpx.AsyncClient") as mock_client_cls:
-        mock_client = AsyncMock()
-        mock_client_cls.return_value.__aenter__ = AsyncMock(return_value=mock_client)
-        mock_client_cls.return_value.__aexit__ = AsyncMock(return_value=None)
-
-        import httpx as _httpx
-        mock_client.post = AsyncMock(return_value=_httpx.Response(
-            200,
-            content=__import__("json").dumps(token_response).encode(),
-            headers={"Content-Type": "application/json"},
-            request=_httpx.Request("POST", "https://zoom.us/oauth/token"),
-        ))
+    with patch("src.web.routes.zoom.ZoomConnector") as MockConnectorCls:
+        mock_connector = AsyncMock()
+        MockConnectorCls.return_value = mock_connector
+        mock_connector.exchange_authorization_code = AsyncMock(return_value=token_response)
+        mock_connector.close = AsyncMock()
 
         resp = client_with_zoom.get(f"/zoom/callback?code=authcode123&state={state}", follow_redirects=False)
 

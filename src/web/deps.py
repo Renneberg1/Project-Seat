@@ -3,9 +3,12 @@
 from __future__ import annotations
 
 import hashlib
+import html
+import re
 from pathlib import Path
 
 from fastapi import Request
+from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 
 from src.connectors.confluence import ConfluenceConnector
@@ -117,6 +120,49 @@ def collect_qa_pairs(form: dict) -> list[dict[str, str]]:
         pairs.append({"question": str(q), "answer": str(form.get(f"answer_{i}") or "")})
         i += 1
     return pairs
+
+
+# ---------------------------------------------------------------------------
+# Shared error helper
+# ---------------------------------------------------------------------------
+
+
+def error_banner(message: str, *, status_code: int = 200) -> HTMLResponse:
+    """Return an HTML error banner suitable for HTMX swap."""
+    escaped = html.escape(str(message))
+    return HTMLResponse(f'<div class="error-banner">{escaped}</div>', status_code=status_code)
+
+
+# ---------------------------------------------------------------------------
+# Jira Plans URL helper (moved from routes/project.py)
+# ---------------------------------------------------------------------------
+
+_IFRAME_SRC_RE = re.compile(
+    r"""<iframe\b[^>]*\bsrc\s*=\s*['"]([^'"]+)['"]""", re.IGNORECASE,
+)
+
+
+def extract_plan_url(raw: str) -> str:
+    """Extract a valid Atlassian plan embed URL from user input.
+
+    Handles three input styles:
+    1. Full ``<iframe src="https://...">`` snippet -> extracts the src URL
+    2. Bare URL (``https://company.atlassian.net/...``)
+    3. Empty / invalid -> returns ``""``
+    """
+    raw = raw.strip()
+    if not raw:
+        return ""
+
+    # If user pasted an <iframe> tag, pull out the src attribute
+    m = _IFRAME_SRC_RE.search(raw)
+    if m:
+        raw = m.group(1).strip()
+
+    if raw.startswith("https://") and "atlassian.net" in raw:
+        return raw
+
+    return ""
 
 
 # ---------------------------------------------------------------------------

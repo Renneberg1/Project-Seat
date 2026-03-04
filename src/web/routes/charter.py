@@ -2,15 +2,18 @@
 
 from __future__ import annotations
 
-import html
+import logging
 
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
+
+logger = logging.getLogger(__name__)
 
 from src.services.charter import CharterService
 from src.services.dashboard import DashboardService
 from src.web.deps import (
     collect_qa_pairs,
+    error_banner,
     get_charter_service,
     get_dashboard_service,
     render_project_page,
@@ -38,6 +41,7 @@ async def charter_page(
     try:
         sections = await service.fetch_charter_sections(project)
     except Exception:
+        logger.warning("Charter fetch failed for project %d", id, exc_info=True)
         sections = []
 
     suggestions = service.list_suggestions(id)
@@ -67,17 +71,11 @@ async def charter_ask(
         return HTMLResponse("Project not found", status_code=404)
 
     if not project.confluence_charter_id:
-        return HTMLResponse(
-            '<div class="error-banner">No Charter page configured for this project.</div>',
-            status_code=400,
-        )
+        return error_banner("No Charter page configured for this project.", status_code=400)
     try:
         questions = await service.generate_questions(project, user_input)
     except Exception as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">LLM analysis failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"LLM analysis failed: {exc}", status_code=500)
 
     return templates.TemplateResponse(request, "partials/charter_questions.html", {
         "project": project,
@@ -108,10 +106,7 @@ async def charter_analyze(
     try:
         suggestions = await service.analyze_charter_update(project, str(user_input), qa_pairs)
     except Exception as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">LLM analysis failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"LLM analysis failed: {exc}", status_code=500)
 
     return templates.TemplateResponse(request, "partials/charter_suggestions.html", {
         "project": project,
@@ -139,10 +134,7 @@ async def accept_charter_suggestion(
     try:
         sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">{html.escape(str(exc))}</div>',
-            status_code=400,
-        )
+        return error_banner(str(exc), status_code=400)
     if sug is None:
         return HTMLResponse("Suggestion not found", status_code=404)
 

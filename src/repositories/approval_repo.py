@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import datetime, timezone
 
 import src.config
 from src.database import get_db
 from src.models.approval import ApprovalAction, ApprovalItem, ApprovalStatus
+
+logger = logging.getLogger(__name__)
 
 
 class ApprovalRepository:
@@ -55,6 +58,8 @@ class ApprovalRepository:
             row = conn.execute(
                 "SELECT * FROM approval_queue WHERE id = ?", (item_id,)
             ).fetchone()
+        if not row:
+            logger.debug("Approval item id=%s not found", item_id)
         return ApprovalItem.from_row(row) if row else None
 
     def list_all(self, project_id: int | None = None) -> list[ApprovalItem]:
@@ -91,6 +96,7 @@ class ApprovalRepository:
     # ------------------------------------------------------------------
 
     def update_status(self, item_id: int, status: ApprovalStatus) -> None:
+        logger.info("Approval item id=%s -> %s", item_id, status.value)
         now = datetime.now(timezone.utc).isoformat()
         with get_db(self._db_path) as conn:
             conn.execute(

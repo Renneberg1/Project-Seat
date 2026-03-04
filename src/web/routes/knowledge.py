@@ -61,7 +61,7 @@ async def update_action_status(
     status = str(form.get("status", "open"))
     knowledge.update_action_item_status(aid, status)
 
-    item = knowledge._repo.get_action_item(aid)
+    item = knowledge.get_action_item(aid)
     return templates.TemplateResponse(request, "partials/action_item_row.html", {
         "item": item,
         "project_id": id,
@@ -157,7 +157,7 @@ async def publish_entry(
     except ValueError as exc:
         return HTMLResponse(str(exc), status_code=400)
 
-    entry = knowledge._repo.get_knowledge_entry(eid)
+    entry = knowledge.get_knowledge_entry(eid)
     return templates.TemplateResponse(request, "partials/knowledge_entry_card.html", {
         "entry": entry,
         "project_id": id,

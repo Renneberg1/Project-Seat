@@ -71,9 +71,11 @@ project-seat/
 │   ├── config.py                # Settings, env loading, constants
 │   ├── database.py              # SQLite setup, migrations, queries
 │   ├── cache.py                 # In-memory TTL cache singleton
+│   ├── jira_constants.py        # Named constants for Jira field IDs, issue type IDs, project keys
 │   ├── connectors/
 │   │   ├── __init__.py
 │   │   ├── base.py              # Base connector class (auth, retry, pagination)
+│   │   ├── retry.py             # Shared retry/backoff constants and helpers
 │   │   ├── jira.py              # Jira REST API connector
 │   │   ├── confluence.py        # Confluence REST API connector
 │   │   └── zoom.py              # Zoom REST API connector (Server-to-Server OAuth)
@@ -132,7 +134,7 @@ project-seat/
 │   │   └── knowledge.py         # Knowledge service: action items, notes, insights from analysis
 │   ├── web/
 │   │   ├── __init__.py
-│   │   ├── deps.py              # DI factories, shared helpers (render, Q&A pairs, cache-busting)
+│   │   ├── deps.py              # DI factories, shared helpers (render, Q&A pairs, cache-busting, error_banner, extract_plan_url)
 │   │   ├── routes/
 │   │   │   ├── __init__.py
 │   │   │   ├── approval.py
@@ -243,12 +245,25 @@ project-seat/
     │       ├── __init__.py
     │       ├── test_gemini.py       # Gemini provider unit tests
     │       └── test_ollama.py       # Ollama provider unit tests
+    ├── test_repositories/
+    │   ├── __init__.py
+    │   ├── test_project_repo.py     # Project repo CRUD + cascade tests
+    │   ├── test_approval_repo.py    # Approval queue + log repo tests
+    │   ├── test_transcript_repo.py  # Transcript cache + suggestions repo tests
+    │   ├── test_release_repo.py     # Releases + release documents repo tests
+    │   ├── test_zoom_repo.py        # Zoom recordings + project map + aliases repo tests
+    │   └── test_knowledge_repo.py   # Action items + knowledge entries repo tests
     ├── test_models/
     │   ├── test_project_models.py
     │   ├── test_approval_models.py
     │   ├── test_jira_models.py
     │   ├── test_dashboard_models.py
-    │   └── test_dhf_models.py
+    │   ├── test_dhf_models.py
+    │   ├── test_ceo_review_models.py    # CEO review status + dataclass tests
+    │   ├── test_charter_models.py       # Charter suggestion status + dataclass tests
+    │   ├── test_closure_models.py       # Closure report status + dataclass tests
+    │   ├── test_zoom_models.py          # ZoomRecording + ProjectMeetingMap tests
+    │   └── test_knowledge_models.py     # ActionItem + KnowledgeEntry tests
     ├── test_services/
     │   ├── test_spinup.py
     │   ├── test_dashboard.py
@@ -265,7 +280,8 @@ project-seat/
     │   ├── test_team_snapshot.py    # Snapshot service tests
     │   ├── test_zoom_ingestion.py   # Zoom ingestion: dedup, status, polling, sync tests
     │   ├── test_zoom_matching.py    # Zoom matching: title, fuzzy, alias, LLM fallback tests
-    │   └── test_knowledge.py        # Knowledge service: action items, entries, search tests
+    │   ├── test_knowledge.py        # Knowledge service: action items, entries, search tests
+    │   └── test_risk_refinement.py  # Risk refinement service: start, continue, apply tests
     └── test_web/
         ├── test_routes_approval.py
         ├── test_routes_ceo_review.py    # CEO review route contract tests
@@ -307,6 +323,7 @@ pytest
 ### Connectors
 - Jira/Confluence connectors inherit from `BaseConnector` in `src/connectors/base.py`
 - Base class handles: authentication (Basic auth with API token), automatic retry with backoff, pagination, rate limit handling, error logging
+- Shared retry/backoff constants and helpers live in `src/connectors/retry.py` (`MAX_RETRIES`, `BACKOFF_BASE`, `backoff_sleep()`, `retry_after_or_backoff()`). Both `BaseConnector` and `ZoomConnector` import from this module.
 - Zoom connector (`src/connectors/zoom.py`) does NOT inherit from `BaseConnector` — uses OAuth authorization code flow (General App) with refresh_token grant, independent retry/backoff, proactive token refresh within 5 min of 1-hour expiry; stores/rotates refresh tokens in the `config` table via `ZoomRepository`
 - Connectors expose clean Python methods — no raw HTTP outside the connector layer
 - Never call Jira/Confluence/Zoom APIs directly from services or engine code; always go through a connector
@@ -350,7 +367,13 @@ pytest
 - **Offline CDN assets** — HTMX and Chart.js are bundled in `static/vendor/` and served locally. Google Fonts remains on CDN (cosmetic, has system font fallback).
 - **Page progress bar** — `<div id="page-progress">` in `base.html` with inline JS: animates on `<a>` clicks (non-HTMX, non-external) and on `htmx:beforeRequest`/`htmx:afterRequest` events. CSS in `style.css` (`.page-progress`, `.active`, `.done`).
 - **Navigation tab grouping** — Analysis tabs (Transcripts, Charter, Health, CEO Review) are wrapped in `.nav-dropdown`. On desktop (`>1024px`), `.nav-dropdown-menu` uses `display: contents` so children render flat in the flex row. On `≤1024px`, it becomes a positioned dropdown via `:focus-within`/`:hover`. No JS needed.
+- **Error banners** — Use `error_banner(message, status_code=N)` from `src/web/deps.py` for all error responses in route handlers. It auto-escapes HTML to prevent XSS. Never construct `<div class="error-banner">` inline.
 - **Dependency injection** — All service/connector instantiation in routes uses `Depends()` with factory functions from `src/web/deps.py`. Never instantiate services directly in route functions. When adding a new service, add a factory in `deps.py` and use `Depends(get_new_service)` in the route signature.
+
+### Jira Constants
+- All Jira custom field IDs, issue type IDs, and project keys are defined in `src/jira_constants.py`
+- Never hardcode field IDs like `"customfield_11166"` — import the named constant (e.g., `FIELD_IMPACT_ANALYSIS`)
+- When adding new Jira field references, add a constant to `jira_constants.py` first
 
 ### Repository Layer
 - All raw SQL lives in `src/repositories/` — services and routes never call `get_db()` directly

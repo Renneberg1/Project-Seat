@@ -5,7 +5,6 @@ Upload, paste, and delete routes have moved to ``meetings.py``.
 
 from __future__ import annotations
 
-import html
 import json
 
 from fastapi import APIRouter, Depends, Request
@@ -15,6 +14,7 @@ from src.services.dashboard import DashboardService
 from src.services.risk_refinement import RiskRefinementService
 from src.services.transcript import TranscriptService
 from src.web.deps import (
+    error_banner,
     get_dashboard_service,
     get_risk_refinement_service,
     get_transcript_service,
@@ -44,10 +44,7 @@ async def analyze_transcript(
     try:
         suggestions = await service.analyze_transcript(tid, project)
     except Exception as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">Analysis failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"Analysis failed: {exc}", status_code=500)
 
     record = service.get_transcript(tid)
     meeting_summary = record.meeting_summary if record else ""
@@ -111,10 +108,7 @@ async def accept_suggestion(
     try:
         sug = await service.accept_suggestion(sid, project)
     except ValueError as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">{html.escape(str(exc))}</div>',
-            status_code=400,
-        )
+        return error_banner(str(exc), status_code=400)
     if sug is None:
         return HTMLResponse("Suggestion not found", status_code=404)
 
@@ -197,15 +191,9 @@ async def start_refinement(
     try:
         result = await refine_service.start_risk_refinement(sid, project)
     except ValueError as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">{html.escape(str(exc))}</div>',
-            status_code=400,
-        )
+        return error_banner(str(exc), status_code=400)
     except Exception as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">Refinement failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"Refinement failed: {exc}", status_code=500)
 
     sug = refine_service.get_suggestion(sid)
 
@@ -269,10 +257,7 @@ async def refine_answer(
             round_number=next_round,
         )
     except Exception as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">Refinement failed: {html.escape(str(exc))}</div>',
-            status_code=500,
-        )
+        return error_banner(f"Refinement failed: {exc}", status_code=500)
 
     sug = refine_service.get_suggestion(sid)
 

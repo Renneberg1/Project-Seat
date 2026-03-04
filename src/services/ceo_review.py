@@ -16,7 +16,8 @@ _CONTEXT_CACHE_TTL = 600  # 10 minutes
 
 logger = logging.getLogger(__name__)
 
-_TWO_WEEKS_AGO = lambda: (date.today() - timedelta(days=14)).isoformat()
+def _two_weeks_ago() -> str:
+    return (date.today() - timedelta(days=14)).isoformat()
 
 
 class CeoReviewService:
@@ -57,7 +58,7 @@ class CeoReviewService:
             risks_raw=True, risks_created_since="-2w",
             decisions_raw=True, decisions_created_since="-2w",
             meeting_summaries=True, meeting_summary_limit=5,
-            meeting_summary_since=_TWO_WEEKS_AGO(),
+            meeting_summary_since=_two_weeks_ago(),
             cache_key=f"ctx:ceo_review:{project.id}",
             cache_ttl=_CONTEXT_CACHE_TTL,
         )
@@ -162,7 +163,7 @@ class CeoReviewService:
         metrics["dhf_completion_pct"] = dhf_pct
 
         # Recently updated docs (last 2 weeks)
-        cutoff = _TWO_WEEKS_AGO()
+        cutoff = _two_weeks_ago()
         dhf_recently_updated = []
         for d in dhf_docs:
             if d.last_modified and d.last_modified >= cutoff:

@@ -59,9 +59,13 @@ class ProjectContextService:
         self,
         db_path: str | None = None,
         settings: Settings | None = None,
+        transcript_repo: "TranscriptRepository | None" = None,
+        knowledge_repo: "KnowledgeRepository | None" = None,
     ) -> None:
         self._settings = settings or default_settings
         self._db_path = db_path or self._settings.db_path
+        self._transcript_repo = transcript_repo
+        self._knowledge_repo = knowledge_repo
 
     async def gather(  # noqa: C901 — intentionally many flags
         self,
@@ -424,7 +428,7 @@ class ProjectContextService:
     ) -> list[dict]:
         try:
             from src.repositories.transcript_repo import TranscriptRepository
-            repo = TranscriptRepository(self._db_path)
+            repo = self._transcript_repo or TranscriptRepository(self._db_path)
             return repo.get_meeting_summaries(project.id, limit=limit, since=since)
         except Exception as exc:
             logger.warning("ProjectContext: failed to get meeting summaries: %s", exc)
@@ -433,7 +437,7 @@ class ProjectContextService:
     async def _fetch_action_items(self, project: Project) -> list:
         try:
             from src.repositories.knowledge_repo import KnowledgeRepository
-            repo = KnowledgeRepository(self._db_path)
+            repo = self._knowledge_repo or KnowledgeRepository(self._db_path)
             return repo.list_action_items(project.id, status="open")
         except Exception as exc:
             logger.warning("ProjectContext: failed to get action items: %s", exc)
@@ -442,7 +446,7 @@ class ProjectContextService:
     async def _fetch_knowledge_entries(self, project: Project) -> list:
         try:
             from src.repositories.knowledge_repo import KnowledgeRepository
-            repo = KnowledgeRepository(self._db_path)
+            repo = self._knowledge_repo or KnowledgeRepository(self._db_path)
             return repo.list_knowledge_entries(project.id)
         except Exception as exc:
             logger.warning("ProjectContext: failed to get knowledge entries: %s", exc)

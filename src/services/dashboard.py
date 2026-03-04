@@ -10,6 +10,16 @@ import src.config
 from src.config import Settings
 from src.connectors.base import ConnectorError
 from src.connectors.jira import JiraConnector
+from src.jira_constants import (
+    FIELD_RELEASE_PRIORITY_A,
+    FIELD_RELEASE_PRIORITY_B,
+    FIELD_PI_STATE,
+    FIELD_RISK_POINTS,
+    FIELD_RISK_LEVEL,
+    FIELD_RISK_THRESHOLD,
+    FIELD_TIMELINE_IMPACT,
+    RISK_PROJECT_KEY,
+)
 from src.models.dashboard import (
     VALID_PHASES,
     EpicWithTasks,
@@ -82,22 +92,22 @@ class DashboardService:
                 jira.get_issue(project.jira_goal_key, fields=[
                     "summary", "status", "issuetype", "project", "labels",
                     "fixVersions", "duedate", "parent", "description",
-                    "customfield_13265", "customfield_13264", "customfield_13266",
+                    FIELD_RISK_THRESHOLD, FIELD_RISK_POINTS, FIELD_RISK_LEVEL,
                 ]),
                 jira.search(
-                    f'project = RISK AND issuetype = Risk AND parent = {project.jira_goal_key}',
+                    f'project = {RISK_PROJECT_KEY} AND issuetype = Risk AND parent = {project.jira_goal_key}',
                     fields=["summary", "status", "issuetype", "project", "labels",
                             "fixVersions", "duedate", "parent", "description", "components",
-                            "customfield_13264"],
+                            FIELD_RISK_POINTS],
                 ),
                 jira.search(
-                    f'project = RISK AND issuetype = "Project Issue" AND parent = {project.jira_goal_key}',
+                    f'project = {RISK_PROJECT_KEY} AND issuetype = "Project Issue" AND parent = {project.jira_goal_key}',
                     fields=["summary", "status", "issuetype", "project", "labels",
                             "fixVersions", "duedate", "parent", "description",
-                            "customfield_13267", "components"],
+                            FIELD_TIMELINE_IMPACT, "components"],
                 ),
                 jira.search(
-                    f'parent = {project.jira_goal_key} AND project != RISK'
+                    f'parent = {project.jira_goal_key} AND project != {RISK_PROJECT_KEY}'
                     f' AND statusCategory != Done',
                     fields=["status"],
                 ),
@@ -179,7 +189,7 @@ class DashboardService:
                 f' AND "Idea archived" is EMPTY',
                 fields=["summary", "status", "issuetype", "project", "labels",
                         "fixVersions", "duedate", "parent", "description",
-                        "customfield_12812", "customfield_11054", "customfield_13530"],
+                        FIELD_RELEASE_PRIORITY_A, FIELD_RELEASE_PRIORITY_B, FIELD_PI_STATE],
             )
             ideas = [JiraIssue.from_api(r) for r in results]
             cache.set(cache_key, ideas, ttl=60)
@@ -231,7 +241,7 @@ class DashboardService:
         try:
             # 1. Fetch all initiatives (exclude archived/done)
             initiatives = await jira.search(
-                f'parent = {project.jira_goal_key} AND project != RISK'
+                f'parent = {project.jira_goal_key} AND project != {RISK_PROJECT_KEY}'
                 f' AND statusCategory != Done',
                 fields=["summary", "status", "issuetype", "project", "labels",
                         "fixVersions", "duedate", "parent", "description"],

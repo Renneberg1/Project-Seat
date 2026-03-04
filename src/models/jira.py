@@ -5,6 +5,18 @@ from __future__ import annotations
 from dataclasses import dataclass
 from typing import Any
 
+from src.jira_constants import (
+    FIELD_IMPACT_ANALYSIS,
+    FIELD_MITIGATION_CONTROL,
+    FIELD_PI_STATE,
+    FIELD_RELEASE_PRIORITY_A,
+    FIELD_RELEASE_PRIORITY_B,
+    FIELD_RISK_LEVEL,
+    FIELD_RISK_POINTS,
+    FIELD_RISK_THRESHOLD,
+    FIELD_TIMELINE_IMPACT,
+)
+
 
 @dataclass
 class JiraIssueType:
@@ -74,21 +86,21 @@ class JiraIssue:
         versions = fields.get("fixVersions", [])
 
         # Release priority — try both known custom field IDs
-        rp_raw = fields.get("customfield_12812") or fields.get("customfield_11054")
+        rp_raw = fields.get(FIELD_RELEASE_PRIORITY_A) or fields.get(FIELD_RELEASE_PRIORITY_B)
         release_priority = rp_raw.get("value") if isinstance(rp_raw, dict) else None
 
-        # PI State (customfield_13530)
-        state_raw = fields.get("customfield_13530")
+        # PI State
+        state_raw = fields.get(FIELD_PI_STATE)
         pi_state = state_raw.get("value") if isinstance(state_raw, dict) else None
 
         # Risk metrics (from Goal issues)
-        risk_threshold = fields.get("customfield_13265")
-        risk_points = fields.get("customfield_13264")
-        risk_level_raw = fields.get("customfield_13266")
+        risk_threshold = fields.get(FIELD_RISK_THRESHOLD)
+        risk_points = fields.get(FIELD_RISK_POINTS)
+        risk_level_raw = fields.get(FIELD_RISK_LEVEL)
         risk_level = risk_level_raw.get("value") if isinstance(risk_level_raw, dict) else None
 
         # Timeline Impact (from Decision / Project Issue)
-        timeline_impact = fields.get("customfield_13267")
+        timeline_impact = fields.get(FIELD_TIMELINE_IMPACT)
 
         # Components
         components_raw = fields.get("components", [])

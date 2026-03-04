@@ -43,8 +43,6 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
     - "gemini" -> GeminiProvider (Google Generative Language API)
     - "ollama" -> OllamaProvider (local Ollama server)
     """
-    import os
-
     provider = settings.provider.lower()
 
     if provider == "gemini":
@@ -59,9 +57,8 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
     elif provider == "ollama":
         from src.engine.providers.ollama import OllamaProvider
 
-        base_url = os.getenv("LLM_BASE_URL", "http://localhost:11434")
         return OllamaProvider(
-            base_url=base_url,
+            base_url=settings.base_url,
             model=settings.model or "llama3.3:70b",
         )
 

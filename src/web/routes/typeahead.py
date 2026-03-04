@@ -76,8 +76,7 @@ async def search_confluence_pages(
             cache.set(cache_key, results, _CACHE_SHORT)
             return _render_results(request, results)
         except ConnectorError:
-            # Not a valid page ID — fall through to title search
-            pass
+            logger.debug("Page ID %s not found, falling through", q.strip())
         finally:
             await confluence.close()
 

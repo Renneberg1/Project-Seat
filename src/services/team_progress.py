@@ -8,6 +8,7 @@ from dataclasses import dataclass
 from src.cache import cache
 from src.connectors.base import ConnectorError
 from src.connectors.jira import JiraConnector
+from src.jira_constants import FIELD_STORY_POINTS_CLASSIC, FIELD_STORY_POINTS_NEXTGEN
 from src.models.project import Project
 
 logger = logging.getLogger(__name__)
@@ -19,8 +20,8 @@ _SEARCH_FIELDS = [
     "project",
     "priority",
     "fixVersions",
-    "customfield_10016",  # Story point estimate (next-gen)
-    "customfield_10026",  # Story Points (classic)
+    FIELD_STORY_POINTS_NEXTGEN,  # Story point estimate (next-gen)
+    FIELD_STORY_POINTS_CLASSIC,  # Story Points (classic)
 ]
 
 
@@ -60,13 +61,13 @@ class TeamVersionReport:
 
 def _get_story_points(fields: dict) -> float | None:
     """Extract story points, preferring next-gen field over classic."""
-    sp = fields.get("customfield_10016")
+    sp = fields.get(FIELD_STORY_POINTS_NEXTGEN)
     if sp is not None:
         try:
             return float(sp)
         except (TypeError, ValueError):
             pass
-    sp = fields.get("customfield_10026")
+    sp = fields.get(FIELD_STORY_POINTS_CLASSIC)
     if sp is not None:
         try:
             return float(sp)

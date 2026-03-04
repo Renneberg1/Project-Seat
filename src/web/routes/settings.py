@@ -89,6 +89,7 @@ async def _resolve_display_values(
                     cache.set(cache_key, display, _DISPLAY_CACHE_TTL)
                     vals[field_name] = display
                 except Exception:
+                    logger.warning("Failed to resolve Confluence page %s", page_id, exc_info=True)
                     vals[field_name] = str(page_id)
         finally:
             await confluence.close()
@@ -108,6 +109,7 @@ async def _resolve_display_values(
                 cache.set(cache_key, display, _DISPLAY_CACHE_TTL)
                 vals["jira_goal_key"] = display
             except Exception:
+                logger.warning("Failed to resolve Jira issue %s", goal_key, exc_info=True)
                 vals["jira_goal_key"] = goal_key
             finally:
                 await jira.close()
@@ -164,8 +166,8 @@ async def settings_save(
     dhf_draft_root_id = str(form.get("dhf_draft_root_id", "")).strip() or None
     dhf_released_root_id = str(form.get("dhf_released_root_id", "")).strip() or None
     pi_version = str(form.get("pi_version", "")).strip() or None
-    from src.web.routes.project import _extract_plan_url
-    jira_plan_url = _extract_plan_url(str(form.get("jira_plan_url", ""))) or None
+    from src.web.deps import extract_plan_url
+    jira_plan_url = extract_plan_url(str(form.get("jira_plan_url", ""))) or None
 
     # Parse team_projects: each line is "KEY=VersionName"
     # Allows duplicate keys with different versions.

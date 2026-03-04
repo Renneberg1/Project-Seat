@@ -9,6 +9,14 @@ from typing import Any
 from src.config import Settings, settings as default_settings
 from src.connectors.jira import JiraConnector
 from src.engine.mentions import resolve_adf_doc_mentions, resolve_confluence_mentions
+from src.jira_constants import (
+    FIELD_IMPACT_ANALYSIS,
+    FIELD_MITIGATION_CONTROL,
+    FIELD_TIMELINE_IMPACT,
+    ISSUE_TYPE_DECISION,
+    ISSUE_TYPE_RISK,
+    RISK_PROJECT_KEY,
+)
 from src.models.transcript import (
     ParsedTranscript,
     ProjectContext,
@@ -287,13 +295,13 @@ class TranscriptService:
                     fields["description"] = await resolve_adf_doc_mentions(
                         fields["description"], jira
                     )
-                if fields.get("customfield_11166"):
-                    fields["customfield_11166"] = await resolve_adf_doc_mentions(
-                        fields["customfield_11166"], jira
+                if fields.get(FIELD_IMPACT_ANALYSIS):
+                    fields[FIELD_IMPACT_ANALYSIS] = await resolve_adf_doc_mentions(
+                        fields[FIELD_IMPACT_ANALYSIS], jira
                     )
-                if fields.get("customfield_11342"):
-                    fields["customfield_11342"] = await resolve_adf_doc_mentions(
-                        fields["customfield_11342"], jira
+                if fields.get(FIELD_MITIGATION_CONTROL):
+                    fields[FIELD_MITIGATION_CONTROL] = await resolve_adf_doc_mentions(
+                        fields[FIELD_MITIGATION_CONTROL], jira
                     )
             finally:
                 await jira.close()
@@ -378,7 +386,7 @@ class TranscriptService:
         sug_type = suggestion.get("type", "risk")
         is_decision = sug_type == "decision"
 
-        issue_type_id = "12499" if is_decision else "10832"
+        issue_type_id = ISSUE_TYPE_DECISION if is_decision else ISSUE_TYPE_RISK
 
         background = suggestion.get("background", "")
         evidence = suggestion.get("evidence", "")
@@ -408,23 +416,23 @@ class TranscriptService:
 
         fields["fixVersions"] = [{"name": context.project_name}]
 
-        # Impact Analysis (customfield_11166)
+        # Impact Analysis
         impact = suggestion.get("impact_analysis", "")
         if impact:
-            fields["customfield_11166"] = build_adf_field(impact)
+            fields[FIELD_IMPACT_ANALYSIS] = build_adf_field(impact)
 
-        # Mitigation/Control (customfield_11342)
+        # Mitigation/Control
         mitigation = suggestion.get("mitigation", "")
         if mitigation:
-            fields["customfield_11342"] = build_adf_field(mitigation)
+            fields[FIELD_MITIGATION_CONTROL] = build_adf_field(mitigation)
 
-        # Timeline Impact (customfield_13267)
+        # Timeline Impact
         timeline_days = suggestion.get("timeline_impact_days")
         if timeline_days:
-            fields["customfield_13267"] = timeline_days
+            fields[FIELD_TIMELINE_IMPACT] = timeline_days
 
         return {
-            "project_key": "RISK",
+            "project_key": RISK_PROJECT_KEY,
             "issue_type_id": issue_type_id,
             "summary": suggestion.get("title", "Untitled"),
             "fields": fields,

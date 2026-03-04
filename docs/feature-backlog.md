@@ -1,6 +1,6 @@
 # Project Seat — Feature Backlog
 
-Tracking planned features, improvements, and technical debt. Grouped by theme, roughly prioritised within each section. Items marked **(NEW)** were identified in the Feb 2026 codebase audit.
+Tracking planned features, improvements, and technical debt. Grouped by theme, roughly prioritised within each section. Items marked **(NEW)** were identified in the Feb 2026 codebase audit. Items marked **(MAR-2026)** were identified in the Mar 2026 codebase scan.
 
 ---
 
@@ -81,6 +81,15 @@ Currently success/error feedback uses inline banners that can be missed. A toast
 
 ## Infrastructure & Technical Debt
 
+### Extract Meetings Route Orchestration into Service Layer **(MAR-2026)**
+`reanalyse_recording`, `retry_recording`, and `assign_recording` handlers in `meetings.py:387-571` contain non-trivial orchestration logic (status state machine, project mapping, re-analysis pipeline). This belongs in `ZoomIngestionService`, not in route handlers.
+
+### Add Return Type Hints to Repository and Service Layer **(MAR-2026)**
+207 function signatures missing return type annotations, concentrated in:
+- All 10 repository files (no return types at all)
+- Most service files (`transcript.py`, `charter.py`, `ceo_review.py`, `closure.py`, `risk_refinement.py`, `knowledge.py`, etc.)
+- All 100+ FastAPI route handlers (minor, FastAPI doesn't require them)
+
 ### Connector Extensions (as needed)
 - Jira: project/component listing, bulk operations
 - Confluence: page deletion/archival, attachment upload, label management, space operations
@@ -159,3 +168,21 @@ The `projects` table could further benefit from:
 - [x] Zoom-to-Project Matching (hybrid title match + LLM fallback: substring/fuzzy matching on project names/aliases/team keys, `ZoomMatchAgent` for ambiguous meetings, multi-project mapping, triage queue for unmatched recordings with assign/dismiss/retry)
 - [x] Project Knowledge Database (per-project action items + notes + insights from LLM transcript analysis and manual entry, `KnowledgeRepository` with CRUD + LIKE search, `KnowledgeService` routing LLM suggestions, tabbed Knowledge Base page, Confluence publish via approval queue, project aliases for Zoom matching)
 - [x] Unified Meetings Page (merged Transcripts + Zoom Inbox into single `/meetings/` page with source/project/status filtering, inline project assignment + analyze, `source` column on `transcript_cache`, Zoom sync/dismiss/retry/reanalyse controls, backward-compat redirects from old URLs)
+- [x] Consolidate Jira Field ID Constants (`src/jira_constants.py` — named constants for all hardcoded field IDs, issue type IDs, project keys; consumed by 7 files)
+- [x] Extract Shared Retry/Backoff Utility (`src/connectors/retry.py` — shared constants, `backoff_sleep()`, `retry_after_or_backoff()`; consumed by `base.py` and `zoom.py`)
+- [x] Extract Shared Error Banner Helper (`error_banner()` in `src/web/deps.py` — HTML-escaped error responses; replaced ~25 inline banners across 8 route files)
+- [x] Move `_extract_plan_url` to Shared Utility (`extract_plan_url()` in `src/web/deps.py`; removed route-to-route coupling)
+- [x] Fix `os.getenv` Bypassing Settings in Agent (`agent.py` now uses `settings.base_url` instead of `os.getenv`)
+- [x] Lambda Assigned to Module Variable (`ceo_review.py` — converted `_TWO_WEEKS_AGO` lambda to `def _two_weeks_ago()`)
+- [x] Fix DI Violations in Meetings Routes (added `Depends()` params for `TranscriptService`, `TranscriptParser`, `ZoomMatchingService` to 3 handlers)
+- [x] Expose Public Methods on KnowledgeService (`get_action_item()` and `get_knowledge_entry()` public methods; routes no longer access `_repo` directly)
+- [x] Move OAuth Code Exchange into ZoomConnector (`exchange_authorization_code()` method; removed raw `httpx` from zoom routes)
+- [x] Add Logging to Silent Exception Blocks (5 locations: approval, charter, settings×2, typeahead — all now log with `logger.warning/debug`)
+- [x] HTML-Escape Remaining Error Responses (import_project and knowledge routes now use `error_banner()`)
+- [x] Add Logging to Repository Layer (all 10 repository files have module-level loggers with strategic debug/info/warning statements)
+- [x] Add Logging to `risk_refinement.py` and `connectors/jira.py` (module loggers + key log points for refinement rounds and connector operations)
+- [x] `ProjectContextService` Bypasses Service Layer (constructor-injected `transcript_repo` and `knowledge_repo` params; no more inline instantiation)
+- [x] `ReleaseService` Bypasses ApprovalEngine for Audit (now uses `ApprovalEngine.log_audit_raw()` pass-through)
+- [x] Repository Unit Tests (6 test files: project, approval, transcript, release, zoom, knowledge repos — 125 tests covering CRUD, edge cases, cascades)
+- [x] Missing Model Tests (5 new test files: ceo_review, charter, closure, zoom, knowledge models — 38 tests covering `from_row()`, enums, JSON parsing)
+- [x] Risk Refinement Service Tests (27 tests covering `start_risk_refinement`, `continue_risk_refinement`, `apply_refinement` with mocked agent/repos)

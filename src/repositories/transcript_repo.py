@@ -3,6 +3,7 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import src.config
@@ -12,6 +13,8 @@ from src.models.transcript import (
     TranscriptRecord,
     TranscriptSuggestion,
 )
+
+logger = logging.getLogger(__name__)
 
 
 class TranscriptRepository:
@@ -59,6 +62,7 @@ class TranscriptRepository:
         return TranscriptRecord.from_row(row) if row else None
 
     def delete_transcript(self, transcript_id: int) -> None:
+        logger.info("Deleting transcript id=%s and its suggestions", transcript_id)
         with get_db(self._db_path) as conn:
             conn.execute(
                 "DELETE FROM transcript_suggestions WHERE transcript_id = ?",
@@ -207,6 +211,7 @@ class TranscriptRepository:
     def update_suggestion_status(
         self, suggestion_id: int, status: str, approval_item_id: int | None = None,
     ) -> None:
+        logger.info("Suggestion id=%s -> status=%s", suggestion_id, status)
         with get_db(self._db_path) as conn:
             if approval_item_id is not None:
                 conn.execute(

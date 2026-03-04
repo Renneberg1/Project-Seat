@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import src.config
 from src.database import get_db
 from src.models.project import Project
+
+logger = logging.getLogger(__name__)
 
 
 class ProjectRepository:
@@ -32,6 +35,8 @@ class ProjectRepository:
             row = conn.execute(
                 "SELECT * FROM projects WHERE id = ?", (project_id,)
             ).fetchone()
+        if not row:
+            logger.debug("Project id=%s not found", project_id)
         return Project.from_row(row) if row else None
 
     def get_by_goal_key(self, goal_key: str) -> Project | None:
@@ -97,6 +102,7 @@ class ProjectRepository:
     # ------------------------------------------------------------------
 
     def delete(self, project_id: int) -> None:
+        logger.info("Deleting project id=%s", project_id)
         with get_db(self._db_path) as conn:
             conn.execute("DELETE FROM projects WHERE id = ?", (project_id,))
             conn.commit()

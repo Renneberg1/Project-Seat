@@ -9,13 +9,9 @@ from typing import Any
 import httpx
 
 from src.config import Settings, settings as default_settings
+from src.connectors.retry import BACKOFF_BASE, MAX_RETRIES, RATE_LIMIT_STATUS, retry_after_or_backoff
 
 logger = logging.getLogger(__name__)
-
-# Retry defaults
-_MAX_RETRIES = 3
-_BACKOFF_BASE = 1.0  # seconds
-_RATE_LIMIT_STATUS = 429
 
 
 class ConnectorError(Exception):
@@ -82,20 +78,20 @@ class BaseConnector:
         client = await self._get_client()
         last_exc: Exception | None = None
 
-        for attempt in range(_MAX_RETRIES):
+        for attempt in range(MAX_RETRIES):
             try:
                 response = await client.request(method, path, params=params, json=json_body)
 
                 # Rate limit
-                if response.status_code == _RATE_LIMIT_STATUS:
-                    retry_after = float(response.headers.get("Retry-After", _BACKOFF_BASE * (2**attempt)))
+                if response.status_code == RATE_LIMIT_STATUS:
+                    retry_after = retry_after_or_backoff(response.headers, attempt)
                     logger.warning("Rate-limited (429). Retrying after %.1fs (attempt %d)", retry_after, attempt + 1)
                     await asyncio.sleep(retry_after)
                     continue
 
                 # Server errors worth retrying
                 if response.status_code >= 500:
-                    wait = _BACKOFF_BASE * (2**attempt)
+                    wait = BACKOFF_BASE * (2**attempt)
                     logger.warning(
                         "Server error %d on %s %s. Retrying in %.1fs (attempt %d)",
                         response.status_code,
@@ -117,12 +113,12 @@ class BaseConnector:
 
             except httpx.TransportError as exc:
                 last_exc = exc
-                wait = _BACKOFF_BASE * (2**attempt)
+                wait = BACKOFF_BASE * (2**attempt)
                 logger.warning("Transport error on %s %s: %s. Retrying in %.1fs", method, path, exc, wait)
                 await asyncio.sleep(wait)
 
         # Exhausted retries
-        msg = f"Failed after {_MAX_RETRIES} retries on {method} {path}"
+        msg = f"Failed after {MAX_RETRIES} retries on {method} {path}"
         logger.error(msg)
         if last_exc:
             raise ConnectorError(0, msg) from last_exc

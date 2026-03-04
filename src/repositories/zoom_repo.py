@@ -3,11 +3,14 @@
 from __future__ import annotations
 
 import json
+import logging
 from typing import Any
 
 import src.config
 from src.database import get_db
 from src.models.zoom import ProjectMeetingMap, ZoomRecording
+
+logger = logging.getLogger(__name__)
 
 
 class ZoomRepository:
@@ -60,6 +63,8 @@ class ZoomRepository:
                 "SELECT * FROM zoom_recordings WHERE id = ?",
                 (recording_id,),
             ).fetchone()
+        if not row:
+            logger.debug("Zoom recording id=%s not found", recording_id)
         return ZoomRecording.from_row(row) if row else None
 
     def list_all(self) -> list[ZoomRecording]:
@@ -104,6 +109,7 @@ class ZoomRepository:
             conn.commit()
 
     def dismiss_recording(self, recording_id: int) -> None:
+        logger.info("Dismissing Zoom recording id=%s", recording_id)
         self.update_status(recording_id, "dismissed")
 
     # ------------------------------------------------------------------

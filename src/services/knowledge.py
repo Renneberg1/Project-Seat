@@ -99,6 +99,9 @@ class KnowledgeService:
             source="manual",
         )
 
+    def get_action_item(self, item_id: int) -> ActionItem | None:
+        return self._repo.get_action_item(item_id)
+
     def count_action_items(self, project_id: int) -> dict[str, int]:
         return self._repo.count_action_items(project_id)
 
@@ -110,6 +113,9 @@ class KnowledgeService:
         self, project_id: int, entry_type: str | None = None,
     ) -> list[KnowledgeEntry]:
         return self._repo.list_knowledge_entries(project_id, entry_type)
+
+    def get_knowledge_entry(self, entry_id: int) -> KnowledgeEntry | None:
+        return self._repo.get_knowledge_entry(entry_id)
 
     def search_knowledge(
         self, project_id: int, query: str,

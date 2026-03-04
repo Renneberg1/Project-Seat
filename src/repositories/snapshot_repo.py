@@ -3,10 +3,13 @@
 from __future__ import annotations
 
 import json
+import logging
 from datetime import date, timedelta
 
 import src.config
 from src.database import get_db
+
+logger = logging.getLogger(__name__)
 
 
 class SnapshotRepository:
@@ -16,6 +19,7 @@ class SnapshotRepository:
         self._db_path = db_path or src.config.settings.db_path
 
     def save(self, project_id: int, snapshot_date: str, data_json: str) -> None:
+        logger.debug("Saving snapshot for project=%s date=%s", project_id, snapshot_date)
         with get_db(self._db_path) as conn:
             conn.execute(
                 "INSERT OR REPLACE INTO team_progress_snapshots "

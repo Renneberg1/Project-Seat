@@ -14,11 +14,13 @@ from src.services.transcript import TranscriptService
 from src.services.transcript_parser import TranscriptParser
 from src.services.zoom_ingestion import ZoomIngestionService
 from src.web.deps import (
+    error_banner,
     get_dashboard_service,
     get_nav_context,
     get_transcript_parser,
     get_transcript_service,
     get_zoom_ingestion_service,
+    get_zoom_matching_service,
     get_zoom_repo,
     templates,
 )
@@ -174,16 +176,10 @@ async def upload_transcript(
     try:
         parsed = parser.parse(filename, content)
     except (ValueError, ImportError) as exc:
-        return HTMLResponse(
-            f'<div class="error-banner">{html.escape(str(exc))}</div>',
-            status_code=400,
-        )
+        return error_banner(str(exc), status_code=400)
 
     if not parsed.segments:
-        return HTMLResponse(
-            '<div class="error-banner">No speech segments found in transcript.</div>',
-            status_code=400,
-        )
+        return error_banner("No speech segments found in transcript.", status_code=400)
 
     transcript_id = service.store_transcript(None, parsed)
     all_projects = dash.list_projects()
@@ -211,17 +207,11 @@ async def paste_transcript(
     """Parse pasted text, store unassigned, return parsed preview."""
     text = transcript_text.strip()
     if not text:
-        return HTMLResponse(
-            '<div class="error-banner">Please enter some text.</div>',
-            status_code=400,
-        )
+        return error_banner("Please enter some text.", status_code=400)
     parsed = parser.parse("pasted-input.txt", text.encode("utf-8"))
 
     if not parsed.segments:
-        return HTMLResponse(
-            '<div class="error-banner">No speech segments found in the text.</div>',
-            status_code=400,
-        )
+        return error_banner("No speech segments found in the text.", status_code=400)
 
     transcript_id = service.store_transcript(None, parsed)
     all_projects = dash.list_projects()
@@ -251,10 +241,7 @@ async def assign_and_analyze(
     project_ids = [int(p) for p in project_ids_raw if str(p).isdigit()]
 
     if not project_ids:
-        return HTMLResponse(
-            '<div class="error-banner">Please select at least one project.</div>',
-            status_code=400,
-        )
+        return error_banner("Please select at least one project.", status_code=400)
 
     record = service.get_transcript(tid)
     if record is None:
@@ -391,6 +378,8 @@ async def reanalyse_recording(
     zoom_repo: ZoomRepository = Depends(get_zoom_repo),
     ingestion: ZoomIngestionService = Depends(get_zoom_ingestion_service),
     dash: DashboardService = Depends(get_dashboard_service),
+    ts: TranscriptService = Depends(get_transcript_service),
+    parser: TranscriptParser = Depends(get_transcript_parser),
 ) -> HTMLResponse:
     """Re-run LLM analysis on stored transcripts for a completed recording."""
     rec = zoom_repo.get_by_id(rec_id)
@@ -401,15 +390,12 @@ async def reanalyse_recording(
     if not mappings:
         return HTMLResponse("No project mappings found", status_code=400)
 
-    ts = TranscriptService()
-
     try:
         parsed = None
         needs_download = any(not m.transcript_id for m in mappings)
         if needs_download:
             vtt_bytes = await ingestion.download_transcript(rec_id)
             if vtt_bytes:
-                parser = TranscriptParser()
                 parsed = parser.parse(f"{rec.topic}.vtt", vtt_bytes)
 
         for m in mappings:
@@ -473,6 +459,9 @@ async def retry_recording(
     zoom_repo: ZoomRepository = Depends(get_zoom_repo),
     ingestion: ZoomIngestionService = Depends(get_zoom_ingestion_service),
     dash: DashboardService = Depends(get_dashboard_service),
+    ts: TranscriptService = Depends(get_transcript_service),
+    parser: TranscriptParser = Depends(get_transcript_parser),
+    matcher: "ZoomMatchingService" = Depends(get_zoom_matching_service),
 ) -> HTMLResponse:
     """Re-run matching + analysis for a recording."""
     zoom_repo.update_status(rec_id, "new")
@@ -480,19 +469,14 @@ async def retry_recording(
     rec = zoom_repo.get_by_id(rec_id)
     if rec:
         try:
-            from src.services.zoom_matching import ZoomMatchingService
-
             vtt_bytes = await ingestion.download_transcript(rec_id)
             if vtt_bytes:
-                parser = TranscriptParser()
                 parsed = parser.parse(f"{rec.topic}.vtt", vtt_bytes)
 
-                matcher = ZoomMatchingService()
                 project_ids = await matcher.match_recording(rec, parsed.raw_text[:2000])
 
                 if project_ids:
                     zoom_repo.update_status(rec_id, "matched", match_method=matcher.last_match_method)
-                    ts = TranscriptService()
                     for pid in project_ids:
                         project = dash.get_project_by_id(pid)
                         if project:
@@ -530,6 +514,8 @@ async def assign_recording(
     zoom_repo: ZoomRepository = Depends(get_zoom_repo),
     ingestion: ZoomIngestionService = Depends(get_zoom_ingestion_service),
     dash: DashboardService = Depends(get_dashboard_service),
+    ts: TranscriptService = Depends(get_transcript_service),
+    parser: TranscriptParser = Depends(get_transcript_parser),
 ) -> HTMLResponse:
     """Manually assign a Zoom recording to project(s), then trigger analysis."""
     form = await request.form()
@@ -554,9 +540,7 @@ async def assign_recording(
             if not vtt_bytes:
                 zoom_repo.update_status(rec_id, "failed", error_message="Transcript download returned no data")
             else:
-                parser = TranscriptParser()
                 parsed = parser.parse(f"{rec.topic}.vtt", vtt_bytes)
-                ts = TranscriptService()
 
                 for pid in project_ids:
                     project = dash.get_project_by_id(pid)

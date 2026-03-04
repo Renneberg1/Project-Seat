@@ -219,6 +219,12 @@ class ApprovalEngine:
     # Audit trail
     # ------------------------------------------------------------------
 
+    def log_audit_raw(
+        self, project_id: int | None, action: str, details: dict,
+    ) -> None:
+        """Write a raw audit entry (for non-queue-based actions like releases)."""
+        self._repo.log_audit_raw(project_id, action, details)
+
     def _log_to_audit(self, item: ApprovalItem, result_json: str) -> None:
         """Write an entry to the immutable approval_log table."""
         self._repo.log_audit(item, result_json)
