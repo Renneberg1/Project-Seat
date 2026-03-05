@@ -186,3 +186,4 @@ The `projects` table could further benefit from:
 - [x] Repository Unit Tests (6 test files: project, approval, transcript, release, zoom, knowledge repos — 125 tests covering CRUD, edge cases, cascades)
 - [x] Missing Model Tests (5 new test files: ceo_review, charter, closure, zoom, knowledge models — 38 tests covering `from_row()`, enums, JSON parsing)
 - [x] Risk Refinement Service Tests (27 tests covering `start_risk_refinement`, `continue_risk_refinement`, `apply_refinement` with mocked agent/repos)
+- [x] Transcript-Only Zoom Meeting Ingestion (second discovery path for meetings with live transcripts but no cloud recording; `list_past_meetings()` + `get_meeting_transcript()` + `download_meeting_transcript()` on connector; `discovery_source` column on `zoom_recordings`; rate-limited transcript probing; integrated into full sync pipeline)

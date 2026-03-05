@@ -217,6 +217,219 @@ async def test_fetch_new_recordings(service: ZoomIngestionService, repo: ZoomRep
 
 
 @pytest.mark.asyncio
+async def test_same_day_sync_still_fetches(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """When last sync is today, recordings should still be fetched (not skipped)."""
+    from datetime import date
+
+    repo.set_last_sync_time(date.today().isoformat())
+
+    mock_meetings = [
+        {
+            "uuid": "uuid-same-day",
+            "id": "333",
+            "topic": "Same Day Meeting",
+            "host_email": "host@test.com",
+            "start_time": f"{date.today().isoformat()}T14:00:00Z",
+            "duration": 30,
+            "recording_files": [
+                {"recording_type": "audio_transcript", "download_url": "https://zoom.us/dl/3"},
+            ],
+        }
+    ]
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.list_recordings = AsyncMock(return_value=mock_meetings)
+
+        count = await service.fetch_new_recordings()
+
+    assert count == 1
+    rec = repo.get_by_uuid("uuid-same-day")
+    assert rec is not None
+    assert rec.topic == "Same Day Meeting"
+
+
+@pytest.mark.asyncio
+async def test_fetch_transcript_only_meetings(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """fetch_transcript_only_meetings discovers meetings with live transcripts but no recording."""
+    past_meetings = [
+        {
+            "uuid": "uuid-transcript-1",
+            "id": "500",
+            "topic": "Transcript Only Meeting",
+            "host_email": "host@test.com",
+            "start_time": "2026-01-10T14:00:00Z",
+            "duration": 60,
+        },
+        {
+            "uuid": "uuid-no-transcript",
+            "id": "501",
+            "topic": "No Transcript Meeting",
+            "host_email": "host@test.com",
+            "start_time": "2026-01-10T15:00:00Z",
+            "duration": 30,
+        },
+    ]
+
+    # First meeting has a transcript, second does not
+    async def mock_get_transcript(uuid):
+        if uuid == "uuid-transcript-1":
+            return {"download_url": "https://zoom.us/transcript/dl/t1"}
+        return None
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.list_past_meetings = AsyncMock(return_value=past_meetings)
+        zoom_instance.get_meeting_transcript = AsyncMock(side_effect=mock_get_transcript)
+
+        count = await service.fetch_transcript_only_meetings()
+
+    assert count == 1
+    rec = repo.get_by_uuid("uuid-transcript-1")
+    assert rec is not None
+    assert rec.topic == "Transcript Only Meeting"
+    assert rec.discovery_source == "transcript"
+    assert rec.transcript_url == "https://zoom.us/transcript/dl/t1"
+
+    # Meeting without transcript should not be inserted
+    assert repo.get_by_uuid("uuid-no-transcript") is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_transcript_only_skips_known(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """fetch_transcript_only_meetings skips meetings already known from recordings sync."""
+    # Pre-insert a recording (from the recordings API)
+    repo.insert_recording(
+        zoom_meeting_uuid="uuid-already-known", zoom_meeting_id="600",
+        topic="Already Known", host_email="", start_time="2026-01-01T00:00:00Z",
+        duration_minutes=30, transcript_url="https://zoom.us/dl/old", raw_metadata={},
+    )
+
+    past_meetings = [
+        {
+            "uuid": "uuid-already-known",
+            "id": "600",
+            "topic": "Already Known",
+            "host_email": "",
+            "start_time": "2026-01-01T00:00:00Z",
+            "duration": 30,
+        },
+    ]
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.list_past_meetings = AsyncMock(return_value=past_meetings)
+        zoom_instance.get_meeting_transcript = AsyncMock()
+
+        count = await service.fetch_transcript_only_meetings()
+
+    assert count == 0
+    # get_meeting_transcript should never be called for known UUIDs
+    zoom_instance.get_meeting_transcript.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_full_sync_includes_transcript_only(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """run_full_sync calls both fetch_new_recordings and fetch_transcript_only_meetings."""
+    with patch.object(service, "fetch_new_recordings", new_callable=AsyncMock, return_value=2) as mock_rec, \
+         patch.object(service, "fetch_transcript_only_meetings", new_callable=AsyncMock, return_value=1) as mock_trans:
+        # No new recordings to process
+        repo_list = patch.object(repo, "list_by_status", return_value=[])
+        with repo_list:
+            stats = await service.run_full_sync()
+
+    mock_rec.assert_awaited_once()
+    mock_trans.assert_awaited_once()
+    assert stats["fetched"] == 2
+    assert stats["transcript_only"] == 1
+
+
+@pytest.mark.asyncio
+async def test_download_transcript_routes_by_source(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """download_transcript uses download_meeting_transcript for transcript-only recordings."""
+    rec_id = repo.insert_recording(
+        zoom_meeting_uuid="uuid-trans-dl", zoom_meeting_id="700",
+        topic="Transcript DL", host_email="", start_time="2026-01-01T00:00:00Z",
+        duration_minutes=30, transcript_url="https://zoom.us/transcript/dl/t700",
+        raw_metadata={}, discovery_source="transcript",
+    )
+
+    vtt = b"WEBVTT\n\nHello"
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.download_meeting_transcript = AsyncMock(return_value=vtt)
+        zoom_instance.download_transcript = AsyncMock(return_value=b"wrong")
+
+        result = await service.download_transcript(rec_id)
+
+    assert result == vtt
+    zoom_instance.download_meeting_transcript.assert_awaited_once()
+    zoom_instance.download_transcript.assert_not_awaited()
+
+
+@pytest.mark.asyncio
+async def test_fetch_meeting_by_uuid_found(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """fetch_meeting_by_uuid inserts a transcript-only recording when transcript exists."""
+    transcript_meta = {
+        "download_url": "https://zoom.us/transcript/dl/manual",
+        "meeting_topic": "Manual Lookup Meeting",
+        "meeting_start_time": "2026-03-05T09:00:00Z",
+    }
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.get_meeting_transcript = AsyncMock(return_value=transcript_meta)
+
+        rec_id = await service.fetch_meeting_by_uuid("manual-uuid-1")
+
+    assert rec_id is not None
+    rec = repo.get_by_id(rec_id)
+    assert rec is not None
+    assert rec.discovery_source == "transcript"
+    assert rec.topic == "Manual Lookup Meeting"
+    assert rec.transcript_url == "https://zoom.us/transcript/dl/manual"
+
+
+@pytest.mark.asyncio
+async def test_fetch_meeting_by_uuid_no_transcript(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """fetch_meeting_by_uuid returns None when meeting has no transcript."""
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.get_meeting_transcript = AsyncMock(return_value=None)
+
+        rec_id = await service.fetch_meeting_by_uuid("no-transcript-uuid")
+
+    assert rec_id is None
+
+
+@pytest.mark.asyncio
+async def test_fetch_meeting_by_uuid_already_known(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """fetch_meeting_by_uuid returns existing ID for already-known UUID."""
+    existing_id = repo.insert_recording(
+        zoom_meeting_uuid="known-uuid", zoom_meeting_id="999",
+        topic="Already Known", host_email="", start_time="2026-01-01T00:00:00Z",
+        duration_minutes=30, transcript_url="https://zoom.us/dl/old", raw_metadata={},
+    )
+
+    # Should NOT call the API
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+
+        rec_id = await service.fetch_meeting_by_uuid("known-uuid")
+
+    assert rec_id == existing_id
+    zoom_instance.get_meeting_transcript.assert_not_awaited()
+
+
+@pytest.mark.asyncio
 async def test_fetch_skips_duplicates(service: ZoomIngestionService, repo: ZoomRepository) -> None:
     """fetch_new_recordings skips already-known UUIDs."""
     repo.insert_recording(

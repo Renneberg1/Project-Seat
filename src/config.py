@@ -66,6 +66,7 @@ class ZoomSettings:
     redirect_uri: str = os.getenv("ZOOM_REDIRECT_URI", "http://localhost:8000/zoom/callback")
     user_id: str = os.getenv("ZOOM_USER_ID", "me")
     enabled: bool = _env_bool("ZOOM_ENABLED", False)
+    verify_ssl: bool = _env_bool("VERIFY_SSL", True)
 
 
 @dataclass(frozen=True)

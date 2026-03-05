@@ -183,6 +183,7 @@ CREATE TABLE IF NOT EXISTS zoom_recordings (
     match_method        TEXT,
     error_message       TEXT,
     raw_metadata        TEXT    NOT NULL DEFAULT '{}',
+    discovery_source    TEXT    NOT NULL DEFAULT 'recording',
     created_at          TEXT    NOT NULL DEFAULT (datetime('now'))
 );
 
@@ -633,6 +634,16 @@ def _migrate_13_add_transcript_source(conn: sqlite3.Connection) -> None:
     )
 
 
+def _migrate_14_add_discovery_source(conn: sqlite3.Connection) -> None:
+    """Add discovery_source column to zoom_recordings for transcript-only meetings."""
+    try:
+        conn.execute(
+            "ALTER TABLE zoom_recordings ADD COLUMN discovery_source TEXT NOT NULL DEFAULT 'recording'"
+        )
+    except sqlite3.OperationalError:
+        pass  # Column already exists (new databases)
+
+
 _MIGRATIONS: list[tuple[int, callable]] = [
     (1, _migrate_1_add_phase),
     (2, _migrate_2_add_dhf_columns),
@@ -647,6 +658,7 @@ _MIGRATIONS: list[tuple[int, callable]] = [
     (11, _migrate_11_add_closure_reports),
     (12, _migrate_12_add_zoom_and_knowledge),
     (13, _migrate_13_add_transcript_source),
+    (14, _migrate_14_add_discovery_source),
 ]
 
 

@@ -368,6 +368,121 @@ async def zoom_sync(
 
 
 # ------------------------------------------------------------------
+# POST /meetings/zoom/fetch-by-uuid — manual meeting UUID lookup
+# ------------------------------------------------------------------
+
+@router.post("/meetings/zoom/fetch-by-uuid", response_class=HTMLResponse)
+async def fetch_by_uuid(
+    request: Request,
+    meeting_uuid: str = Form(...),
+    ingestion: ZoomIngestionService = Depends(get_zoom_ingestion_service),
+    zoom_repo: ZoomRepository = Depends(get_zoom_repo),
+    ts: TranscriptService = Depends(get_transcript_service),
+    dash: DashboardService = Depends(get_dashboard_service),
+    parser: TranscriptParser = Depends(get_transcript_parser),
+    matcher: "ZoomMatchingService" = Depends(get_zoom_matching_service),
+) -> HTMLResponse:
+    """Fetch a single meeting's transcript by UUID, then download → match → analyze."""
+    meeting_uuid = meeting_uuid.strip()
+    if not meeting_uuid:
+        return error_banner("Please enter a meeting UUID.", status_code=400)
+
+    try:
+        rec_id = await ingestion.fetch_meeting_by_uuid(meeting_uuid)
+    except Exception as exc:
+        logger.error("Fetch by UUID failed: %s", exc)
+        return _render_meetings_page(request, zoom_repo, ts, dash, fetch_result={
+            "ok": False, "message": f"Failed to fetch meeting: {html.escape(str(exc)[:300])}",
+        })
+
+    if rec_id is None:
+        return _render_meetings_page(request, zoom_repo, ts, dash, fetch_result={
+            "ok": False, "message": "No transcript found for that meeting UUID.",
+        })
+
+    # Process the recording: download → match → analyze
+    msg = "Meeting transcript found and added to inbox."
+    rec = zoom_repo.get_by_id(rec_id)
+    if rec and rec.processing_status == "new":
+        try:
+            vtt_bytes = await ingestion.download_transcript(rec_id)
+            if vtt_bytes:
+                parsed = parser.parse(f"{rec.topic}.vtt", vtt_bytes)
+                project_ids = await matcher.match_recording(rec, parsed.raw_text[:2000])
+
+                if project_ids:
+                    zoom_repo.update_status(rec_id, "matched", match_method=matcher.last_match_method)
+                    for pid in project_ids:
+                        project = dash.get_project_by_id(pid)
+                        if project:
+                            tid = ts.store_transcript(pid, parsed, source="zoom")
+                            zoom_repo.add_project_mapping(rec_id, pid, tid)
+                            await ts.analyze_transcript(tid, project)
+                    zoom_repo.update_status(rec_id, "complete")
+                    msg = "Meeting fetched, matched, and analyzed."
+                else:
+                    zoom_repo.update_status(rec_id, "unmatched")
+                    msg = "Meeting fetched but could not auto-match to a project. Use Assign to pick one."
+            else:
+                zoom_repo.update_status(rec_id, "failed", error_message="Transcript download returned no data")
+                msg = "Meeting found but transcript download failed."
+        except Exception as exc:
+            logger.error("Processing after fetch failed for recording %d: %s", rec_id, exc)
+            zoom_repo.update_status(rec_id, "failed", error_message=str(exc)[:500])
+            msg = f"Meeting fetched but processing failed: {html.escape(str(exc)[:200])}"
+
+    return _render_meetings_page(request, zoom_repo, ts, dash, fetch_result={
+        "ok": zoom_repo.get_by_id(rec_id).processing_status in ("complete", "matched") if rec_id else False,
+        "message": msg,
+    })
+
+
+def _render_meetings_page(
+    request: Request,
+    zoom_repo: ZoomRepository,
+    ts: TranscriptService,
+    dash: DashboardService,
+    *,
+    fetch_result: dict | None = None,
+) -> HTMLResponse:
+    """Re-render the full meetings page (shared helper)."""
+    zoom_connected = zoom_repo.get_config("zoom_refresh_token") is not None
+    last_sync = zoom_repo.get_last_sync_time()
+
+    transcripts = ts.list_all_transcripts()
+    pending_statuses = ("new", "downloaded", "matching", "matched", "unmatched", "failed")
+    all_zoom = zoom_repo.list_all()
+    zoom_pending = [r for r in all_zoom if r.processing_status in pending_statuses]
+
+    rows = _merge_meeting_rows(transcripts, zoom_pending, zoom_repo)
+
+    pids: set[int] = set()
+    for r in rows:
+        if r["kind"] == "transcript" and r["transcript"].project_id:
+            pids.add(r["transcript"].project_id)
+        elif r["kind"] == "zoom":
+            for m in r.get("mappings", []):
+                pids.add(m.project_id)
+    project_names = _build_project_names(dash, pids)
+    all_projects = dash.list_projects()
+
+    nav = get_nav_context(request)
+    ctx = {
+        **nav,
+        "rows": rows,
+        "last_sync": last_sync,
+        "zoom_connected": zoom_connected,
+        "project_names": project_names,
+        "all_projects": all_projects,
+        "filter_source": "all",
+    }
+    if fetch_result:
+        ctx["fetch_result"] = fetch_result
+
+    return templates.TemplateResponse(request, "meetings.html", ctx)
+
+
+# ------------------------------------------------------------------
 # POST /meetings/zoom/{rec_id}/reanalyse
 # ------------------------------------------------------------------
 

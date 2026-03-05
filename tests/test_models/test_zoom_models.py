@@ -26,6 +26,7 @@ def test_zoom_recording_construction():
         match_method="title",
         error_message=None,
         raw_metadata={"recording_id": "r1"},
+        discovery_source="recording",
         created_at="2026-03-01T10:00:00",
     )
 
@@ -55,6 +56,7 @@ def test_zoom_recording_with_error():
         match_method=None,
         error_message="Transcript download failed",
         raw_metadata={},
+        discovery_source="recording",
         created_at="2026-03-02T15:00:00",
     )
 

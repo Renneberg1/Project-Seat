@@ -39,10 +39,40 @@
 <div id="meetings-content">
 {% if sync_stats is defined and sync_stats %}
 <div class="success-banner">
-    Sync complete: {{ sync_stats.fetched }} fetched, {{ sync_stats.downloaded }} downloaded,
+    Sync complete: {{ sync_stats.fetched }} fetched,
+    {% if sync_stats.transcript_only is defined %}{{ sync_stats.transcript_only }} transcript-only,{% endif %}
+    {{ sync_stats.downloaded }} downloaded,
     {{ sync_stats.matched }} matched, {{ sync_stats.analyzed }} analyzed
     {% if sync_stats.errors %}, {{ sync_stats.errors }} errors{% endif %}
 </div>
+{% endif %}
+
+{% if fetch_result is defined and fetch_result %}
+<div class="{% if fetch_result.ok %}success-banner{% else %}error-banner{% endif %}">
+    {{ fetch_result.message }}
+</div>
+{% endif %}
+
+{# --- Fetch by Meeting UUID --- #}
+{% if zoom_connected is defined and zoom_connected %}
+<details class="transcript-upload-section">
+    <summary><h2 style="display:inline;">Fetch Zoom Meeting by ID</h2></summary>
+    <p>Paste a Zoom meeting ID or UUID to fetch its transcript directly. Use this for instant/ad-hoc meetings that don't appear in the automatic sync.</p>
+    <form hx-post="/meetings/zoom/fetch-by-uuid"
+          hx-target="#meetings-content"
+          hx-select="#meetings-content"
+          hx-indicator="#fetch-uuid-spinner"
+          style="display:flex; gap:0.5rem; align-items:flex-end;">
+        <div class="form-group" style="flex:1; margin-bottom:0;">
+            <label for="meeting_uuid">Meeting ID or UUID</label>
+            <input type="text" id="meeting_uuid" name="meeting_uuid"
+                   placeholder="e.g. 81263056250 or abc123=="
+                   required>
+        </div>
+        <button type="submit" hx-disabled-elt="this">Fetch</button>
+        <span id="fetch-uuid-spinner" class="htmx-indicator spinner"></span>
+    </form>
+</details>
 {% endif %}
 
 {# --- Upload section --- #}

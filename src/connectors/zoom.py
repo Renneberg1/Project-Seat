@@ -5,6 +5,7 @@ from __future__ import annotations
 import asyncio
 import logging
 import time
+import urllib.parse
 from typing import Any
 
 import httpx
@@ -41,6 +42,7 @@ class ZoomConnector:
     def __init__(self, settings: ZoomSettings, *, db_path: str | None = None) -> None:
         self._settings = settings
         self._db_path = db_path
+        self._verify_ssl = settings.verify_ssl
         self._client: httpx.AsyncClient | None = None
         self._access_token: str | None = None
         self._token_expires_at: float = 0.0
@@ -51,7 +53,7 @@ class ZoomConnector:
 
     async def _get_client(self) -> httpx.AsyncClient:
         if self._client is None or self._client.is_closed:
-            self._client = httpx.AsyncClient(timeout=30.0, follow_redirects=True)
+            self._client = httpx.AsyncClient(timeout=30.0, follow_redirects=True, verify=self._verify_ssl)
         return self._client
 
     async def close(self) -> None:
@@ -239,5 +241,102 @@ class ZoomConnector:
         The download URL includes auth via query param, but we also
         pass the Bearer token for reliability.
         """
+        resp = await self._request("GET", download_url, accept="*/*")
+        return resp.content
+
+    async def list_past_meetings(
+        self,
+        user_id: str,
+        from_date: str,
+        to_date: str,
+    ) -> list[dict[str, Any]]:
+        """List past scheduled meeting instances within a date range.
+
+        Uses ``GET /users/{userId}/meetings?type=previous_meetings``
+        which requires the ``meeting:read:list_meetings:admin`` scope.
+
+        **Limitation:** Only returns pre-scheduled meetings that have ended.
+        Instant/ad-hoc meetings are NOT returned by this endpoint.
+        Use ``get_meeting_transcript(uuid)`` directly for those.
+
+        Auto-paginates via next_page_token.
+        Dates are YYYY-MM-DD strings.
+        """
+        all_meetings: list[dict[str, Any]] = []
+        params: dict[str, Any] = {
+            "type": "previous_meetings",
+            "from": from_date,
+            "to": to_date,
+            "page_size": 100,
+        }
+
+        url = f"https://api.zoom.us/v2/users/{user_id}/meetings"
+
+        while True:
+            resp = await self._request("GET", url, params=params)
+            data = resp.json()
+            meetings = data.get("meetings", [])
+            logger.info(
+                "Zoom past meetings: fetched %d (page), total_records=%s",
+                len(meetings), data.get("total_records", "?"),
+            )
+            all_meetings.extend(meetings)
+
+            next_token = data.get("next_page_token", "")
+            if not next_token:
+                break
+            params["next_page_token"] = next_token
+
+        return all_meetings
+
+    @staticmethod
+    def _double_encode_uuid(uuid: str) -> str:
+        """Double-encode a meeting UUID for use in URL paths.
+
+        Zoom UUIDs that start with ``/`` or contain ``//`` must be
+        double-URL-encoded when used as a path parameter.
+        """
+        if uuid.startswith("/") or "//" in uuid:
+            return urllib.parse.quote(urllib.parse.quote(uuid, safe=""), safe="")
+        return uuid
+
+    async def get_meeting_transcript(self, meeting_uuid: str) -> dict[str, Any] | None:
+        """Get transcript metadata for a past meeting.
+
+        Uses ``GET /meetings/{meetingId}/transcript``.
+        Returns the response dict (contains ``download_url``) on success,
+        or ``None`` if the meeting has no transcript (404).
+        """
+        encoded = self._double_encode_uuid(meeting_uuid)
+        url = f"https://api.zoom.us/v2/meetings/{encoded}/transcript"
+
+        try:
+            resp = await self._request("GET", url)
+            return resp.json()
+        except ZoomConnectorError as exc:
+            if exc.status_code == 404:
+                logger.debug("No transcript at /meetings/%s/transcript (404)", meeting_uuid)
+                return None
+            raise
+
+    async def get_past_meeting_instances(self, meeting_id: str) -> list[dict[str, Any]]:
+        """Get past instances of a meeting (recurring or otherwise).
+
+        Uses ``GET /past_meetings/{meetingId}/instances``.
+        Returns a list of meeting instance dicts, each with a ``uuid`` field.
+        Returns empty list on 404.
+        """
+        url = f"https://api.zoom.us/v2/past_meetings/{meeting_id}/instances"
+        try:
+            resp = await self._request("GET", url)
+            data = resp.json()
+            return data.get("meetings", [])
+        except ZoomConnectorError as exc:
+            if exc.status_code == 404:
+                return []
+            raise
+
+    async def download_meeting_transcript(self, download_url: str) -> bytes:
+        """Download VTT bytes from a meeting transcript download URL."""
         resp = await self._request("GET", download_url, accept="*/*")
         return resp.content

@@ -165,6 +165,117 @@ async def test_download_transcript(connector: ZoomConnector, zoom_db: str) -> No
 
 
 @pytest.mark.asyncio
+async def test_list_past_meetings_pagination(connector: ZoomConnector) -> None:
+    """list_past_meetings auto-paginates via next_page_token."""
+    page1 = _make_response(200, {
+        "meetings": [{"uuid": "pm1", "topic": "Past Meeting 1"}],
+        "next_page_token": "tok2",
+    })
+    page2 = _make_response(200, {
+        "meetings": [{"uuid": "pm2", "topic": "Past Meeting 2"}],
+        "next_page_token": "",
+    })
+
+    import time
+    connector._access_token = "test-token"
+    connector._token_expires_at = time.monotonic() + 3600
+
+    with patch.object(connector, "_get_client") as mock_client:
+        client = AsyncMock()
+        client.is_closed = False
+        mock_client.return_value = client
+        client.request = AsyncMock(side_effect=[page1, page2])
+
+        meetings = await connector.list_past_meetings("me", "2026-01-01", "2026-01-31")
+
+    assert len(meetings) == 2
+    assert meetings[0]["uuid"] == "pm1"
+    assert meetings[1]["uuid"] == "pm2"
+
+    # Verify correct endpoint and type parameter
+    call_args = client.request.call_args_list[0]
+    assert "/users/me/meetings" in call_args.args[1]
+    assert call_args.kwargs["params"]["type"] == "previous_meetings"
+
+
+@pytest.mark.asyncio
+async def test_get_meeting_transcript_found(connector: ZoomConnector) -> None:
+    """get_meeting_transcript returns transcript metadata when available."""
+    import time
+    connector._access_token = "test-token"
+    connector._token_expires_at = time.monotonic() + 3600
+
+    transcript_data = {"download_url": "https://zoom.us/transcript/dl/abc123"}
+
+    with patch.object(connector, "_get_client") as mock_client:
+        client = AsyncMock()
+        client.is_closed = False
+        mock_client.return_value = client
+        client.request = AsyncMock(return_value=_make_response(200, transcript_data))
+
+        result = await connector.get_meeting_transcript("simple-uuid")
+
+    assert result is not None
+    assert result["download_url"] == "https://zoom.us/transcript/dl/abc123"
+
+
+@pytest.mark.asyncio
+async def test_get_meeting_transcript_not_found(connector: ZoomConnector) -> None:
+    """get_meeting_transcript returns None when meeting has no transcript (404)."""
+    import time
+    connector._access_token = "test-token"
+    connector._token_expires_at = time.monotonic() + 3600
+
+    with patch.object(connector, "_get_client") as mock_client:
+        client = AsyncMock()
+        client.is_closed = False
+        mock_client.return_value = client
+        client.request = AsyncMock(return_value=_make_response(404, {"message": "not found"}))
+
+        result = await connector.get_meeting_transcript("no-transcript-uuid")
+
+    assert result is None
+
+
+def test_double_encode_uuid() -> None:
+    """UUIDs with leading / or // are double-encoded."""
+    # Normal UUID — no encoding needed
+    assert ZoomConnector._double_encode_uuid("abc123") == "abc123"
+
+    # UUID starting with /
+    encoded = ZoomConnector._double_encode_uuid("/abc+123==")
+    assert "/" not in encoded
+    assert "+" not in encoded
+
+    # UUID containing //
+    encoded = ZoomConnector._double_encode_uuid("abc//123")
+    assert "//" not in encoded
+
+
+@pytest.mark.asyncio
+async def test_download_meeting_transcript(connector: ZoomConnector) -> None:
+    """download_meeting_transcript returns VTT bytes."""
+    import time
+    connector._access_token = "test-token"
+    connector._token_expires_at = time.monotonic() + 3600
+
+    vtt_content = b"WEBVTT\n\n00:00:01.000 --> 00:00:03.000\nHello from transcript"
+
+    with patch.object(connector, "_get_client") as mock_client:
+        client = AsyncMock()
+        client.is_closed = False
+        mock_client.return_value = client
+        client.request = AsyncMock(return_value=httpx.Response(
+            200, content=vtt_content,
+            request=httpx.Request("GET", "https://zoom.us/download"),
+        ))
+
+        result = await connector.download_meeting_transcript("https://zoom.us/transcript/dl/abc")
+
+    assert result == vtt_content
+
+
+@pytest.mark.asyncio
 async def test_close(connector: ZoomConnector) -> None:
     """close() handles both open and closed clients."""
     # No client yet

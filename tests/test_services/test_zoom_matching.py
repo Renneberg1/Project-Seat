@@ -48,7 +48,8 @@ def _make_recording(**kwargs) -> ZoomRecording:
         start_time="2026-01-01T10:00:00Z", duration_minutes=30,
         transcript_url="", processing_status="new",
         match_method=None, error_message=None,
-        raw_metadata={}, created_at="2026-01-01T10:00:00",
+        raw_metadata={}, discovery_source="recording",
+        created_at="2026-01-01T10:00:00",
     )
     defaults.update(kwargs)
     return ZoomRecording(**defaults)

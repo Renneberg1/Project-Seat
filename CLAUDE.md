@@ -21,7 +21,7 @@ The application has four layers:
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and Zoom REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, unified Meetings page (manual transcript upload + Zoom recording ingestion in a single view with source/project/status filtering), LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, LLM-powered project closure report with full lifecycle data + lessons learned, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking, Zoom OAuth authorization code flow with project matching, per-project knowledge database (action items, notes, insights).
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, unified Meetings page (manual transcript upload + Zoom recording ingestion + transcript-only meeting discovery in a single view with source/project/status filtering), LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, LLM-powered project closure report with full lifecycle data + lessons learned, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking, Zoom OAuth authorization code flow with project matching, per-project knowledge database (action items, notes, insights).
 
 See `docs/architecture.mmd` and `docs/workflow.mmd` for visual diagrams (Mermaid source, renderable in any Mermaid-compatible viewer).
 
@@ -129,7 +129,7 @@ project-seat/
 │   │   ├── closure.py           # Closure report: data gathering, LLM Q&A, XHTML render, publish
 │   │   ├── team_progress.py     # Per-team version progress tracking (JQL-based)
 │   │   ├── team_snapshot.py     # Daily team progress snapshots for burnup charts
-│   │   ├── zoom_ingestion.py    # Zoom recording fetch, transcript download, full sync pipeline
+│   │   ├── zoom_ingestion.py    # Zoom recording fetch, transcript-only discovery, transcript download, full sync pipeline
 │   │   ├── zoom_matching.py     # Hybrid title match + LLM fallback for Zoom-to-project matching
 │   │   └── knowledge.py         # Knowledge service: action items, notes, insights from analysis
 │   ├── web/
@@ -324,7 +324,7 @@ pytest
 - Jira/Confluence connectors inherit from `BaseConnector` in `src/connectors/base.py`
 - Base class handles: authentication (Basic auth with API token), automatic retry with backoff, pagination, rate limit handling, error logging
 - Shared retry/backoff constants and helpers live in `src/connectors/retry.py` (`MAX_RETRIES`, `BACKOFF_BASE`, `backoff_sleep()`, `retry_after_or_backoff()`). Both `BaseConnector` and `ZoomConnector` import from this module.
-- Zoom connector (`src/connectors/zoom.py`) does NOT inherit from `BaseConnector` — uses OAuth authorization code flow (General App) with refresh_token grant, independent retry/backoff, proactive token refresh within 5 min of 1-hour expiry; stores/rotates refresh tokens in the `config` table via `ZoomRepository`
+- Zoom connector (`src/connectors/zoom.py`) does NOT inherit from `BaseConnector` — uses OAuth authorization code flow (General App) with refresh_token grant, independent retry/backoff, proactive token refresh within 5 min of 1-hour expiry; stores/rotates refresh tokens in the `config` table via `ZoomRepository`. Two discovery paths: `list_recordings()` for cloud-recorded meetings, `list_past_meetings()` + `get_meeting_transcript()` + `download_meeting_transcript()` for transcript-only meetings. UUIDs with leading `/` or `//` are double-encoded via `_double_encode_uuid()`. Required scopes: `cloud_recording:read:list_user_recordings:admin`, `meeting:read:list_meetings:admin`. Note: Zoom's meetings list API only returns scheduled meetings; instant/ad-hoc meetings must be fetched manually by UUID via `fetch_meeting_by_uuid()`.
 - Connectors expose clean Python methods — no raw HTTP outside the connector layer
 - Never call Jira/Confluence/Zoom APIs directly from services or engine code; always go through a connector
 
@@ -470,6 +470,7 @@ ZOOM_CLIENT_ID=...                # Zoom General App OAuth client ID
 ZOOM_CLIENT_SECRET=...            # Zoom General App OAuth client secret
 ZOOM_REDIRECT_URI=http://localhost:8000/zoom/callback  # OAuth redirect URI
 ZOOM_USER_ID=me                    # Zoom user ID (email or "me")
+# Zoom scopes: cloud_recording:read:list_user_recordings:admin, meeting:read:list_meetings:admin
 ```
 
 ## LLM Workflows

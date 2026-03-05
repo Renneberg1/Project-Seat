@@ -81,7 +81,7 @@
         {% endif %}
     </td>
     <td class="actions-cell">
-        {% if rec.processing_status == 'unmatched' %}
+        {% if rec.processing_status in ('unmatched', 'new') %}
         <form style="display:inline;" hx-post="/meetings/zoom/{{ rec.id }}/assign" hx-target="#meeting-row-z{{ rec.id }}" hx-swap="outerHTML">
             <select name="project_ids" class="select-sm" required>
                 <option value="">Assign...</option>

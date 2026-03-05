@@ -33,17 +33,19 @@ class ZoomRepository:
         duration_minutes: int,
         transcript_url: str,
         raw_metadata: dict[str, Any],
+        discovery_source: str = "recording",
     ) -> int:
         with get_db(self._db_path) as conn:
             cursor = conn.execute(
                 """INSERT INTO zoom_recordings
                    (zoom_meeting_uuid, zoom_meeting_id, topic, host_email,
-                    start_time, duration_minutes, transcript_url, raw_metadata)
-                   VALUES (?, ?, ?, ?, ?, ?, ?, ?)""",
+                    start_time, duration_minutes, transcript_url, raw_metadata,
+                    discovery_source)
+                   VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)""",
                 (
                     zoom_meeting_uuid, zoom_meeting_id, topic, host_email,
                     start_time, duration_minutes, transcript_url,
-                    json.dumps(raw_metadata),
+                    json.dumps(raw_metadata), discovery_source,
                 ),
             )
             conn.commit()

@@ -21,6 +21,7 @@ class ZoomRecording:
     match_method: str | None
     error_message: str | None
     raw_metadata: dict[str, Any]
+    discovery_source: str
     created_at: str
 
     @classmethod
@@ -40,6 +41,7 @@ class ZoomRecording:
             match_method=row["match_method"],
             error_message=row["error_message"],
             raw_metadata=metadata,
+            discovery_source=row["discovery_source"] if "discovery_source" in row.keys() else "recording",
             created_at=row["created_at"],
         )
 
