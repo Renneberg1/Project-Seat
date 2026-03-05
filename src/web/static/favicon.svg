@@ -1,0 +1,18 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32">
+  <rect width="32" height="32" rx="6" fill="#000F5B"/>
+  <!-- Chair seen from 3/4 above, isometric-ish, blocky H-logo style -->
+  <g fill="#FFFFFF">
+    <!-- Seat surface (parallelogram for perspective) -->
+    <polygon points="6,14 18,10 26,14 14,18"/>
+    <!-- Back-left leg -->
+    <polygon points="6,14 9,14 9,24 6,24"/>
+    <!-- Front-left leg -->
+    <polygon points="14,17 17,17 17,28 14,28"/>
+    <!-- Back-right leg -->
+    <polygon points="18,10 21,12 21,20 18,20"/>
+    <!-- Front-right leg -->
+    <polygon points="22,15 25,14 25,25 22,25"/>
+    <!-- Backrest (rises from back edge) -->
+    <polygon points="6,14 18,10 18,4 6,8"/>
+  </g>
+</svg>

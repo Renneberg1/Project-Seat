@@ -4,6 +4,7 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>{% block title %}Project Seat{% endblock %}</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg?v={{ static_versions.get('favicon.svg', '0') }}">
     <script>
     /* FOUC prevention — set theme before first paint */
     (function() {
@@ -22,10 +23,14 @@
 <body>
     <div id="page-progress" class="page-progress"></div>
     <nav class="nav-bar">
-        <a href="/phases/" class="nav-logo" aria-label="harrison.ai">
-            <svg viewBox="0 0 180 186" width="20" height="21" fill="currentColor" aria-hidden="true">
-                <polygon points="22.13 81.41 26.77 81.41 26.77 40.31 26.95 40.31 26.95 4.32 0 4.32 0 81.41 22.13 81.41"/>
-                <polygon points="153.24 81.47 153.24 4.32 125.64 4.32 125.64 81.12 53.54 81.42 26.78 81.42 26.78 108.19 0 108.2 0 185.07 26.95 185.07 26.77 108.2 125.64 108.04 125.64 185.07 153.24 185.07 153.24 108.26 179.87 108.26 179.87 81.47 153.24 81.47"/>
+        <a href="/phases/" class="nav-logo" aria-label="Project Seat">
+            <svg viewBox="0 0 32 32" width="32" height="32" fill="currentColor" aria-hidden="true">
+                <polygon points="6,14 18,10 26,14 14,18"/>
+                <polygon points="6,14 9,14 9,24 6,24"/>
+                <polygon points="14,17 17,17 17,28 14,28"/>
+                <polygon points="18,10 21,12 21,20 18,20"/>
+                <polygon points="22,15 25,14 25,25 22,25"/>
+                <polygon points="6,14 18,10 18,4 6,8"/>
             </svg>
         </a>
         <div class="nav-global">
