@@ -14,6 +14,7 @@ logger = logging.getLogger(__name__)
 from src.cache import cache
 from src.config import settings as app_settings
 from src.connectors.base import ConnectorError
+from src.connectors.jira import JiraConnector
 from src.engine.approval import ApprovalEngine
 from src.services.import_project import ImportService
 from src.models.approval import ApprovalStatus
@@ -34,6 +35,7 @@ from src.web.deps import (
     get_dhf_service,
     get_health_review_service,
     get_import_service,
+    get_jira_connector,
     get_release_service,
     get_spinup_service,
     get_team_progress_service,
@@ -491,6 +493,48 @@ async def unlock_release(
 # ------------------------------------------------------------------
 
 
+async def _fetch_milestones(project, jira: JiraConnector) -> dict[str, str]:
+    """Fetch version release dates from Jira for a project's team_projects.
+
+    Returns one milestone per unique release date (deduped across team
+    version names that share the same date).  The label uses the shortest
+    version name when multiple names map to the same date.
+    """
+    if not project.team_projects:
+        return {}
+    version_names_set = {tp[1] for tp in project.team_projects if len(tp) >= 2}
+    project_keys_set = {tp[0] for tp in project.team_projects if len(tp) >= 2}
+
+    async def _fetch_versions(pk: str) -> list[dict]:
+        try:
+            return await jira.get_versions(pk)
+        except Exception:
+            logger.warning("Failed to fetch versions for %s", pk)
+            return []
+
+    all_version_lists = await asyncio.gather(
+        *[_fetch_versions(pk) for pk in project_keys_set]
+    )
+
+    # Collect all matching version names → release dates
+    name_to_date: dict[str, str] = {}
+    for versions in all_version_lists:
+        for v in versions:
+            vname = v.get("name", "")
+            rdate = v.get("releaseDate")
+            if vname in version_names_set and rdate and vname not in name_to_date:
+                name_to_date[vname] = rdate
+
+    # Deduplicate by date — keep shortest name per unique date
+    date_to_label: dict[str, str] = {}
+    for vname, rdate in name_to_date.items():
+        if rdate not in date_to_label or len(vname) < len(date_to_label[rdate]):
+            date_to_label[rdate] = vname
+
+    # Return {label: date} — one entry per unique release date
+    return {label: rdate for rdate, label in date_to_label.items()}
+
+
 @router.get("/{id}/team-progress", response_class=HTMLResponse)
 async def project_team_progress(
     request: Request,
@@ -498,6 +542,7 @@ async def project_team_progress(
     service: DashboardService = Depends(get_dashboard_service),
     team_service: TeamProgressService = Depends(get_team_progress_service),
     snapshot_svc: TeamSnapshotService = Depends(get_team_snapshot_service),
+    jira: JiraConnector = Depends(get_jira_connector),
 ) -> HTMLResponse:
     """Per-team fix version progress (issue counts + story points)."""
     project = service.get_project_by_id(id)
@@ -518,6 +563,27 @@ async def project_team_progress(
     project_due_date = None
     if summary.goal and summary.goal.due_date:
         project_due_date = summary.goal.due_date  # ISO string e.g. "2026-09-01"
+
+    # Fetch version release dates from Jira for milestone lines
+    version_milestones = await _fetch_milestones(project, jira)
+
+    # Fetch overlay data for cross-project burnup comparison
+    overlay_projects: list[dict] = []
+    all_projects = service.list_projects()
+    for op in all_projects:
+        if op.id == project.id or op.status != "active" or not op.team_projects:
+            continue
+        op_snapshots = snapshot_svc.get_snapshots(op.id)
+        op_summary = await service.get_project_summary(op)
+        op_due = op_summary.goal.due_date if op_summary.goal and op_summary.goal.due_date else None
+        op_milestones = await _fetch_milestones(op, jira)
+        overlay_projects.append({
+            "id": op.id,
+            "name": op.name,
+            "snapshots": op_snapshots,
+            "due_date": op_due,
+            "milestones": op_milestones,
+        })
 
     # Compute totals row
     totals = None
@@ -542,6 +608,8 @@ async def project_team_progress(
         "totals": totals,
         "snapshots_json": snapshots_json,
         "project_due_date": project_due_date,
+        "version_milestones": version_milestones,
+        "overlay_projects": overlay_projects,
     }, id)
 
 

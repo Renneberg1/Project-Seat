@@ -64,7 +64,12 @@
                    placeholder="auto">
             <span class="text-tertiary">SP/day</span>
         </label>
+        <label id="perProjectDoneToggle" class="text-secondary" style="display: none; align-items: center; gap: 0.35rem; font-size: 0.85rem;">
+            <input id="burnupPerProjectDone" type="checkbox">
+            Per-project done
+        </label>
     </div>
+    <div id="overlayFilterBar" style="display: none; margin-bottom: 0.5rem; display: flex; align-items: center; gap: 0.75rem; flex-wrap: wrap; font-size: 0.85rem;"></div>
     <canvas id="burnupChart" height="100"></canvas>
 </div>
 <script>
@@ -75,8 +80,11 @@
 
     var allSnapshots = {{ snapshots_json | tojson }};
     var projectDueDate = {{ project_due_date | tojson }};
+    var versionMilestones = {{ version_milestones | default({}) | tojson }};
+    var overlayProjects = {{ overlay_projects | default([]) | tojson }};
+    var currentProjectName = {{ project.name | tojson }};
 
-    /* Discover team keys from the per_team data */
+    /* Discover team keys from the per_team data (current project) */
     var teamKeys = [];
     var seen = {};
     allSnapshots.forEach(function(s) {
@@ -84,9 +92,19 @@
             if (!seen[t.team_key]) { seen[t.team_key] = true; teamKeys.push(t.team_key); }
         });
     });
+    /* Also discover team keys from overlay projects */
+    overlayProjects.forEach(function(op) {
+        (op.snapshots || []).forEach(function(s) {
+            (s.per_team || []).forEach(function(t) {
+                if (!seen[t.team_key]) { seen[t.team_key] = true; teamKeys.push(t.team_key); }
+            });
+        });
+    });
     teamKeys.sort();
 
-    /* Populate the dropdown */
+    var COLOR_SLOTS = ['v1', 'v2', 'v3', 'v4'];
+
+    /* Populate the team dropdown */
     var select = document.getElementById('burnupTeamSelect');
     teamKeys.forEach(function(key) {
         var opt = document.createElement('option');
@@ -94,131 +112,165 @@
         opt.textContent = key;
         select.appendChild(opt);
     });
-    /* Hide selector if only one team (no useful choice) */
     if (teamKeys.length <= 1) select.style.display = 'none';
+
+    /* Build overlay filter checkboxes */
+    var overlayFilterBar = document.getElementById('overlayFilterBar');
+    if (overlayProjects.length > 0) {
+        overlayFilterBar.style.display = 'flex';
+        var filterLabel = document.createElement('span');
+        filterLabel.className = 'text-secondary';
+        filterLabel.style.fontWeight = '600';
+        filterLabel.textContent = 'Compare with:';
+        overlayFilterBar.appendChild(filterLabel);
+        overlayProjects.forEach(function(op) {
+            var lbl = document.createElement('label');
+            lbl.className = 'text-secondary';
+            lbl.style.cssText = 'display: flex; align-items: center; gap: 0.25rem; cursor: pointer;';
+            var cb = document.createElement('input');
+            cb.type = 'checkbox';
+            cb.value = String(op.id);
+            cb.className = 'overlay-filter-cb';
+            cb.addEventListener('change', function() { buildChart(select.value); });
+            lbl.appendChild(cb);
+            lbl.appendChild(document.createTextNode(op.name));
+            overlayFilterBar.appendChild(lbl);
+        });
+    } else {
+        overlayFilterBar.style.display = 'none';
+    }
 
     var chart = null;
     var velocityInput = document.getElementById('burnupVelocityOverride');
 
-    function buildChart(teamFilter) {
-        var velocityOverride = velocityInput.value !== '' ? parseFloat(velocityInput.value) : null;
-        var scopeColor = getThemeColor('--chart-scope');
-        var scopeFill = getThemeColor('--chart-scope-fill');
-        var doneColor = getThemeColor('--chart-done');
-        var doneFill = getThemeColor('--chart-done-fill');
-        var textColor = getThemeColor('--text-secondary');
-        var gridColor = getThemeColor('--border-subtle');
+    /* Chart.js plugin: milestone markers — tick marks at edges + label above.
+       Interpolates x-position between labels so no nulls are spliced into data. */
+    var milestonePlugin = {
+        id: 'milestoneLines',
+        afterDraw: function(chart) {
+            var milestones = chart.options._milestones;
+            if (!milestones || milestones.length === 0) return;
+            var xScale = chart.scales.x;
+            var yScale = chart.scales.y;
+            var ctx = chart.ctx;
+            var labels = chart.data.labels;
+            var msColor = getThemeColor('--chart-milestone');
 
-        /* Extract sp_total/sp_done for the selected team (or aggregate) */
-        var labels = allSnapshots.map(function(s) { return s.date; });
-        var scope, done;
-        if (teamFilter) {
-            scope = allSnapshots.map(function(s) {
-                var t = (s.per_team || []).find(function(t) { return t.team_key === teamFilter; });
-                return t ? t.sp_total : 0;
+            /* Resolve pixel positions — interpolate between labels if needed */
+            var resolved = [];
+            milestones.forEach(function(ms) {
+                var exact = labels.indexOf(ms.date);
+                var px;
+                if (exact >= 0) {
+                    px = xScale.getPixelForValue(exact);
+                } else {
+                    /* Find the two labels that bracket this date */
+                    var before = -1, after = -1;
+                    for (var li = 0; li < labels.length; li++) {
+                        if (labels[li] < ms.date) before = li;
+                        if (labels[li] > ms.date && after < 0) after = li;
+                    }
+                    if (before < 0 || after < 0) return; /* outside label range */
+                    var d0 = new Date(labels[before] + 'T00:00:00');
+                    var d1 = new Date(labels[after] + 'T00:00:00');
+                    var dm = new Date(ms.date + 'T00:00:00');
+                    var frac = (dm - d0) / (d1 - d0);
+                    var px0 = xScale.getPixelForValue(before);
+                    var px1 = xScale.getPixelForValue(after);
+                    px = px0 + frac * (px1 - px0);
+                }
+                resolved.push({ x: px, label: ms.label });
             });
-            done = allSnapshots.map(function(s) {
-                var t = (s.per_team || []).find(function(t) { return t.team_key === teamFilter; });
-                return t ? t.sp_done : 0;
+            resolved.sort(function(a, b) { return a.x - b.x; });
+
+            /* Stagger label rows when milestones are close together */
+            var LINE_HEIGHT = 14;
+            var MIN_GAP = 80;
+            resolved.forEach(function(ms, i) {
+                var row = 0;
+                if (i > 0) {
+                    for (var j = i - 1; j >= 0; j--) {
+                        if (ms.x - resolved[j].x >= MIN_GAP) break;
+                        if (resolved[j]._row >= row) row = resolved[j]._row + 1;
+                    }
+                }
+                ms._row = row;
             });
-        } else {
-            scope = allSnapshots.map(function(s) { return s.sp_total; });
-            done = allSnapshots.map(function(s) { return s.sp_done; });
+
+            resolved.forEach(function(ms) {
+                ctx.save();
+                /* Dashed vertical line */
+                ctx.beginPath();
+                ctx.setLineDash([6, 4]);
+                ctx.lineWidth = 2;
+                ctx.strokeStyle = msColor;
+                ctx.moveTo(ms.x, yScale.top);
+                ctx.lineTo(ms.x, yScale.bottom);
+                ctx.stroke();
+                /* Label above chart */
+                ctx.setLineDash([]);
+                ctx.font = 'bold 11px Inter, sans-serif';
+                ctx.fillStyle = msColor;
+                ctx.textAlign = 'center';
+                var labelY = yScale.top - 6 - (ms._row * LINE_HEIGHT);
+                ctx.fillText(ms.label, ms.x, labelY);
+                ctx.restore();
+            });
         }
+    };
 
-        var datasets = [
-            {
-                label: 'Total Scope (SP)',
-                data: scope.slice(),
-                borderColor: scopeColor,
-                backgroundColor: scopeFill,
-                fill: true, tension: 0.2, pointRadius: 3,
-            },
-            {
-                label: 'Done (SP)',
-                data: done.slice(),
-                borderColor: doneColor,
-                backgroundColor: doneFill,
-                fill: true, tension: 0.2, pointRadius: 3,
-            }
-        ];
-
-        /* --- Projection lines --- */
-        if (projectDueDate && allSnapshots.length >= 2) {
-            var lastDate = new Date(allSnapshots[allSnapshots.length - 1].date + 'T00:00:00');
-            var dueDate = new Date(projectDueDate + 'T00:00:00');
-
-            if (dueDate > lastDate) {
-                var VELOCITY_WINDOW = 28;
-                var windowStart = 0;
-                var cutoff = new Date(lastDate);
-                cutoff.setDate(cutoff.getDate() - VELOCITY_WINDOW);
-                for (var w = allSnapshots.length - 1; w >= 0; w--) {
-                    if (new Date(allSnapshots[w].date + 'T00:00:00') <= cutoff) { windowStart = w; break; }
-                }
-                var firstDate = new Date(allSnapshots[windowStart].date + 'T00:00:00');
-                var totalDays = (lastDate - firstDate) / 86400000;
-                var lastSPDone = done[done.length - 1];
-                var firstSPDone = done[windowStart];
-                var calcVelocity = totalDays > 0 ? (lastSPDone - firstSPDone) / totalDays : 0;
-                if (calcVelocity < 0) calcVelocity = 0;
-                velocityInput.placeholder = Math.round(calcVelocity * 10) / 10 || 'auto';
-                var velocity = (velocityOverride !== null && velocityOverride >= 0) ? velocityOverride : calcVelocity;
-
-                var lastSPTotal = scope[scope.length - 1];
-
-                var projLabels = [];
-                var projDone = [];
-                var projScope = [];
-                var cur = new Date(lastDate);
-                var daysSinceLast = 0;
-                while (cur <= dueDate) {
-                    projLabels.push(cur.toISOString().slice(0, 10));
-                    projDone.push(Math.round((lastSPDone + velocity * daysSinceLast) * 10) / 10);
-                    projScope.push(lastSPTotal);
-                    var next = new Date(cur);
-                    next.setDate(next.getDate() + 7);
-                    if (next > dueDate && cur < dueDate) next = new Date(dueDate);
-                    daysSinceLast += (next - cur) / 86400000;
-                    cur = next;
-                    if (cur.getTime() === dueDate.getTime() && projLabels[projLabels.length - 1] === cur.toISOString().slice(0, 10)) break;
-                }
-
-                var padProj = new Array(labels.length - 1).fill(null);
-
-                for (var i = 1; i < projLabels.length; i++) {
-                    labels.push(projLabels[i]);
-                    scope.push(null);
-                    done.push(null);
-                }
-
-                datasets.push({
-                    label: 'Done (Projected)',
-                    data: padProj.concat(projDone),
-                    borderColor: doneColor, borderDash: [8, 4],
-                    backgroundColor: 'transparent', fill: false,
-                    tension: 0, pointRadius: 0, pointHitRadius: 0,
-                });
-                datasets.push({
-                    label: 'Scope (Projected)',
-                    data: padProj.concat(projScope),
-                    borderColor: scopeColor, borderDash: [8, 4],
-                    backgroundColor: 'transparent', fill: false,
-                    tension: 0, pointRadius: 0, pointHitRadius: 0,
-                });
-            }
+    /* Compute 28-day velocity for a done array relative to a snapshots array */
+    function calcVelocityForArray(doneArr, snapshotsArr) {
+        if (!snapshotsArr || snapshotsArr.length < 2) return 0;
+        var VELOCITY_WINDOW = 28;
+        var lastDate = new Date(snapshotsArr[snapshotsArr.length - 1].date + 'T00:00:00');
+        var cutoff = new Date(lastDate);
+        cutoff.setDate(cutoff.getDate() - VELOCITY_WINDOW);
+        var windowStart = 0;
+        for (var w = snapshotsArr.length - 1; w >= 0; w--) {
+            if (new Date(snapshotsArr[w].date + 'T00:00:00') <= cutoff) { windowStart = w; break; }
         }
+        var firstDate = new Date(snapshotsArr[windowStart].date + 'T00:00:00');
+        var totalDays = (lastDate - firstDate) / 86400000;
+        var v = totalDays > 0 ? (doneArr[doneArr.length - 1] - doneArr[windowStart]) / totalDays : 0;
+        return v > 0 ? v : 0;
+    }
 
+    /* Generate projection date labels from lastDate to dueDate (weekly steps) */
+    function buildProjectionLabels(lastDate, dueDate) {
+        var projLabels = [];
+        var cur = new Date(lastDate);
+        while (cur <= dueDate) {
+            projLabels.push(cur.toISOString().slice(0, 10));
+            var next = new Date(cur);
+            next.setDate(next.getDate() + 7);
+            if (next > dueDate && cur < dueDate) next = new Date(dueDate);
+            cur = next;
+            if (cur.getTime() === dueDate.getTime() && projLabels[projLabels.length - 1] === cur.toISOString().slice(0, 10)) break;
+        }
+        return projLabels;
+    }
+
+    /* Render chart — milestones are drawn by the plugin without touching labels/data */
+    function renderChart(labels, datasets, milestones, textColor, gridColor) {
         if (chart) chart.destroy();
         chart = new Chart(document.getElementById('burnupChart'), {
             type: 'line',
             data: { labels: labels, datasets: datasets },
             options: {
                 responsive: true,
+                layout: { padding: { top: milestones.length > 0 ? 14 * Math.min(milestones.length, 4) + 8 : 0 } },
+                _milestones: milestones,
                 plugins: {
                     legend: {
                         position: 'top',
-                        labels: { color: textColor }
+                        labels: {
+                            color: textColor,
+                            filter: function(item) {
+                                var ds = datasets[item.datasetIndex];
+                                return !ds._isProjection;
+                            }
+                        }
                     }
                 },
                 scales: {
@@ -234,13 +286,381 @@
                         beginAtZero: true
                     }
                 }
+            },
+            plugins: [milestonePlugin]
+        });
+    }
+
+    /* Get selected overlay project IDs */
+    function getSelectedOverlays() {
+        var cbs = document.querySelectorAll('.overlay-filter-cb');
+        var sel = [];
+        cbs.forEach(function(cb) { if (cb.checked) sel.push(parseInt(cb.value)); });
+        return sel;
+    }
+
+    /* Aggregate scope/done from snapshots, optionally filtered by team */
+    function aggregateSnapshots(snapshots, teamFilter) {
+        return {
+            scope: snapshots.map(function(s) {
+                if (teamFilter) {
+                    var total = 0;
+                    (s.per_team || []).forEach(function(t) {
+                        if (t.team_key === teamFilter) total += t.sp_total;
+                    });
+                    return total;
+                }
+                return s.sp_total || 0;
+            }),
+            done: snapshots.map(function(s) {
+                if (teamFilter) {
+                    var total = 0;
+                    (s.per_team || []).forEach(function(t) {
+                        if (t.team_key === teamFilter) total += t.sp_done;
+                    });
+                    return total;
+                }
+                return s.sp_done || 0;
+            })
+        };
+    }
+
+    /* Align a project's data to unified date labels using carry-forward */
+    function alignToUnifiedDates(unifiedDates, projectDates, dataArr) {
+        var aligned = [];
+        var pIdx = 0;
+        var lastVal = 0;
+        for (var i = 0; i < unifiedDates.length; i++) {
+            while (pIdx < projectDates.length && projectDates[pIdx] < unifiedDates[i]) {
+                lastVal = dataArr[pIdx];
+                pIdx++;
+            }
+            if (pIdx < projectDates.length && projectDates[pIdx] === unifiedDates[i]) {
+                lastVal = dataArr[pIdx];
+                aligned.push(lastVal);
+                pIdx++;
+            } else {
+                aligned.push(lastVal);
+            }
+        }
+        return aligned;
+    }
+
+    var perProjectCheckbox = document.getElementById('burnupPerProjectDone');
+    var perProjectToggle = document.getElementById('perProjectDoneToggle');
+
+    function buildChart(teamFilter) {
+        var velocityOverride = velocityInput.value !== '' ? parseFloat(velocityInput.value) : null;
+        var selectedOverlays = getSelectedOverlays();
+        var overlayMode = selectedOverlays.length > 0;
+        var showPerProject = overlayMode && perProjectCheckbox.checked;
+        /* Show/hide per-project toggle */
+        perProjectToggle.style.display = overlayMode ? 'flex' : 'none';
+        var textColor = getThemeColor('--text-secondary');
+        var gridColor = getThemeColor('--border-subtle');
+        var doneColor = getThemeColor('--chart-done');
+        var doneFill = getThemeColor('--chart-done-fill');
+
+        var datasets = [];
+        var milestones = [];
+
+        /* Build milestones for current project */
+        Object.keys(versionMilestones).forEach(function(vn) {
+            var rd = versionMilestones[vn];
+            if (rd) milestones.push({ date: rd, label: overlayMode ? currentProjectName + ': ' + vn : vn });
+        });
+
+        if (!overlayMode) {
+            /* ---- Single project mode: aggregate all versions as one band ---- */
+            var labels = allSnapshots.map(function(s) { return s.date; });
+            var agg = aggregateSnapshots(allSnapshots, teamFilter);
+            var scope = agg.scope;
+            var done = agg.done;
+
+            var scopeColor = getThemeColor('--chart-scope');
+            var scopeFill = getThemeColor('--chart-scope-fill');
+
+            datasets.push({
+                label: 'Total Scope (SP)',
+                data: scope.slice(),
+                borderColor: scopeColor,
+                backgroundColor: scopeFill,
+                fill: true, tension: 0.2, pointRadius: 3,
+            });
+            datasets.push({
+                label: 'Done (SP)',
+                data: done.slice(),
+                borderColor: doneColor,
+                backgroundColor: doneFill,
+                fill: true, tension: 0.2, pointRadius: 3,
+            });
+
+            /* Projection */
+            if (projectDueDate && allSnapshots.length >= 2) {
+                var lastDate = new Date(allSnapshots[allSnapshots.length - 1].date + 'T00:00:00');
+                var dueDate = new Date(projectDueDate + 'T00:00:00');
+                if (dueDate > lastDate) {
+                    var calcVelocity = calcVelocityForArray(done, allSnapshots);
+                    velocityInput.placeholder = Math.round(calcVelocity * 10) / 10 || 'auto';
+                    var velocity = (velocityOverride !== null && velocityOverride >= 0) ? velocityOverride : calcVelocity;
+                    var lastSPDone = done[done.length - 1];
+                    var lastSPTotal = scope[scope.length - 1];
+                    var projLabels = buildProjectionLabels(lastDate, dueDate);
+                    var padProj = new Array(labels.length - 1).fill(null);
+                    var projDone = [], projScope = [];
+                    var daysSinceLast = 0;
+                    for (var pi = 0; pi < projLabels.length; pi++) {
+                        projDone.push(Math.round((lastSPDone + velocity * daysSinceLast) * 10) / 10);
+                        projScope.push(lastSPTotal);
+                        if (pi < projLabels.length - 1) {
+                            var cd = new Date(projLabels[pi] + 'T00:00:00');
+                            var nd = new Date(projLabels[pi + 1] + 'T00:00:00');
+                            daysSinceLast += (nd - cd) / 86400000;
+                        }
+                    }
+                    for (var i = 1; i < projLabels.length; i++) {
+                        labels.push(projLabels[i]);
+                        scope.push(null);
+                        done.push(null);
+                    }
+                    datasets.push({
+                        label: 'Done (Projected)', data: padProj.concat(projDone),
+                        borderColor: doneColor, borderDash: [8, 4],
+                        backgroundColor: 'transparent', fill: false,
+                        tension: 0, pointRadius: 0, pointHitRadius: 0,
+                        _isProjection: true,
+                    });
+                    datasets.push({
+                        label: 'Scope (Projected)', data: padProj.concat(projScope),
+                        borderColor: scopeColor, borderDash: [8, 4],
+                        backgroundColor: 'transparent', fill: false,
+                        tension: 0, pointRadius: 0, pointHitRadius: 0,
+                        _isProjection: true,
+                    });
+                }
+            }
+
+            renderChart(labels, datasets, milestones, textColor, gridColor);
+            return;
+        }
+
+        /* ---- Overlay mode: cross-project stacked scope bands ---- */
+
+        /* Collect all participating projects: current + selected overlays */
+        var projects = [{
+            name: currentProjectName,
+            snapshots: allSnapshots,
+            due_date: projectDueDate,
+            milestones_map: versionMilestones
+        }];
+        overlayProjects.forEach(function(op) {
+            if (selectedOverlays.indexOf(op.id) >= 0) {
+                projects.push({
+                    name: op.name,
+                    snapshots: op.snapshots || [],
+                    due_date: op.due_date,
+                    milestones_map: op.milestones || {}
+                });
             }
         });
+
+        /* Build milestones for overlay projects */
+        for (var pi = 1; pi < projects.length; pi++) {
+            var pMilestones = projects[pi].milestones_map;
+            Object.keys(pMilestones).forEach(function(vn) {
+                var rd = pMilestones[vn];
+                if (rd) milestones.push({ date: rd, label: projects[pi].name + ': ' + vn });
+            });
+        }
+
+        /* Merge and sort all dates */
+        var dateSet = {};
+        projects.forEach(function(p) {
+            (p.snapshots || []).forEach(function(s) { dateSet[s.date] = true; });
+        });
+        var unifiedDates = Object.keys(dateSet).sort();
+
+        /* Aggregate and align each project's data */
+        var projectData = projects.map(function(p) {
+            var pDates = (p.snapshots || []).map(function(s) { return s.date; });
+            var agg = aggregateSnapshots(p.snapshots || [], teamFilter);
+            return {
+                name: p.name,
+                due_date: p.due_date,
+                scope: alignToUnifiedDates(unifiedDates, pDates, agg.scope),
+                done: alignToUnifiedDates(unifiedDates, pDates, agg.done),
+                rawSnapshots: p.snapshots || [],
+                rawDone: agg.done
+            };
+        });
+
+        var labels = unifiedDates.slice();
+
+        /* Build cumulative scope bands */
+        var cumulRunning = new Array(unifiedDates.length).fill(0);
+        var scopeDatasetStartIdx = datasets.length;
+        projectData.forEach(function(pd, vi) {
+            var slot = COLOR_SLOTS[vi % COLOR_SLOTS.length];
+            var cumul = pd.scope.map(function(val, si) {
+                cumulRunning[si] += val;
+                return cumulRunning[si];
+            });
+            datasets.push({
+                label: pd.name + ' (Scope)',
+                data: cumul.slice(),
+                borderColor: getThemeColor('--chart-' + slot),
+                backgroundColor: getThemeColor('--chart-' + slot + '-fill'),
+                fill: vi === 0 ? 'origin' : '-1',
+                tension: 0.2, pointRadius: 2,
+                order: projects.length - vi + 10,
+            });
+        });
+
+        /* Combined done line */
+        var combinedDone = new Array(unifiedDates.length).fill(0);
+        projectData.forEach(function(pd) {
+            pd.done.forEach(function(val, i) { combinedDone[i] += val; });
+        });
+        datasets.push({
+            label: 'Done (SP)',
+            data: combinedDone.slice(),
+            borderColor: doneColor,
+            backgroundColor: 'transparent',
+            fill: false, tension: 0.2, pointRadius: 3,
+            borderWidth: 3,
+            order: 2,
+        });
+
+        /* Per-project done lines (when toggled on) */
+        if (showPerProject) {
+            projectData.forEach(function(pd, vi) {
+                var slot = COLOR_SLOTS[vi % COLOR_SLOTS.length];
+                datasets.push({
+                    label: pd.name + ' (Done)',
+                    data: pd.done.slice(),
+                    borderColor: getThemeColor('--chart-' + slot),
+                    backgroundColor: 'transparent',
+                    fill: false, tension: 0.2, pointRadius: 2,
+                    borderWidth: 2, borderDash: [6, 3],
+                    order: 1,
+                });
+            });
+        }
+
+        /* ---- Projections ---- */
+        /* Find the latest due date across all selected projects */
+        var latestDue = null;
+        projects.forEach(function(p) {
+            if (p.due_date) {
+                var d = new Date(p.due_date + 'T00:00:00');
+                if (!latestDue || d > latestDue) latestDue = d;
+            }
+        });
+
+        if (latestDue && unifiedDates.length >= 2) {
+            var lastDateStr = unifiedDates[unifiedDates.length - 1];
+            var lastDate = new Date(lastDateStr + 'T00:00:00');
+
+            if (latestDue > lastDate) {
+                var projLabels = buildProjectionLabels(lastDate, latestDue);
+
+                /* Compute days-from-start for each projection label */
+                var projDays = [0];
+                for (var pi = 1; pi < projLabels.length; pi++) {
+                    var cd = new Date(projLabels[pi - 1] + 'T00:00:00');
+                    var nd = new Date(projLabels[pi] + 'T00:00:00');
+                    projDays.push(projDays[pi - 1] + (nd - cd) / 86400000);
+                }
+
+                /* Aggregate velocity for the placeholder */
+                var aggVelocity = 0;
+                projectData.forEach(function(pd) {
+                    aggVelocity += calcVelocityForArray(pd.rawDone, pd.rawSnapshots);
+                });
+                velocityInput.placeholder = Math.round(aggVelocity * 10) / 10 || 'auto';
+
+                /* Extend labels for projection dates */
+                var padProj = new Array(labels.length - 1).fill(null);
+                var projPadCount = projLabels.length - 1;
+                for (var i = 1; i < projLabels.length; i++) {
+                    labels.push(projLabels[i]);
+                }
+
+                /* Pad existing data arrays so they align with extended labels */
+                datasets.forEach(function(ds) {
+                    for (var p = 0; p < projPadCount; p++) ds.data.push(null);
+                });
+
+                /* Combined done projection */
+                var velocity = (velocityOverride !== null && velocityOverride >= 0) ? velocityOverride : aggVelocity;
+                var lastCombinedDone = combinedDone[combinedDone.length - 1];
+                var aggProjDone = projDays.map(function(d) {
+                    return Math.round((lastCombinedDone + velocity * d) * 10) / 10;
+                });
+                datasets.push({
+                    label: 'Done (Projected)', data: padProj.concat(aggProjDone),
+                    borderColor: doneColor, borderDash: [8, 4],
+                    backgroundColor: 'transparent', fill: false,
+                    tension: 0, pointRadius: 0, pointHitRadius: 0,
+                    order: 0,
+                    _isProjection: true,
+                });
+
+                /* Cumulative scope projection — shaded bands below dashed lines.
+                   Stack with fill: '-1' (or 'origin' for first) just like the
+                   real scope bands, using a lighter version of the fill color. */
+                var projScopeStartIdx = datasets.length;
+                projectData.forEach(function(pd, vi) {
+                    var slot = COLOR_SLOTS[vi % COLOR_SLOTS.length];
+                    var scopeDs = datasets[scopeDatasetStartIdx + vi];
+                    var lastCumul = scopeDs.data[unifiedDates.length - 1];
+                    var projScope = projDays.map(function() { return lastCumul; });
+                    var fillColor = getThemeColor('--chart-' + slot + '-fill');
+                    /* Halve the alpha for a lighter projection shade */
+                    var lightFill = fillColor.replace(/[\d.]+\)$/, function(m) {
+                        return (parseFloat(m) * 0.5) + ')';
+                    });
+                    datasets.push({
+                        label: pd.name + ' Scope (Projected)', data: padProj.concat(projScope),
+                        borderColor: getThemeColor('--chart-' + slot), borderDash: [8, 4],
+                        backgroundColor: lightFill,
+                        fill: vi === 0 ? 'origin' : { target: projScopeStartIdx + vi - 1, above: lightFill },
+                        tension: 0, pointRadius: 0, pointHitRadius: 0,
+                        order: projects.length - vi + 10,
+                        _isProjection: true,
+                    });
+                });
+
+                /* Per-project done projections (when toggled) */
+                if (showPerProject) {
+                    projectData.forEach(function(pd, vi) {
+                        var slot = COLOR_SLOTS[vi % COLOR_SLOTS.length];
+                        var vVelocity = calcVelocityForArray(pd.rawDone, pd.rawSnapshots);
+                        var lastVDone = pd.done[pd.done.length - 1];
+                        var vProjDone = projDays.map(function(d) {
+                            return Math.round((lastVDone + vVelocity * d) * 10) / 10;
+                        });
+                        datasets.push({
+                            label: pd.name + ' Done (Projected)', data: padProj.concat(vProjDone),
+                            borderColor: getThemeColor('--chart-' + slot), borderDash: [4, 3],
+                            backgroundColor: 'transparent', fill: false,
+                            tension: 0, pointRadius: 0, pointHitRadius: 0,
+                            borderWidth: 1.5,
+                            order: 0,
+                            _isProjection: true,
+                        });
+                    });
+                }
+            }
+        }
+
+        renderChart(labels, datasets, milestones, textColor, gridColor);
     }
 
     buildChart('');
     select.addEventListener('change', function() { buildChart(select.value); });
     velocityInput.addEventListener('input', function() { buildChart(select.value); });
+    perProjectCheckbox.addEventListener('change', function() { buildChart(select.value); });
     window.addEventListener('theme-changed', function() { buildChart(select.value); });
 })();
 </script>
