@@ -111,13 +111,17 @@ async def project_dashboard(
     confluence_page_base = f"https://{app_settings.atlassian.domain}.atlassian.net/wiki/spaces/{app_settings.atlassian.confluence_space_key}/pages"
 
     market_release = None
+    technical_release = None
     if summary.goal and summary.goal.due_date:
         try:
-            tech = date.fromisoformat(summary.goal.due_date)
-            mr = tech.replace(month=tech.month + 1) if tech.month < 12 else tech.replace(year=tech.year + 1, month=1)
-            market_release = mr.isoformat()
+            market_date = date.fromisoformat(summary.goal.due_date)
+            market_release = market_date.isoformat()
+            # Technical release is 1 month before market release
+            tech_month = market_date.month - 1 or 12
+            tech_year = market_date.year if market_date.month > 1 else market_date.year - 1
+            technical_release = market_date.replace(year=tech_year, month=tech_month)
         except ValueError:
-            logger.warning("Failed to compute market release date from %s", summary.goal.due_date)
+            logger.warning("Failed to compute release dates from %s", summary.goal.due_date)
 
     # Check for active locked release for the Documents card
     releases = release_service.list_releases(id)
@@ -160,14 +164,10 @@ async def project_dashboard(
         else:
             risk_by_status["Open"] += 1  # default bucket
 
-    # Days to release
+    # Days to technical release
     days_to_release = None
-    if summary.goal and summary.goal.due_date:
-        try:
-            release_date = date.fromisoformat(summary.goal.due_date)
-            days_to_release = (release_date - date.today()).days
-        except ValueError:
-            pass
+    if technical_release:
+        days_to_release = (technical_release - date.today()).days
 
     return render_project_page(request, "project_dashboard.html", {
         "project": project,

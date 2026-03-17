@@ -21,7 +21,7 @@
         {% endif %}
         {% if days_to_release is not none %}
         <span class="dash-hero__countdown {% if days_to_release < 30 %}dash-countdown--urgent{% elif days_to_release < 60 %}dash-countdown--warning{% endif %}">
-            {% if days_to_release > 0 %}{{ days_to_release }}d to release{% elif days_to_release == 0 %}Release today{% else %}{{ days_to_release|abs }}d overdue{% endif %}
+            {% if days_to_release > 0 %}{{ days_to_release }}d to technical release{% elif days_to_release == 0 %}Technical release today{% else %}{{ days_to_release|abs }}d overdue{% endif %}
         </span>
         {% elif summary.goal and summary.goal.due_date %}
         <span class="dash-hero__countdown">{{ summary.goal.due_date }}</span>
