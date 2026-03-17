@@ -15,7 +15,7 @@
     <a href="/spinup/" class="btn">Spin Up a Project</a>
 </div>
 {% else %}
-<div class="pipeline">
+<div id="pipeline-container" class="pipeline">
     {% for phase in phases %}
     <div class="pipeline-stage">
         <div class="pipeline-stage-header pipeline-stage-{{ phase.value }}">

@@ -187,3 +187,4 @@ The `projects` table could further benefit from:
 - [x] Missing Model Tests (5 new test files: ceo_review, charter, closure, zoom, knowledge models — 38 tests covering `from_row()`, enums, JSON parsing)
 - [x] Risk Refinement Service Tests (27 tests covering `start_risk_refinement`, `continue_risk_refinement`, `apply_refinement` with mocked agent/repos)
 - [x] Transcript-Only Zoom Meeting Ingestion (second discovery path for meetings with live transcripts but no cloud recording; `list_past_meetings()` + `get_meeting_transcript()` + `download_meeting_transcript()` on connector; `discovery_source` column on `zoom_recordings`; rate-limited transcript probing; integrated into full sync pipeline)
+- [x] Stacked Fix Version Burnup Charts (multi-version stacked scope bands with per-version colors, combined done line overlay, optional per-version done breakdown toggle with dashed lines, per-version projections, single-version fallback identical to previous behavior)

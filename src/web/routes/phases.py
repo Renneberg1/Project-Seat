@@ -7,6 +7,7 @@ from datetime import date
 from fastapi import APIRouter, Depends, Form, Request
 from fastapi.responses import HTMLResponse
 
+from src.cache import cache
 from src.models.dashboard import PIPELINE_PHASES
 from src.services.dashboard import DashboardService
 from src.web.deps import get_dashboard_service, get_nav_context, templates
@@ -52,16 +53,35 @@ async def update_phase(
     phase: str = Form(...),
     service: DashboardService = Depends(get_dashboard_service),
 ) -> HTMLResponse:
-    """Update a project's pipeline phase. Returns refreshed project card partial."""
+    """Update a project's pipeline phase. Returns refreshed pipeline view."""
     service.update_phase(project_id, phase)
 
     project = service.get_project_by_id(project_id)
     if project is None:
         return HTMLResponse("Project not found", status_code=404)
 
-    summary = await service.get_project_summary(project)
+    # Invalidate cached summary so re-fetch picks up the new phase
+    cache.invalidate(f"summary:{project.jira_goal_key}")
+
+    # Return the full pipeline so the card moves to the correct column
+    summaries = await service.get_all_summaries()
+    phases_with_projects: list[dict] = []
+    for value, label in PIPELINE_PHASES:
+        phase_summaries = [s for s in summaries if s.project.phase == value]
+        phases_with_projects.append({
+            "value": value,
+            "label": label,
+            "summaries": phase_summaries,
+        })
+
     return templates.TemplateResponse(
         request,
-        "partials/project_card.html",
-        {"summary": summary, "pipeline_phases": PIPELINE_PHASES, "now_date": date.today().isoformat()},
+        "phases.html",
+        {
+            "phases": phases_with_projects,
+            "total_projects": len(summaries),
+            "pipeline_phases": PIPELINE_PHASES,
+            "now_date": date.today().isoformat(),
+            **get_nav_context(request),
+        },
     )

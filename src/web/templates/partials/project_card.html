@@ -42,7 +42,8 @@
 
     <form class="phase-form"
           hx-post="/phases/{{ summary.project.id }}/phase"
-          hx-target="#project-card-{{ summary.project.id }}"
+          hx-target="#pipeline-container"
+          hx-select="#pipeline-container"
           hx-swap="outerHTML">
         <select name="phase" class="phase-select" onchange="this.form.requestSubmit()">
             {% for value, label in pipeline_phases %}

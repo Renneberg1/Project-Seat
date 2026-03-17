@@ -130,24 +130,18 @@ def test_phases_get_error_project_shows_banner(client, tmp_db):
 
 def test_update_phase_post_returns_200(client, tmp_db):
     pid = _insert_project(tmp_db, "Alpha", "PROG-1", "planning")
+    updated_project = Project(
+        id=pid, jira_goal_key="PROG-1", name="Alpha",
+        confluence_charter_id=None, confluence_xft_id=None,
+        status="active", phase="development", created_at="2026-01-01",
+    )
+    summary = _make_summary(updated_project)
 
     with patch("src.web.deps.DashboardService") as MockSvc:
         instance = MockSvc.return_value
         instance.update_phase = lambda pid, phase: None
-        instance.get_project_by_id = lambda pid: Project(
-            id=pid, jira_goal_key="PROG-1", name="Alpha",
-            confluence_charter_id=None, confluence_xft_id=None,
-            status="active", phase="development", created_at="2026-01-01",
-        )
-        instance.get_project_summary = AsyncMock(
-            return_value=_make_summary(
-                Project(
-                    id=pid, jira_goal_key="PROG-1", name="Alpha",
-                    confluence_charter_id=None, confluence_xft_id=None,
-                    status="active", phase="development", created_at="2026-01-01",
-                )
-            )
-        )
+        instance.get_project_by_id = lambda pid: updated_project
+        instance.get_all_summaries = AsyncMock(return_value=[summary])
 
         result = client.post(f"/phases/{pid}/phase", data={"phase": "development"})
 

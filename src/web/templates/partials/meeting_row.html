@@ -40,6 +40,18 @@
             <button type="submit" class="btn-sm btn-primary" hx-disabled-elt="this" hx-indicator="#assign-spinner-t{{ t.id }}">Assign & Analyze</button>
             <span id="assign-spinner-t{{ t.id }}" class="htmx-indicator spinner-sm"></span>
         </form>
+        {% elif t.project_id %}
+        <form style="display:inline;" hx-post="/meetings/{{ t.id }}/reassign" hx-target="#meeting-row-t{{ t.id }}" hx-swap="outerHTML"
+              hx-confirm="Reassign this transcript? Existing suggestions will be deleted and analysis re-run.">
+            <select name="project_id" class="select-sm" required>
+                <option value="">Reassign...</option>
+                {% for p in all_projects if p.id != t.project_id %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn-sm" hx-disabled-elt="this" hx-indicator="#reassign-spinner-t{{ t.id }}">Reassign</button>
+            <span id="reassign-spinner-t{{ t.id }}" class="htmx-indicator spinner-sm"></span>
+        </form>
         {% endif %}
         <button class="btn-sm btn-muted"
                 hx-post="/meetings/{{ t.id }}/delete"
@@ -100,6 +112,18 @@
                 hx-disabled-elt="this"
                 hx-indicator="#reanalyse-spinner-{{ rec.id }}">Re-analyse</button>
         <span id="reanalyse-spinner-{{ rec.id }}" class="htmx-indicator spinner-sm"></span>
+        <form style="display:inline;" hx-post="/meetings/zoom/{{ rec.id }}/reassign" hx-target="#meeting-row-z{{ rec.id }}" hx-swap="outerHTML"
+              hx-confirm="Reassign this recording? Existing analysis will be deleted and re-run for the new project.">
+            <select name="project_id" class="select-sm" required>
+                <option value="">Reassign...</option>
+                {% set current_pids = maps | map(attribute='project_id') | list %}
+                {% for p in all_projects if p.id not in current_pids %}
+                <option value="{{ p.id }}">{{ p.name }}</option>
+                {% endfor %}
+            </select>
+            <button type="submit" class="btn-sm" hx-disabled-elt="this" hx-indicator="#reassign-spinner-z{{ rec.id }}">Reassign</button>
+            <span id="reassign-spinner-z{{ rec.id }}" class="htmx-indicator spinner-sm"></span>
+        </form>
         {% endif %}
         {% if rec.processing_status == 'failed' %}
         <button class="btn-sm"
