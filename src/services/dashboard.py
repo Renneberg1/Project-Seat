@@ -18,6 +18,7 @@ from src.jira_constants import (
     FIELD_RISK_LEVEL,
     FIELD_RISK_THRESHOLD,
     FIELD_TIMELINE_IMPACT,
+    ISSUE_TYPE_DECISION,
     RISK_PROJECT_KEY,
 )
 from src.models.dashboard import (
@@ -101,7 +102,7 @@ class DashboardService:
                             FIELD_RISK_POINTS],
                 ),
                 jira.search(
-                    f'project = {RISK_PROJECT_KEY} AND issuetype = "Project Issue" AND parent = {project.jira_goal_key}',
+                    f'project = {RISK_PROJECT_KEY} AND issuetype = {ISSUE_TYPE_DECISION} AND parent = {project.jira_goal_key}',
                     fields=["summary", "status", "issuetype", "project", "labels",
                             "fixVersions", "duedate", "parent", "description",
                             FIELD_TIMELINE_IMPACT, "components"],

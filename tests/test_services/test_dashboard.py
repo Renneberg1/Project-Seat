@@ -109,7 +109,7 @@ async def test_get_project_summary_returns_correct_counts(tmp_db, test_settings,
     mock_jira.get_issue = AsyncMock(return_value=make_jira_issue_response())
     mock_jira.search = AsyncMock(side_effect=[
         [{"id": str(i), "key": f"RISK-{i}", "fields": {"summary": f"Risk {i}", "status": {"name": "Open"}, "issuetype": {"name": "Risk"}, "project": {"key": "RISK"}}} for i in range(3)],  # risks
-        [{"id": str(i), "key": f"RISK-{100+i}", "fields": {"summary": f"Decision {i}", "status": {"name": "Open"}, "issuetype": {"name": "Project Issue"}, "project": {"key": "RISK"}}} for i in range(2)],  # decisions
+        [{"id": str(i), "key": f"RISK-{100+i}", "fields": {"summary": f"Decision {i}", "status": {"name": "Open"}, "issuetype": {"name": "Project Decision"}, "project": {"key": "RISK"}}} for i in range(2)],  # decisions
         [{"fields": {"status": {"name": "Open"}}}] * 4,  # initiatives (still count-only)
     ])
     mock_jira.close = AsyncMock()

@@ -10,6 +10,7 @@ from typing import Any
 from src.cache import cache
 from src.config import Settings, settings as default_settings
 from src.connectors.base import ConnectorError
+from src.jira_constants import ISSUE_TYPE_DECISION
 
 from src.models.project import Project
 
@@ -259,7 +260,7 @@ class ProjectContextService:
         jira = JiraConnector(settings=self._settings)
         try:
             raw = await jira.search(
-                f'project = RISK AND issuetype = "Project Issue" AND parent = {project.jira_goal_key}',
+                f'project = RISK AND issuetype = {ISSUE_TYPE_DECISION} AND parent = {project.jira_goal_key}',
                 fields=["summary", "status"],
             )
             return [
@@ -299,7 +300,7 @@ class ProjectContextService:
         jira = JiraConnector(settings=self._settings)
         try:
             jql = (
-                f'project = RISK AND issuetype = "Project Issue" '
+                f'project = RISK AND issuetype = {ISSUE_TYPE_DECISION} '
                 f'AND parent = {project.jira_goal_key}'
             )
             if created_since:

@@ -16,7 +16,7 @@ RISK_PROJECT_KEY = "RISK"
 # ---------------------------------------------------------------------------
 
 ISSUE_TYPE_RISK = "10832"
-ISSUE_TYPE_DECISION = "12499"  # "Project Issue" type in RISK project
+ISSUE_TYPE_DECISION = "12499"  # "Project Decision" type in RISK project (formerly "Project Issue")
 
 # ---------------------------------------------------------------------------
 # Custom field IDs — Risk / Decision fields
