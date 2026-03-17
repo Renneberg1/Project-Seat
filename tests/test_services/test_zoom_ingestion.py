@@ -430,6 +430,81 @@ async def test_fetch_meeting_by_uuid_already_known(service: ZoomIngestionService
 
 
 @pytest.mark.asyncio
+async def test_refresh_transcript_url_recording_source(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """refresh_transcript_url re-fetches recording metadata for recording-source meetings."""
+    rec_id = repo.insert_recording(
+        zoom_meeting_uuid="uuid-refresh-1", zoom_meeting_id="800",
+        topic="Needs Refresh", host_email="", start_time="2026-01-01T00:00:00Z",
+        duration_minutes=30, transcript_url="", raw_metadata={},
+        discovery_source="recording",
+    )
+
+    recording_data = {
+        "recording_files": [
+            {"recording_type": "audio_transcript", "file_type": "TRANSCRIPT",
+             "download_url": "https://zoom.us/dl/refreshed"},
+        ],
+    }
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.get_meeting_recordings = AsyncMock(return_value=recording_data)
+
+        result = await service.refresh_transcript_url(rec_id)
+
+    assert result == "https://zoom.us/dl/refreshed"
+    rec = repo.get_by_id(rec_id)
+    assert rec.transcript_url == "https://zoom.us/dl/refreshed"
+
+
+@pytest.mark.asyncio
+async def test_refresh_transcript_url_transcript_source(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """refresh_transcript_url uses meeting transcript endpoint for transcript-source meetings."""
+    rec_id = repo.insert_recording(
+        zoom_meeting_uuid="uuid-refresh-2", zoom_meeting_id="801",
+        topic="Transcript Refresh", host_email="", start_time="2026-01-01T00:00:00Z",
+        duration_minutes=30, transcript_url="", raw_metadata={},
+        discovery_source="transcript",
+    )
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.get_meeting_transcript = AsyncMock(
+            return_value={"download_url": "https://zoom.us/transcript/refreshed"},
+        )
+
+        result = await service.refresh_transcript_url(rec_id)
+
+    assert result == "https://zoom.us/transcript/refreshed"
+    rec = repo.get_by_id(rec_id)
+    assert rec.transcript_url == "https://zoom.us/transcript/refreshed"
+
+
+@pytest.mark.asyncio
+async def test_refresh_transcript_url_still_unavailable(service: ZoomIngestionService, repo: ZoomRepository) -> None:
+    """refresh_transcript_url returns None when transcript is still not available."""
+    rec_id = repo.insert_recording(
+        zoom_meeting_uuid="uuid-refresh-3", zoom_meeting_id="802",
+        topic="Still No Transcript", host_email="", start_time="2026-01-01T00:00:00Z",
+        duration_minutes=30, transcript_url="", raw_metadata={},
+        discovery_source="recording",
+    )
+
+    with patch("src.connectors.zoom.ZoomConnector") as MockZoom:
+        zoom_instance = AsyncMock()
+        MockZoom.return_value = zoom_instance
+        zoom_instance.get_meeting_recordings = AsyncMock(return_value={"recording_files": []})
+
+        result = await service.refresh_transcript_url(rec_id)
+
+    assert result is None
+    rec = repo.get_by_id(rec_id)
+    assert rec.transcript_url == ""
+
+
+@pytest.mark.asyncio
 async def test_fetch_skips_duplicates(service: ZoomIngestionService, repo: ZoomRepository) -> None:
     """fetch_new_recordings skips already-known UUIDs."""
     repo.insert_recording(

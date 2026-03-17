@@ -265,6 +265,128 @@ def test_delete_transcript(client, tmp_db):
 
 
 # ---------------------------------------------------------------------------
+# POST /meetings/{tid}/reassign
+# ---------------------------------------------------------------------------
+
+
+def test_reassign_transcript_no_project_returns_400(client, tmp_db):
+    with patch("src.web.deps.TranscriptService"), \
+         patch("src.web.deps.DashboardService"):
+        result = client.post("/meetings/1/reassign", data={})
+    assert result.status_code == 400
+    assert "select a project" in result.text
+
+
+def test_reassign_transcript_not_found(client, tmp_db):
+    with patch("src.web.deps.TranscriptService") as MockTS, \
+         patch("src.web.deps.DashboardService"):
+        MockTS.return_value.get_transcript.return_value = None
+        result = client.post("/meetings/999/reassign", data={"project_id": "1"})
+    assert result.status_code == 404
+
+
+def test_reassign_transcript_same_project_returns_400(client, tmp_db):
+    pid = _insert_project(tmp_db)
+    record = _make_transcript_record(1, pid, "manual")
+
+    with patch("src.web.deps.TranscriptService") as MockTS, \
+         patch("src.web.deps.DashboardService"):
+        MockTS.return_value.get_transcript.return_value = record
+        result = client.post(f"/meetings/1/reassign", data={"project_id": str(pid)})
+    assert result.status_code == 400
+    assert "Already assigned" in result.text
+
+
+def test_reassign_transcript_success(client, tmp_db):
+    pid1 = _insert_project(tmp_db, name="Project A", goal_key="PROG-100")
+    pid2 = _insert_project(tmp_db, name="Project B", goal_key="PROG-200")
+    project_b = _make_project(pid2, name="Project B", goal_key="PROG-200")
+    record = _make_transcript_record(1, pid1, "manual")
+
+    with patch("src.web.deps.TranscriptService") as MockTS, \
+         patch("src.web.deps.DashboardService") as MockDS:
+        MockTS.return_value.get_transcript.return_value = record
+        MockTS.return_value.assign_transcript.return_value = None
+        MockTS.return_value._repo = MagicMock()
+        MockTS.return_value.analyze_transcript = AsyncMock(return_value=[])
+        MockDS.return_value.get_project_by_id.return_value = project_b
+        result = client.post(f"/meetings/1/reassign", data={"project_id": str(pid2)})
+
+    assert result.status_code == 200
+    assert result.headers.get("hx-redirect") == "/meetings/"
+    MockTS.return_value.assign_transcript.assert_called_once_with(1, pid2)
+    MockTS.return_value._repo.delete_suggestions.assert_called_once_with(1)
+
+
+# ---------------------------------------------------------------------------
+# POST /meetings/zoom/{rec_id}/reassign
+# ---------------------------------------------------------------------------
+
+
+def test_reassign_zoom_no_project_returns_400(client, tmp_db):
+    with patch("src.web.deps.ZoomRepository"), \
+         patch("src.web.deps.ZoomIngestionService"), \
+         patch("src.web.deps.DashboardService"), \
+         patch("src.web.deps.TranscriptService"), \
+         patch("src.web.deps.TranscriptParser"):
+        result = client.post("/meetings/zoom/1/reassign", data={})
+    assert result.status_code == 400
+    assert "select a project" in result.text
+
+
+def test_reassign_zoom_not_found(client, tmp_db):
+    with patch("src.web.deps.ZoomRepository") as MockZR, \
+         patch("src.web.deps.ZoomIngestionService"), \
+         patch("src.web.deps.DashboardService"), \
+         patch("src.web.deps.TranscriptService"), \
+         patch("src.web.deps.TranscriptParser"):
+        MockZR.return_value.get_by_id.return_value = None
+        result = client.post("/meetings/zoom/999/reassign", data={"project_id": "1"})
+    assert result.status_code == 404
+
+
+def test_reassign_zoom_success(client, tmp_db):
+    from src.models.zoom import ProjectMeetingMap, ZoomRecording
+
+    pid = _insert_project(tmp_db, name="New Project", goal_key="PROG-300")
+    project = _make_project(pid, name="New Project", goal_key="PROG-300")
+    rec = ZoomRecording(
+        id=1, zoom_meeting_uuid="uuid-1", zoom_meeting_id="123",
+        topic="Sprint Planning", host_email="a@b.com", start_time="2026-01-01",
+        duration_minutes=30, transcript_url="https://example.com",
+        raw_metadata="{}", processing_status="complete", match_method="title",
+        error_message=None, discovery_source="recording", created_at="2026-01-01",
+    )
+    old_mapping = ProjectMeetingMap(
+        id=1, zoom_recording_id=1, project_id=99,
+        transcript_id=10, analysis_status="complete", created_at="2026-01-01",
+    )
+    parsed = _make_parsed("sprint.vtt")
+
+    with patch("src.web.deps.ZoomRepository") as MockZR, \
+         patch("src.web.deps.ZoomIngestionService") as MockZI, \
+         patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptService") as MockTS, \
+         patch("src.web.deps.TranscriptParser") as MockParser:
+        MockZR.return_value.get_by_id.return_value = rec
+        MockZR.return_value.get_mappings_for_recording.return_value = [old_mapping]
+        MockZI.return_value.download_transcript = AsyncMock(return_value=b"WEBVTT\n\ntest")
+        MockParser.return_value.parse.return_value = parsed
+        MockTS.return_value.store_transcript.return_value = 20
+        MockTS.return_value.analyze_transcript = AsyncMock(return_value=[])
+        MockDS.return_value.get_project_by_id.return_value = project
+        result = client.post(f"/meetings/zoom/1/reassign", data={"project_id": str(pid)})
+
+    assert result.status_code == 200
+    assert result.headers.get("hx-redirect") == "/meetings/"
+    # Old transcript deleted, old mapping removed
+    MockTS.return_value.delete_transcript.assert_called_once_with(10)
+    MockZR.return_value.remove_project_mapping.assert_called_once_with(1, 99)
+    # New mapping added
+    MockZR.return_value.add_project_mapping.assert_called_once_with(1, pid)
+
+
+# ---------------------------------------------------------------------------
 # POST /meetings/zoom/{rec_id}/dismiss
 # ---------------------------------------------------------------------------
 
@@ -285,6 +407,41 @@ def test_zoom_inbox_redirects_to_meetings(client, tmp_db):
     result = client.get("/zoom/inbox", follow_redirects=False)
     assert result.status_code == 302
     assert "/meetings/" in result.headers["location"]
+
+
+def test_retry_refreshes_transcript_url_when_missing(client, tmp_db):
+    """Retry should re-fetch transcript URL from Zoom when it's empty."""
+    from src.models.zoom import ZoomRecording
+
+    rec = ZoomRecording(
+        id=1, zoom_meeting_uuid="uuid-no-url", zoom_meeting_id="123",
+        topic="No URL Meeting", host_email="", start_time="2026-01-01",
+        duration_minutes=30, transcript_url="",
+        raw_metadata="{}", processing_status="failed", match_method=None,
+        error_message="No transcript URL", discovery_source="recording", created_at="2026-01-01",
+    )
+    parsed = _make_parsed("test.vtt")
+
+    with patch("src.web.deps.ZoomRepository") as MockZR, \
+         patch("src.web.deps.ZoomIngestionService") as MockZI, \
+         patch("src.web.deps.DashboardService") as MockDS, \
+         patch("src.web.deps.TranscriptService") as MockTS, \
+         patch("src.web.deps.TranscriptParser") as MockParser, \
+         patch("src.web.deps.ZoomMatchingService") as MockZM:
+        MockZR.return_value.get_by_id.return_value = rec
+        MockZR.return_value.get_mappings_for_recording.return_value = []
+        MockZR.return_value.update_status.return_value = None
+        # refresh_transcript_url returns None — still no URL
+        MockZI.return_value.refresh_transcript_url = AsyncMock(return_value=None)
+        MockDS.return_value.list_projects.return_value = []
+        result = client.post("/meetings/zoom/1/retry")
+
+    assert result.status_code == 200
+    MockZI.return_value.refresh_transcript_url.assert_awaited_once_with(1)
+    # Should set status to failed with appropriate message
+    calls = MockZR.return_value.update_status.call_args_list
+    # Last update_status call should be the failure
+    assert any("still not available" in str(c) for c in calls)
 
 
 def test_zoom_triage_redirects_to_meetings(client, tmp_db):

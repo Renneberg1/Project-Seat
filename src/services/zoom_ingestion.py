@@ -315,6 +315,60 @@ class ZoomIngestionService:
             await zoom.close()
 
     # ------------------------------------------------------------------
+    # Refresh transcript URL from Zoom
+    # ------------------------------------------------------------------
+
+    async def refresh_transcript_url(self, recording_id: int) -> str | None:
+        """Re-fetch the transcript URL from Zoom for a recording.
+
+        For recordings discovered via ``list_recordings``, re-fetches the
+        recording metadata and looks for a transcript file.  For
+        transcript-only meetings, re-checks the meeting transcript endpoint.
+
+        Returns the new transcript URL, or None if still unavailable.
+        Updates the DB row if a URL is found.
+        """
+        from src.connectors.zoom import ZoomConnector
+
+        rec = self._repo.get_by_id(recording_id)
+        if rec is None:
+            return None
+
+        zoom = ZoomConnector(self._settings.zoom, db_path=self._db_path)
+        try:
+            transcript_url: str | None = None
+
+            if rec.discovery_source == "transcript":
+                # Re-check the meeting transcript endpoint
+                meta = await zoom.get_meeting_transcript(rec.zoom_meeting_uuid)
+                if meta:
+                    transcript_url = meta.get("download_url", "")
+            else:
+                # Re-fetch recording files and look for transcript
+                data = await zoom.get_meeting_recordings(rec.zoom_meeting_uuid)
+                if data:
+                    for rf in data.get("recording_files", []):
+                        if rf.get("recording_type") == "audio_transcript" or (
+                            rf.get("file_type", "").upper() == "TRANSCRIPT"
+                        ):
+                            transcript_url = rf.get("download_url", "")
+                            break
+
+            if transcript_url:
+                self._repo.update_transcript_url(recording_id, transcript_url)
+                logger.info(
+                    "Refreshed transcript URL for recording %d: %s",
+                    recording_id, transcript_url[:80],
+                )
+                return transcript_url
+
+            logger.info("Transcript URL still not available for recording %d", recording_id)
+            return None
+
+        finally:
+            await zoom.close()
+
+    # ------------------------------------------------------------------
     # Download transcript for a recording
     # ------------------------------------------------------------------
 
@@ -387,11 +441,13 @@ class ZoomIngestionService:
 
         for rec in new_recordings:
             try:
-                # Download transcript
+                # Download transcript — refresh URL from Zoom if missing
                 if not rec.transcript_url:
-                    self._repo.update_status(rec.id, "failed", error_message="No transcript URL")
-                    stats["errors"] += 1
-                    continue
+                    refreshed = await self.refresh_transcript_url(rec.id)
+                    if not refreshed:
+                        self._repo.update_status(rec.id, "failed", error_message="No transcript URL")
+                        stats["errors"] += 1
+                        continue
 
                 vtt_bytes = await self.download_transcript(rec.id)
                 if vtt_bytes is None:

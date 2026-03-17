@@ -300,6 +300,25 @@ class ZoomConnector:
             return urllib.parse.quote(urllib.parse.quote(uuid, safe=""), safe="")
         return uuid
 
+    async def get_meeting_recordings(self, meeting_uuid: str) -> dict[str, Any] | None:
+        """Fetch recording metadata for a single meeting.
+
+        Uses ``GET /meetings/{meetingId}/recordings``.
+        Returns the response dict (contains ``recording_files``) on success,
+        or ``None`` if the meeting has no recordings (404).
+        """
+        encoded = self._double_encode_uuid(meeting_uuid)
+        url = f"https://api.zoom.us/v2/meetings/{encoded}/recordings"
+
+        try:
+            resp = await self._request("GET", url)
+            return resp.json()
+        except ZoomConnectorError as exc:
+            if exc.status_code == 404:
+                logger.debug("No recordings at /meetings/%s/recordings (404)", meeting_uuid)
+                return None
+            raise
+
     async def get_meeting_transcript(self, meeting_uuid: str) -> dict[str, Any] | None:
         """Get transcript metadata for a past meeting.
 

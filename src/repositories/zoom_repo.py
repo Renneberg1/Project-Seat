@@ -110,6 +110,15 @@ class ZoomRepository:
             )
             conn.commit()
 
+    def update_transcript_url(self, recording_id: int, transcript_url: str) -> None:
+        """Update the transcript_url for a recording."""
+        with get_db(self._db_path) as conn:
+            conn.execute(
+                "UPDATE zoom_recordings SET transcript_url = ? WHERE id = ?",
+                (transcript_url, recording_id),
+            )
+            conn.commit()
+
     def dismiss_recording(self, recording_id: int) -> None:
         logger.info("Dismissing Zoom recording id=%s", recording_id)
         self.update_status(recording_id, "dismissed")
@@ -165,6 +174,17 @@ class ZoomRepository:
                 (zoom_recording_id,),
             ).fetchall()
         return [ProjectMeetingMap.from_row(r) for r in rows]
+
+    def remove_project_mapping(
+        self, zoom_recording_id: int, project_id: int,
+    ) -> None:
+        """Remove a single project mapping for a recording."""
+        with get_db(self._db_path) as conn:
+            conn.execute(
+                "DELETE FROM project_meeting_map WHERE zoom_recording_id = ? AND project_id = ?",
+                (zoom_recording_id, project_id),
+            )
+            conn.commit()
 
     def get_project_ids_for_recording(self, zoom_recording_id: int) -> list[int]:
         with get_db(self._db_path) as conn:

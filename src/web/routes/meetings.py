@@ -319,6 +319,49 @@ async def delete_transcript(
 
 
 # ------------------------------------------------------------------
+# POST /meetings/{tid}/reassign
+# ------------------------------------------------------------------
+
+@router.post("/meetings/{tid}/reassign", response_class=HTMLResponse)
+async def reassign_transcript(
+    request: Request,
+    tid: int,
+    service: TranscriptService = Depends(get_transcript_service),
+    dash: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
+    """Reassign a transcript to a different project and re-run analysis."""
+    form = await request.form()
+    new_pid_raw = form.get("project_id", "")
+    if not str(new_pid_raw).isdigit():
+        return error_banner("Please select a project.", status_code=400)
+    new_pid = int(new_pid_raw)
+
+    record = service.get_transcript(tid)
+    if record is None:
+        return HTMLResponse("Transcript not found", status_code=404)
+
+    if record.project_id == new_pid:
+        return error_banner("Already assigned to that project.", status_code=400)
+
+    # Reassign: update project_id and clear old suggestions
+    service.assign_transcript(tid, new_pid)
+    service._repo.delete_suggestions(tid)
+    service._repo.update_meeting_summary(tid, None)
+
+    # Re-run analysis
+    project = dash.get_project_by_id(new_pid)
+    if project:
+        try:
+            await service.analyze_transcript(tid, project)
+        except Exception as exc:
+            logger.error("Re-analysis failed after reassign for transcript %d: %s", tid, exc)
+
+    response = HTMLResponse("")
+    response.headers["HX-Redirect"] = "/meetings/"
+    return response
+
+
+# ------------------------------------------------------------------
 # POST /meetings/zoom/sync
 # ------------------------------------------------------------------
 
@@ -584,6 +627,25 @@ async def retry_recording(
     rec = zoom_repo.get_by_id(rec_id)
     if rec:
         try:
+            # If transcript URL is missing, try to refresh it from Zoom
+            if not rec.transcript_url:
+                new_url = await ingestion.refresh_transcript_url(rec_id)
+                if not new_url:
+                    zoom_repo.update_status(
+                        rec_id, "failed",
+                        error_message="Transcript still not available on Zoom",
+                    )
+                    rec = zoom_repo.get_by_id(rec_id)
+                    mappings = zoom_repo.get_mappings_for_recording(rec_id) if rec else []
+                    pids = {m.project_id for m in mappings}
+                    project_names = _build_project_names(dash, pids)
+                    all_projects = dash.list_projects()
+                    return templates.TemplateResponse(request, "partials/meeting_row.html", {
+                        "row": {"kind": "zoom", "recording": rec, "mappings": mappings, "date": rec.start_time if rec else ""},
+                        "project_names": project_names,
+                        "all_projects": all_projects,
+                    })
+
             vtt_bytes = await ingestion.download_transcript(rec_id)
             if vtt_bytes:
                 parsed = parser.parse(f"{rec.topic}.vtt", vtt_bytes)
@@ -672,3 +734,61 @@ async def assign_recording(
     response = HTMLResponse("")
     response.headers["HX-Redirect"] = "/meetings/"
     return response
+
+
+# ------------------------------------------------------------------
+# POST /meetings/zoom/{rec_id}/reassign
+# ------------------------------------------------------------------
+
+@router.post("/meetings/zoom/{rec_id}/reassign", response_class=HTMLResponse)
+async def reassign_recording(
+    request: Request,
+    rec_id: int,
+    zoom_repo: ZoomRepository = Depends(get_zoom_repo),
+    ingestion: ZoomIngestionService = Depends(get_zoom_ingestion_service),
+    dash: DashboardService = Depends(get_dashboard_service),
+    ts: TranscriptService = Depends(get_transcript_service),
+    parser: TranscriptParser = Depends(get_transcript_parser),
+) -> HTMLResponse:
+    """Reassign a Zoom recording to a different project."""
+    form = await request.form()
+    new_pid_raw = form.get("project_id", "")
+    if not str(new_pid_raw).isdigit():
+        return error_banner("Please select a project.", status_code=400)
+    new_pid = int(new_pid_raw)
+
+    rec = zoom_repo.get_by_id(rec_id)
+    if rec is None:
+        return HTMLResponse("Recording not found", status_code=404)
+
+    # Remove old mappings and their transcripts/suggestions
+    old_mappings = zoom_repo.get_mappings_for_recording(rec_id)
+    for m in old_mappings:
+        if m.transcript_id:
+            ts.delete_transcript(m.transcript_id)
+        zoom_repo.remove_project_mapping(rec_id, m.project_id)
+
+    # Add new mapping
+    zoom_repo.add_project_mapping(rec_id, new_pid)
+    zoom_repo.update_status(rec_id, "matched", match_method="manual")
+
+    # Download transcript and run analysis for new project
+    try:
+        vtt_bytes = await ingestion.download_transcript(rec_id)
+        if not vtt_bytes:
+            zoom_repo.update_status(rec_id, "failed", error_message="Transcript download returned no data")
+        else:
+            parsed = parser.parse(f"{rec.topic}.vtt", vtt_bytes)
+            project = dash.get_project_by_id(new_pid)
+            if project:
+                tid = ts.store_transcript(new_pid, parsed, source="zoom")
+                zoom_repo.update_mapping_transcript(rec_id, new_pid, tid)
+                await ts.analyze_transcript(tid, project)
+            zoom_repo.update_status(rec_id, "complete")
+    except Exception as exc:
+        logger.error("Reassign analysis failed: %s", exc)
+        zoom_repo.update_status(rec_id, "failed", error_message=str(exc)[:500])
+
+    rsp = HTMLResponse("")
+    rsp.headers["HX-Redirect"] = "/meetings/"
+    return rsp
