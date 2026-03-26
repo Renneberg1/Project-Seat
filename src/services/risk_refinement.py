@@ -70,6 +70,8 @@ class RiskRefinementService:
             else context.existing_decisions
         )
 
+        project_ctx = self._build_refine_context(context)
+
         provider = get_provider(self._settings.llm)
         agent = RiskRefineAgent(provider)
         try:
@@ -80,6 +82,11 @@ class RiskRefinementService:
                 qa_history=[],
                 round_number=1,
                 max_rounds=self.MAX_REFINE_ROUNDS,
+                project_context=project_ctx,
+            )
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Risk refine",
             )
         finally:
             await provider.close()
@@ -124,6 +131,8 @@ class RiskRefinementService:
             else context.existing_decisions
         )
 
+        project_ctx = self._build_refine_context(context)
+
         provider = get_provider(self._settings.llm)
         agent = RiskRefineAgent(provider)
         try:
@@ -134,11 +143,29 @@ class RiskRefinementService:
                 qa_history=qa_history,
                 round_number=round_number,
                 max_rounds=self.MAX_REFINE_ROUNDS,
+                project_context=project_ctx,
+            )
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Risk refine",
             )
         finally:
             await provider.close()
 
         return result
+
+    @staticmethod
+    def _build_refine_context(context: ProjectContext) -> dict[str, str]:
+        """Build a concise project context dict for the refine agent."""
+        ctx: dict[str, str] = {}
+        ctx["project_name"] = f"Project: {context.project_name} ({context.jira_goal_key})"
+
+        if context.charter_content:
+            # Give the LLM the charter scope to understand project boundaries
+            excerpt = context.charter_content[:2000]
+            ctx["charter_excerpt"] = f"Charter excerpt:\n{excerpt}"
+
+        return ctx
 
     def apply_refinement(
         self,

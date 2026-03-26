@@ -33,6 +33,12 @@ class TestGetProvider:
         from src.engine.providers.gemini import GeminiProvider
         assert isinstance(provider, GeminiProvider)
 
+    def test_claude_provider(self):
+        settings = LLMSettings(provider="claude", api_key="test-key", model="claude-sonnet-4-20250514")
+        provider = get_provider(settings)
+        from src.engine.providers.claude import ClaudeProvider
+        assert isinstance(provider, ClaudeProvider)
+
     def test_ollama_provider(self, monkeypatch):
         monkeypatch.setenv("LLM_BASE_URL", "http://localhost:11434")
         settings = LLMSettings(provider="ollama", api_key="", model="llama3.3:70b")

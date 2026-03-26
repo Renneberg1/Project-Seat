@@ -10,7 +10,11 @@ from typing import Any
 from src.cache import cache
 from src.config import Settings, settings as default_settings
 from src.connectors.base import ConnectorError
-from src.jira_constants import ISSUE_TYPE_DECISION
+from src.jira_constants import (
+    FIELD_IMPACT_ANALYSIS,
+    FIELD_MITIGATION_CONTROL,
+    ISSUE_TYPE_DECISION,
+)
 
 from src.models.project import Project
 
@@ -51,6 +55,9 @@ class ProjectContextData:
     # Knowledge
     action_items: list[Any] = field(default_factory=list)
     knowledge_entries: list[Any] = field(default_factory=list)
+    # Past reviews (for trend analysis)
+    past_health_reviews: list[dict] = field(default_factory=list)
+    past_ceo_reviews: list[dict] = field(default_factory=list)
 
 
 class ProjectContextService:
@@ -95,6 +102,10 @@ class ProjectContextService:
         meeting_summary_since: str | None = None,
         action_items: bool = False,
         knowledge: bool = False,
+        past_health_reviews: bool = False,
+        past_health_review_limit: int = 1,
+        past_ceo_reviews: bool = False,
+        past_ceo_review_limit: int = 1,
         cache_key: str | None = None,
         cache_ttl: float = 0,
     ) -> ProjectContextData:
@@ -166,6 +177,16 @@ class ProjectContextService:
         if knowledge:
             tasks["knowledge"] = self._fetch_knowledge_entries(project)
 
+        # --- Past reviews ---
+        if past_health_reviews:
+            tasks["past_health_reviews"] = self._fetch_past_health_reviews(
+                project, past_health_review_limit,
+            )
+        if past_ceo_reviews:
+            tasks["past_ceo_reviews"] = self._fetch_past_ceo_reviews(
+                project, past_ceo_review_limit,
+            )
+
         # Run all tasks in parallel
         if tasks:
             keys = list(tasks.keys())
@@ -228,6 +249,10 @@ class ProjectContextService:
             data.action_items = result
         elif key == "knowledge":
             data.knowledge_entries = result
+        elif key == "past_health_reviews":
+            data.past_health_reviews = result
+        elif key == "past_ceo_reviews":
+            data.past_ceo_reviews = result
 
     # ------------------------------------------------------------------
     # Individual fetch methods — each catches its own errors
@@ -239,16 +264,10 @@ class ProjectContextService:
         try:
             raw = await jira.search(
                 f'project = RISK AND issuetype = Risk AND parent = {project.jira_goal_key}',
-                fields=["summary", "status"],
+                fields=["summary", "status", "description", "components",
+                         FIELD_IMPACT_ANALYSIS, FIELD_MITIGATION_CONTROL],
             )
-            return [
-                {
-                    "key": r.get("key", ""),
-                    "summary": r.get("fields", {}).get("summary", ""),
-                    "status": r.get("fields", {}).get("status", {}).get("name", ""),
-                }
-                for r in raw
-            ]
+            return [self._parse_risk_or_decision(r) for r in raw]
         except (ConnectorError, Exception) as exc:
             logger.warning("ProjectContext: failed to fetch risk summaries: %s", exc)
             return []
@@ -261,21 +280,71 @@ class ProjectContextService:
         try:
             raw = await jira.search(
                 f'project = RISK AND issuetype = {ISSUE_TYPE_DECISION} AND parent = {project.jira_goal_key}',
-                fields=["summary", "status"],
+                fields=["summary", "status", "description", "components"],
             )
-            return [
-                {
-                    "key": r.get("key", ""),
-                    "summary": r.get("fields", {}).get("summary", ""),
-                    "status": r.get("fields", {}).get("status", {}).get("name", ""),
-                }
-                for r in raw
-            ]
+            return [self._parse_risk_or_decision(r) for r in raw]
         except (ConnectorError, Exception) as exc:
             logger.warning("ProjectContext: failed to fetch decision summaries: %s", exc)
             return []
         finally:
             await jira.close()
+
+    @staticmethod
+    def _parse_risk_or_decision(raw: dict) -> dict[str, str]:
+        """Extract a rich summary dict from a raw Jira issue response."""
+        fields = raw.get("fields", {})
+        result: dict[str, str] = {
+            "key": raw.get("key", ""),
+            "summary": fields.get("summary", ""),
+            "status": fields.get("status", {}).get("name", ""),
+        }
+
+        # Components
+        components = fields.get("components", [])
+        if components:
+            result["components"] = ", ".join(c.get("name", "") for c in components)
+
+        # Description (extract plain text from ADF)
+        desc = fields.get("description")
+        if desc and isinstance(desc, dict):
+            result["description"] = ProjectContextService._extract_adf_text(desc)[:500]
+        elif desc and isinstance(desc, str):
+            result["description"] = desc[:500]
+
+        # Impact analysis (custom field, ADF)
+        impact = fields.get(FIELD_IMPACT_ANALYSIS)
+        if impact and isinstance(impact, dict):
+            result["impact_analysis"] = ProjectContextService._extract_adf_text(impact)[:300]
+        elif impact and isinstance(impact, str):
+            result["impact_analysis"] = impact[:300]
+
+        # Mitigation (custom field, ADF)
+        mitigation = fields.get(FIELD_MITIGATION_CONTROL)
+        if mitigation and isinstance(mitigation, dict):
+            result["mitigation"] = ProjectContextService._extract_adf_text(mitigation)[:300]
+        elif mitigation and isinstance(mitigation, str):
+            result["mitigation"] = mitigation[:300]
+
+        return result
+
+    @staticmethod
+    def _extract_adf_text(adf: dict) -> str:
+        """Recursively extract plain text from a Jira ADF document."""
+        texts: list[str] = []
+
+        def _walk(node: dict | list) -> None:
+            if isinstance(node, list):
+                for item in node:
+                    _walk(item)
+                return
+            if isinstance(node, dict):
+                if node.get("type") == "text":
+                    texts.append(node.get("text", ""))
+                for child in node.get("content", []):
+                    _walk(child)
+
+        _walk(adf)
+        return " ".join(texts)
 
     async def _fetch_risks_raw(
         self, project: Project, created_since: str | None,
@@ -451,4 +520,46 @@ class ProjectContextService:
             return repo.list_knowledge_entries(project.id)
         except Exception as exc:
             logger.warning("ProjectContext: failed to get knowledge entries: %s", exc)
+            return []
+
+    async def _fetch_past_health_reviews(
+        self, project: Project, limit: int,
+    ) -> list[dict]:
+        try:
+            from src.repositories.review_repo import HealthReviewRepository
+            repo = HealthReviewRepository(self._db_path)
+            reviews = repo.list_reviews(project.id, limit=limit)
+            # Return lightweight summaries (rating + rationale + date)
+            result = []
+            for r in reviews:
+                import json as _json
+                review_data = _json.loads(r.get("review_json", "{}"))
+                result.append({
+                    "health_rating": r.get("health_rating", ""),
+                    "health_rationale": review_data.get("health_rationale", ""),
+                    "created_at": r.get("created_at", ""),
+                })
+            return result
+        except Exception as exc:
+            logger.warning("ProjectContext: failed to get past health reviews: %s", exc)
+            return []
+
+    async def _fetch_past_ceo_reviews(
+        self, project: Project, limit: int,
+    ) -> list[dict]:
+        try:
+            from src.repositories.review_repo import CeoReviewRepository
+            repo = CeoReviewRepository(self._db_path)
+            reviews = repo.list_reviews(project.id, limit=limit)
+            # Return lightweight summaries (health indicator + summary + date)
+            return [
+                {
+                    "health_indicator": r.health_indicator,
+                    "summary": r.summary,
+                    "created_at": r.created_at,
+                }
+                for r in reviews
+            ]
+        except Exception as exc:
+            logger.warning("ProjectContext: failed to get past CEO reviews: %s", exc)
             return []

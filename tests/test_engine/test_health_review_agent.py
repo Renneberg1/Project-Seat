@@ -184,7 +184,7 @@ class TestHealthReviewAgentGenerateReview:
 
         prompt = provider.generate_calls[0]["user_prompt"]
         assert "HOP Drop 3" in prompt
-        assert "Risk Register" in prompt
+        assert "risk_register" in prompt
 
     async def test_retry_on_invalid_json(self, sample_context):
         """Agent retries once if first response is invalid JSON."""

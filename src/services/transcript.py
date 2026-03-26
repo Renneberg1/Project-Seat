@@ -117,6 +117,7 @@ class TranscriptService:
             risks=True, decisions=True,
             charter=True, xft=True,
             goal_metadata=True,
+            action_items=True, knowledge=True,
         )
 
         default_label = data.goal_labels[0] if data.goal_labels else None
@@ -131,6 +132,14 @@ class TranscriptService:
             xft_content=data.xft_content,
             default_component=default_component,
             default_label=default_label,
+            open_action_items=[
+                {"title": a.title, "owner": a.owner_name, "status": a.status}
+                for a in data.action_items
+            ],
+            knowledge_entries=[
+                {"title": e.title, "type": e.entry_type, "tags": ",".join(e.tags) if e.tags else ""}
+                for e in data.knowledge_entries[:20]
+            ],
         )
 
     # ------------------------------------------------------------------
@@ -152,16 +161,26 @@ class TranscriptService:
         provider = get_provider(self._settings.llm)
         agent = TranscriptAgent(provider)
         try:
+            project_ctx = {
+                "project_name": context.project_name,
+                "jira_goal_key": context.jira_goal_key,
+                "existing_risks": context.existing_risks,
+                "existing_decisions": context.existing_decisions,
+                "charter_content": context.charter_content,
+                "xft_content": context.xft_content,
+                "open_action_items": context.open_action_items,
+                "knowledge_entries": context.knowledge_entries,
+            }
             result = await agent.analyze_transcript(
                 transcript_text=record.raw_text,
-                project_context={
-                    "project_name": context.project_name,
-                    "jira_goal_key": context.jira_goal_key,
-                    "existing_risks": context.existing_risks,
-                    "existing_decisions": context.existing_decisions,
-                    "charter_content": context.charter_content,
-                    "xft_content": context.xft_content,
-                },
+                project_context=project_ctx,
+            )
+
+            # Two-pass: if the LLM requested additional context, fetch and refine
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings,
+                label=f"Transcript {transcript_id}",
             )
         finally:
             await provider.close()
@@ -192,7 +211,13 @@ class TranscriptService:
                 knowledge_items.append(raw_sug)
                 continue
 
-            if stype in (SuggestionType.RISK, SuggestionType.DECISION):
+            if stype == SuggestionType.UPDATE_EXISTING:
+                existing_key = raw_sug.get("existing_key", "")
+                if not existing_key:
+                    continue
+                payload = self._build_update_existing_payload(raw_sug, existing_key)
+                action = "update_jira_issue"
+            elif stype in (SuggestionType.RISK, SuggestionType.DECISION):
                 payload = self._build_jira_payload(raw_sug, context)
                 action = "create_jira_issue"
             elif stype in (SuggestionType.XFT_UPDATE, SuggestionType.CHARTER_UPDATE):
@@ -372,6 +397,49 @@ class TranscriptService:
     # ------------------------------------------------------------------
     # Payload builders
     # ------------------------------------------------------------------
+
+    def _build_update_existing_payload(
+        self, suggestion: dict[str, Any], existing_key: str,
+    ) -> dict[str, Any]:
+        """Build a payload to add new information to an existing Jira issue.
+
+        The payload adds a comment with the new information from the transcript,
+        and optionally updates fields (impact analysis, mitigation) if new data
+        is provided.
+        """
+        from src.engine.prompts.transcript import build_adf_field
+
+        # Build a structured comment with the new information
+        parts = [f"Updated from meeting transcript analysis:"]
+        if suggestion.get("background"):
+            parts.append(f"\nNew context: {suggestion['background']}")
+        if suggestion.get("impact_analysis"):
+            parts.append(f"\nUpdated impact: {suggestion['impact_analysis']}")
+        if suggestion.get("mitigation"):
+            parts.append(f"\nUpdated mitigation: {suggestion['mitigation']}")
+        if suggestion.get("evidence"):
+            parts.append(f"\nEvidence: {suggestion['evidence']}")
+
+        comment_text = "\n".join(parts)
+
+        payload: dict[str, Any] = {
+            "issue_key": existing_key,
+            "comment": comment_text,
+        }
+
+        # Include field updates if the LLM provided new data
+        fields: dict[str, Any] = {}
+        impact = suggestion.get("impact_analysis", "")
+        if impact:
+            fields[FIELD_IMPACT_ANALYSIS] = build_adf_field(impact)
+        mitigation = suggestion.get("mitigation", "")
+        if mitigation:
+            fields[FIELD_MITIGATION_CONTROL] = build_adf_field(mitigation)
+
+        if fields:
+            payload["fields"] = fields
+
+        return payload
 
     def _build_jira_payload(
         self, suggestion: dict[str, Any], context: ProjectContext

@@ -41,6 +41,7 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
 
     Reads LLM_PROVIDER env to decide which backend to use:
     - "gemini" -> GeminiProvider (Google Generative Language API)
+    - "claude" -> ClaudeProvider (Anthropic Messages API)
     - "ollama" -> OllamaProvider (local Ollama server)
     """
     provider = settings.provider.lower()
@@ -51,6 +52,15 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
         return GeminiProvider(
             api_key=settings.api_key,
             model=settings.model or "gemini-2.5-flash",
+            verify_ssl=settings.verify_ssl,
+        )
+
+    elif provider == "claude":
+        from src.engine.providers.claude import ClaudeProvider
+
+        return ClaudeProvider(
+            api_key=settings.api_key,
+            model=settings.model or "claude-sonnet-4-20250514",
             verify_ssl=settings.verify_ssl,
         )
 
@@ -65,7 +75,7 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
     else:
         raise ValueError(
             f"Unknown LLM provider: '{provider}'. "
-            f"Set LLM_PROVIDER to 'gemini' or 'ollama'."
+            f"Set LLM_PROVIDER to 'gemini', 'claude', or 'ollama'."
         )
 
 
@@ -76,12 +86,18 @@ def get_provider(settings: LLMSettings) -> LLMProvider:
 class BaseAgent:
     """Common base for all LLM agents.
 
-    Provides ``_generate_with_retry`` (JSON parse with one retry) and
-    ``_strip_fences`` (remove markdown code fences from LLM output).
+    Provides ``_generate_with_retry`` (JSON parse with one retry),
+    ``_strip_fences`` (remove markdown code fences from LLM output),
+    and ``resolve_context_requests`` (two-pass enrichment pattern).
     """
 
     def __init__(self, provider: LLMProvider) -> None:
         self._provider = provider
+        # Tracked by _generate_with_retry for two-pass refinement
+        self._last_system_prompt: str = ""
+        self._last_user_prompt: str = ""
+        self._last_schema: dict[str, Any] = {}
+        self._last_max_tokens: int = 4096
 
     @staticmethod
     def _strip_fences(text: str) -> str:
@@ -102,6 +118,12 @@ class BaseAgent:
         max_tokens: int = 4096,
     ) -> dict[str, Any]:
         """Generate and parse JSON, retrying once on parse failure."""
+        # Store for potential two-pass refinement
+        self._last_system_prompt = system_prompt
+        self._last_user_prompt = user_prompt
+        self._last_schema = schema
+        self._last_max_tokens = max_tokens
+
         raw = await self._provider.generate(
             system_prompt=system_prompt,
             user_prompt=user_prompt,
@@ -133,6 +155,44 @@ class BaseAgent:
 
         return json.loads(self._strip_fences(raw))
 
+    async def resolve_context_requests(
+        self,
+        result: dict[str, Any],
+        fetched_context: list[dict[str, str]],
+    ) -> dict[str, Any]:
+        """Re-run the last LLM call with additional fetched context appended.
+
+        This is the generic second pass of the two-pass enrichment pattern.
+        Any agent subclass can use this after checking result["context_requests"].
+        """
+        enriched_parts = [
+            self._last_user_prompt,
+            "",
+            "<additional_context>",
+        ]
+        for item in fetched_context:
+            enriched_parts.append(
+                f"<lookup type=\"{item.get('type', '?')}\" query=\"{item.get('query', '?')}\">"
+            )
+            enriched_parts.append(item.get("result", "No results found."))
+            enriched_parts.append("</lookup>")
+        enriched_parts.append("</additional_context>")
+        enriched_parts.append("")
+        enriched_parts.append(
+            "<instructions>Refine your analysis using the additional context above. "
+            "Return an empty context_requests array — no further lookups needed.</instructions>"
+        )
+
+        enriched_prompt = "\n".join(enriched_parts)
+
+        return await self._generate_with_retry(
+            self._last_system_prompt,
+            enriched_prompt,
+            self._last_schema,
+            temperature=0.3,
+            max_tokens=self._last_max_tokens,
+        )
+
 
 # ------------------------------------------------------------------
 # Transcript Agent
@@ -154,7 +214,8 @@ class TranscriptAgent(BaseAgent):
                 (existing risks, decisions, Charter/XFT content).
 
         Returns:
-            Parsed JSON with meeting_summary and suggestions list.
+            Parsed JSON with meeting_summary, suggestions list,
+            and context_requests list.
         """
         from src.engine.prompts.transcript import (
             SYSTEM_PROMPT,
@@ -337,6 +398,7 @@ class RiskRefineAgent(BaseAgent):
         qa_history: list[dict[str, str]],
         round_number: int,
         max_rounds: int = 5,
+        project_context: dict[str, str] | None = None,
     ) -> dict[str, Any]:
         """Evaluate the draft and either ask questions or mark satisfied.
 
@@ -355,6 +417,7 @@ class RiskRefineAgent(BaseAgent):
             qa_history=qa_history,
             round_number=round_number,
             max_rounds=max_rounds,
+            project_context=project_context,
         )
 
         return await self._generate_with_retry(

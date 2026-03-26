@@ -61,6 +61,72 @@ class CharterService:
     # LLM Step 1: Generate questions
     # ------------------------------------------------------------------
 
+    async def _gather_charter_context(self, project: Any) -> dict[str, str]:
+        """Gather rich project context for Charter LLM calls."""
+        from src.services.project_context import ProjectContextService
+
+        ctx_service = ProjectContextService(
+            db_path=self._db_path, settings=self._settings,
+        )
+        data = await ctx_service.gather(
+            project,
+            risks=True, decisions=True,
+            summary=True, initiatives=True,
+            team_reports=True,
+            meeting_summaries=True, meeting_summary_limit=5,
+            action_items=True, knowledge=True,
+            cache_key=f"ctx:charter:{project.id}",
+            cache_ttl=600,
+        )
+
+        ctx: dict[str, str] = {"project_name": project.name}
+
+        # Build a concise project state summary for the LLM
+        parts: list[str] = []
+        if data.summary and data.summary.goal:
+            g = data.summary.goal
+            parts.append(f"Goal: {g.key} — {g.summary} (status: {g.status}, due: {g.due_date})")
+            parts.append(f"Risks: {data.summary.open_risk_count} open / {data.summary.risk_count} total")
+            parts.append(f"Decisions: {data.summary.decision_count} total")
+
+        if data.existing_risks:
+            parts.append("Open risks:")
+            for r in data.existing_risks[:10]:
+                parts.append(f"  - [{r.get('key', '?')}] {r.get('summary', '')}")
+
+        if data.existing_decisions:
+            parts.append("Recent decisions:")
+            for d in data.existing_decisions[:10]:
+                parts.append(f"  - [{d.get('key', '?')}] {d.get('summary', '')}")
+
+        if data.initiatives:
+            parts.append("Initiatives:")
+            for i in data.initiatives:
+                parts.append(
+                    f"  - {i.issue.key}: {i.issue.summary} "
+                    f"({i.done_task_count}/{i.task_count} tasks done)"
+                )
+
+        if data.team_reports:
+            parts.append("Team progress:")
+            for r in data.team_reports:
+                parts.append(f"  - {r.team_key}: {r.pct_done_issues}% done ({r.sp_done}/{r.sp_total} SP)")
+
+        if data.action_items:
+            parts.append("Open action items:")
+            for a in data.action_items[:5]:
+                parts.append(f"  - {a.title} (owner: {a.owner_name})")
+
+        if data.meeting_summaries:
+            parts.append("Recent meetings:")
+            for ms in data.meeting_summaries[:3]:
+                parts.append(f"  - {ms.get('filename', '?')}: {ms.get('summary', '')[:150]}")
+
+        if parts:
+            ctx["project_state"] = "\n".join(parts)
+
+        return ctx
+
     async def generate_questions(
         self, project: Any, user_input: str
     ) -> list[dict[str, str]]:
@@ -72,7 +138,7 @@ class CharterService:
         from src.engine.agent import CharterAgent, get_provider
 
         sections = await self.fetch_charter_sections(project)
-        project_context = {"project_name": project.name}
+        project_context = await self._gather_charter_context(project)
 
         provider = get_provider(self._settings.llm)
         agent = CharterAgent(provider)
@@ -81,6 +147,10 @@ class CharterService:
                 current_sections=sections,
                 user_input=user_input,
                 project_context=project_context,
+            )
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Charter questions",
             )
         finally:
             await provider.close()
@@ -105,7 +175,7 @@ class CharterService:
 
         sections = await self.fetch_charter_sections(project)
         sections_by_name = {s["name"]: s["content"] for s in sections}
-        project_context = {"project_name": project.name}
+        project_context = await self._gather_charter_context(project)
 
         provider = get_provider(self._settings.llm)
         agent = CharterAgent(provider)
@@ -115,6 +185,10 @@ class CharterService:
                 user_input=user_input,
                 qa_pairs=qa_pairs,
                 project_context=project_context,
+            )
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Charter edits",
             )
         finally:
             await provider.close()

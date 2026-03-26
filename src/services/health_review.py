@@ -53,6 +53,8 @@ class HealthReviewService:
             team_reports=True, snapshots=True, snapshot_days=90,
             dhf_summary=True, releases=True,
             meeting_summaries=True, meeting_summary_limit=5,
+            action_items=True, knowledge=True,
+            past_health_reviews=True, past_health_review_limit=1,
             cache_key=f"ctx:health_review:{project.id}",
             cache_ttl=_CONTEXT_CACHE_TTL,
         )
@@ -138,6 +140,21 @@ class HealthReviewService:
         if data.meeting_summaries:
             ctx["meeting_summaries"] = data.meeting_summaries
 
+        if data.action_items:
+            ctx["open_action_items"] = [
+                {"title": a.title, "owner": a.owner_name, "status": a.status}
+                for a in data.action_items
+            ]
+
+        if data.knowledge_entries:
+            ctx["knowledge_entries"] = [
+                {"title": e.title, "type": e.entry_type}
+                for e in data.knowledge_entries[:15]
+            ]
+
+        if data.past_health_reviews:
+            ctx["past_health_reviews"] = data.past_health_reviews
+
         return ctx
 
     # ------------------------------------------------------------------
@@ -159,6 +176,10 @@ class HealthReviewService:
         agent = HealthReviewAgent(provider)
         try:
             result = await agent.ask_questions(context)
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Health questions",
+            )
         finally:
             await provider.close()
 
@@ -185,6 +206,10 @@ class HealthReviewService:
         agent = HealthReviewAgent(provider)
         try:
             result = await agent.generate_review(context, qa_pairs)
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Health review",
+            )
         finally:
             await provider.close()
 

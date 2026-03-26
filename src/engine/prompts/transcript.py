@@ -5,22 +5,26 @@ from __future__ import annotations
 from typing import Any
 
 SYSTEM_PROMPT = """\
-You are a project management analyst for a medical device software engineering team. \
-Your job is to analyze meeting transcripts and extract actionable items.
+<role>You are a project management analyst for a medical device software engineering team. \
+Your job is to analyze meeting transcripts and extract actionable items.</role>
 
-You work in a regulated medical device environment where:
-- **Risks** are tracked in Jira (RISK project, Risk issue type). A risk is anything that \
+<context>You work in a regulated medical device environment where:
+- Risks are tracked in Jira (RISK project, Risk issue type). A risk is anything that \
 could impact the project timeline, quality, regulatory compliance, or patient safety.
-- **Decisions** are tracked in Jira (RISK project, Project Issue type). A decision is any \
+- Decisions are tracked in Jira (RISK project, Project Issue type). A decision is any \
 significant choice made by the team that should be documented for traceability.
-- **XFT updates** are meeting notes that should be appended to the project's \
+- XFT updates are meeting notes that should be appended to the project's \
 Cross-Functional Team (XFT) Confluence page.
-- **Charter updates** are changes to project scope, timeline, or objectives that should \
-update the project Charter page.
+- Charter updates are changes to project scope, timeline, or objectives that should \
+update the project Charter page.</context>
 
-CRITICAL RULES:
-1. Do NOT create duplicate suggestions — check the existing risks and decisions provided \
-in the context. If a risk/decision already exists, skip it.
+<rules>
+1. Do NOT create duplicate suggestions. Carefully compare every potential risk or decision \
+against the existing items provided in context — match by MEANING, not just title. Two items \
+about the same underlying issue are duplicates even if worded differently. \
+If the transcript discusses an existing risk/decision and adds new information (updated impact, \
+new mitigation steps, status change, additional context), use type "update_existing" instead \
+of creating a new item. Set existing_key to the Jira key of the matched item.
 2. Every suggestion MUST have direct evidence from the transcript (a quote or paraphrase).
 3. Assign confidence 0.0-1.0 based on how clearly the transcript supports the suggestion.
 4. For risks: include impact analysis and mitigation/control steps.
@@ -35,12 +39,16 @@ Write with clarity, professional tone, and good structure. Use separate paragrap
 incomplete sentences. Content should read as polished documentation, not rough meeting notes.
 10. If a speaker's full name can be determined from the transcript, reference them with \
 @FirstName LastName syntax in evidence, background, and confluence_content fields.
-11. Respond with valid JSON only — no markdown, no explanation.
-12. **Action items**: tasks explicitly assigned to people during the meeting. Include \
+11. Action items: tasks explicitly assigned to people during the meeting. Include \
 who is responsible (owner_name) and any mentioned deadline (due_date_hint).
-13. **Notes**: important observations, status updates, factual statements worth preserving.
-14. **Insights**: analytical observations, lessons learned, strategic points.
-15. Prioritize: risks and decisions first (regulatory), then action items, then notes/insights.
+12. Notes: important observations, status updates, factual statements worth preserving.
+13. Insights: analytical observations, lessons learned, strategic points.
+14. Prioritize: risks and decisions first (regulatory), then action items, then notes/insights.
+15. If the transcript references specific Jira tickets, Confluence pages, documents, or \
+technical details that you do not have in the provided context, add them to context_requests. \
+Each request should specify what to look up and why it would improve your analysis. \
+Only request information that is genuinely needed — do not request speculatively.
+</rules>
 """
 
 # JSON schema for structured LLM output
@@ -58,7 +66,8 @@ TRANSCRIPT_ANALYSIS_SCHEMA: dict[str, Any] = {
                 "properties": {
                     "type": {
                         "type": "string",
-                        "enum": ["risk", "decision", "xft_update", "charter_update", "action_item", "note", "insight"],
+                        "enum": ["risk", "decision", "update_existing", "xft_update", "charter_update", "action_item", "note", "insight"],
+                        "description": "Use 'update_existing' when the transcript discusses a risk/decision that already exists in the system and provides new information to add to it.",
                     },
                     "title": {
                         "type": "string",
@@ -113,19 +122,26 @@ TRANSCRIPT_ANALYSIS_SCHEMA: dict[str, Any] = {
                         "items": {"type": "string"},
                         "description": "For note/insight: relevant topic tags. Empty array if not applicable.",
                     },
+                    "existing_key": {
+                        "type": "string",
+                        "description": "For update_existing: the Jira key of the existing risk/decision being updated (e.g. 'RISK-174'). Empty string for all other types.",
+                    },
                 },
                 "required": [
                     "type", "title", "background", "impact_analysis",
                     "mitigation", "evidence", "priority",
                     "timeline_impact_days", "confidence",
                     "confluence_section_title", "confluence_content",
-                    "owner_name", "due_date_hint", "tags",
+                    "owner_name", "due_date_hint", "tags", "existing_key",
                 ],
             },
         },
     },
     "required": ["meeting_summary", "suggestions"],
 }
+
+from src.engine.prompts import add_context_requests
+add_context_requests(TRANSCRIPT_ANALYSIS_SCHEMA)
 
 
 def build_user_prompt(transcript_text: str, project_context: dict[str, Any]) -> str:
@@ -139,51 +155,90 @@ def build_user_prompt(transcript_text: str, project_context: dict[str, Any]) -> 
     parts: list[str] = []
 
     # Project context
-    parts.append(f"## Project: {project_context.get('project_name', 'Unknown')}")
+    parts.append(f"<project_context>")
+    parts.append(f"Project: {project_context.get('project_name', 'Unknown')}")
     parts.append(f"Jira Goal: {project_context.get('jira_goal_key', 'Unknown')}")
+    parts.append("</project_context>")
     parts.append("")
 
-    # Existing risks
+    # Existing risks (with descriptions for semantic matching)
     risks = project_context.get("existing_risks", [])
+    parts.append("<existing_risks>")
     if risks:
-        parts.append("## Existing Risks (do NOT duplicate)")
         for r in risks:
-            parts.append(f"- [{r.get('key', '?')}] {r.get('summary', '')} ({r.get('status', '')})")
-        parts.append("")
+            parts.append(f"<risk key=\"{r.get('key', '?')}\" status=\"{r.get('status', '')}\">")
+            parts.append(f"  Summary: {r.get('summary', '')}")
+            if r.get("components"):
+                parts.append(f"  Components: {r['components']}")
+            if r.get("description"):
+                parts.append(f"  Description: {r['description']}")
+            if r.get("impact_analysis"):
+                parts.append(f"  Impact: {r['impact_analysis']}")
+            if r.get("mitigation"):
+                parts.append(f"  Mitigation: {r['mitigation']}")
+            parts.append("</risk>")
     else:
-        parts.append("## Existing Risks: None")
-        parts.append("")
+        parts.append("None")
+    parts.append("</existing_risks>")
+    parts.append("")
 
-    # Existing decisions
+    # Existing decisions (with descriptions for semantic matching)
     decisions = project_context.get("existing_decisions", [])
+    parts.append("<existing_decisions>")
     if decisions:
-        parts.append("## Existing Decisions (do NOT duplicate)")
         for d in decisions:
-            parts.append(f"- [{d.get('key', '?')}] {d.get('summary', '')} ({d.get('status', '')})")
-        parts.append("")
+            parts.append(f"<decision key=\"{d.get('key', '?')}\" status=\"{d.get('status', '')}\">")
+            parts.append(f"  Summary: {d.get('summary', '')}")
+            if d.get("components"):
+                parts.append(f"  Components: {d['components']}")
+            if d.get("description"):
+                parts.append(f"  Description: {d['description']}")
+            parts.append("</decision>")
     else:
-        parts.append("## Existing Decisions: None")
-        parts.append("")
+        parts.append("None")
+    parts.append("</existing_decisions>")
+    parts.append("")
 
     # Charter content (last 3000 chars)
     charter = project_context.get("charter_content")
     if charter:
         truncated = charter[-3000:] if len(charter) > 3000 else charter
-        parts.append("## Current Charter Page (excerpt)")
+        parts.append("<charter_content>")
         parts.append(truncated)
+        parts.append("</charter_content>")
         parts.append("")
 
     # XFT content (last 3000 chars)
     xft = project_context.get("xft_content")
     if xft:
         truncated = xft[-3000:] if len(xft) > 3000 else xft
-        parts.append("## Current XFT Page (excerpt)")
+        parts.append("<xft_content>")
         parts.append(truncated)
+        parts.append("</xft_content>")
+        parts.append("")
+
+    # Open action items (for continuity)
+    action_items = project_context.get("open_action_items", [])
+    if action_items:
+        parts.append("<open_action_items>")
+        for a in action_items:
+            owner = a.get("owner", "unassigned")
+            parts.append(f"- {a.get('title', '?')} (owner: {owner}, status: {a.get('status', '?')})")
+        parts.append("</open_action_items>")
+        parts.append("")
+
+    # Knowledge entries (notes/insights from prior meetings)
+    knowledge = project_context.get("knowledge_entries", [])
+    if knowledge:
+        parts.append("<prior_knowledge>")
+        for k in knowledge:
+            tags = f" [{k.get('tags', '')}]" if k.get("tags") else ""
+            parts.append(f"- [{k.get('type', '?')}] {k.get('title', '?')}{tags}")
+        parts.append("</prior_knowledge>")
         parts.append("")
 
     # Transcript (truncate to ~20K chars keeping start/end + speaker changes)
-    parts.append("## Meeting Transcript")
-    parts.append("---")
+    parts.append("<transcript>")
     if len(transcript_text) > 20000:
         # Keep first 10K, last 5K, and note the truncation
         parts.append(transcript_text[:10000])
@@ -191,12 +246,77 @@ def build_user_prompt(transcript_text: str, project_context: dict[str, Any]) -> 
         parts.append(transcript_text[-5000:])
     else:
         parts.append(transcript_text)
-    parts.append("---")
+    parts.append("</transcript>")
 
     parts.append("")
     parts.append(
-        "Analyze this transcript and return a JSON object with meeting_summary "
-        "and suggestions array. Follow all rules in the system prompt."
+        "<instructions>Analyze this transcript and extract all actionable items. "
+        "Do not duplicate existing risks or decisions listed above. "
+        "Follow all rules in the system prompt.</instructions>"
+    )
+
+    return "\n".join(parts)
+
+
+# ------------------------------------------------------------------
+# Refinement system prompt (second pass with additional context)
+# ------------------------------------------------------------------
+
+REFINEMENT_SYSTEM_PROMPT = """\
+<role>You are a project management analyst for a medical device software engineering team. \
+You previously analyzed a meeting transcript and requested additional context. \
+That context has now been fetched. Your job is to refine your analysis.</role>
+
+<rules>
+1. Review the additional context provided and update your suggestions accordingly.
+2. You may add, modify, or remove suggestions based on the new information.
+3. Additional context may reveal that a risk you identified already exists — remove duplicates.
+4. Additional context may add detail to your impact analysis or mitigation steps — enrich them.
+5. All other rules from the original analysis still apply.
+6. Return an empty context_requests array — no further lookups are needed.
+</rules>
+"""
+
+
+def build_refinement_prompt(
+    original_prompt: str,
+    first_pass_result: dict[str, Any],
+    fetched_context: list[dict[str, str]],
+) -> str:
+    """Build the second-pass prompt with the original analysis + fetched context.
+
+    Args:
+        original_prompt: The full user prompt from the first pass.
+        first_pass_result: The parsed JSON result from the first pass.
+        fetched_context: List of {type, query, result} dicts with fetched data.
+    """
+    parts: list[str] = []
+
+    parts.append("<original_analysis>")
+    parts.append(original_prompt)
+    parts.append("</original_analysis>")
+    parts.append("")
+
+    parts.append("<first_pass_summary>")
+    parts.append(f"Meeting summary: {first_pass_result.get('meeting_summary', '')}")
+    parts.append(f"Suggestions: {len(first_pass_result.get('suggestions', []))}")
+    for s in first_pass_result.get("suggestions", []):
+        parts.append(f"- [{s.get('type', '?')}] {s.get('title', '?')} (confidence: {s.get('confidence', 0)})")
+    parts.append("</first_pass_summary>")
+    parts.append("")
+
+    parts.append("<additional_context>")
+    for item in fetched_context:
+        parts.append(f"<lookup type=\"{item.get('type', '?')}\" query=\"{item.get('query', '?')}\">")
+        parts.append(item.get("result", "No results found."))
+        parts.append("</lookup>")
+    parts.append("</additional_context>")
+    parts.append("")
+
+    parts.append(
+        "<instructions>Refine your analysis using the additional context above. "
+        "Update suggestions where the new information changes your assessment. "
+        "Return the complete refined result with all suggestions.</instructions>"
     )
 
     return "\n".join(parts)

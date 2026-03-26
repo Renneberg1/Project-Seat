@@ -12,22 +12,24 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.engine.prompts import CONTEXT_REQUESTS_RULE, add_context_requests
+
 
 # ------------------------------------------------------------------
 # Step 1: Questions prompt
 # ------------------------------------------------------------------
 
 QUESTIONS_SYSTEM_PROMPT = """\
-You are a senior project manager preparing a fortnightly CEO status update for \
-a medical device software engineering project. You have been given project data \
-from the last 2 weeks, including new risks, new decisions, development progress \
-delta, documentation progress, and team blockers.
+<role>You are a senior project manager preparing a fortnightly CEO status update for \
+a medical device software engineering project.</role>
 
+<context>You have been given project data from the last 2 weeks, including new risks, \
+new decisions, development progress delta, documentation progress, and team blockers. \
 Your job is to identify what you CANNOT determine from the data alone — things \
 like reasons for delays, context behind new risks, stakeholder feedback, \
-external dependency changes, or qualitative team dynamics.
+external dependency changes, or qualitative team dynamics.</context>
 
-RULES:
+<rules>
 1. Only ask questions about information genuinely absent from the provided data.
 2. Each question must include a category (e.g. "Decisions", "Risks", \
 "Development", "Documentation", "Stakeholders", "Timeline").
@@ -35,7 +37,8 @@ RULES:
 4. Ask at most 6 questions — focus on the most impactful gaps.
 5. If the data is comprehensive enough and PM notes cover the gaps, return an \
 empty list.
-6. Respond with valid JSON only — no markdown, no explanation.
+6. """ + CONTEXT_REQUESTS_RULE + """
+</rules>
 """
 
 CEO_QUESTIONS_SCHEMA: dict[str, Any] = {
@@ -65,6 +68,7 @@ CEO_QUESTIONS_SCHEMA: dict[str, Any] = {
     },
     "required": ["questions"],
 }
+add_context_requests(CEO_QUESTIONS_SCHEMA)
 
 
 def build_questions_prompt(
@@ -74,36 +78,33 @@ def build_questions_prompt(
     """Build the user prompt for the questions step."""
     parts: list[str] = []
 
-    parts.append(f"# CEO Status Update Data: {metrics.get('project_name', 'Unknown')}")
-    parts.append(f"Phase: {metrics.get('phase', 'N/A')} | Due: {metrics.get('due_date', 'N/A')}")
+    parts.append(f"<project_context>")
+    parts.append(f"Project: {metrics.get('project_name', 'Unknown')}")
+    parts.append(f"Phase: {metrics.get('phase', 'N/A')}")
+    parts.append(f"Due: {metrics.get('due_date', 'N/A')}")
+    parts.append(f"</project_context>")
+    parts.append("")
+    parts.append(f"<time_window>Last 2 weeks</time_window>")
     parts.append("")
 
-    # New decisions (last 2 weeks)
     _append_new_decisions(parts, metrics)
-
-    # New risks (last 2 weeks)
     _append_new_risks(parts, metrics)
-
-    # Development progress
     _append_dev_progress(parts, metrics)
-
-    # Documentation progress
     _append_doc_progress(parts, metrics)
-
-    # Releases
     _append_releases(parts, metrics)
+    _append_past_ceo_review(parts, metrics)
+    _append_action_items(parts, metrics)
+    _append_knowledge_entries(parts, metrics)
 
-    # PM notes
     if pm_notes and pm_notes.strip():
-        parts.append("## PM Notes")
+        parts.append("<pm_notes>")
         parts.append(pm_notes.strip())
+        parts.append("</pm_notes>")
         parts.append("")
 
-    parts.append("---")
     parts.append(
-        "Based on the data above, identify questions you cannot answer from the data "
-        "alone. Return a JSON object with a 'questions' array. "
-        'If the data is sufficient, return {"questions": []}.'
+        "<instructions>Based on the data above, identify questions you cannot answer from the data "
+        "alone. If the data is sufficient, return an empty questions list.</instructions>"
     )
 
     return "\n".join(parts)
@@ -114,14 +115,14 @@ def build_questions_prompt(
 # ------------------------------------------------------------------
 
 REVIEW_SYSTEM_PROMPT = """\
-You are a senior project manager producing a fortnightly CEO-level project \
-status update for a medical device software engineering project. Focus on what \
-changed in the last 2 weeks.
+<role>You are a senior project manager producing a fortnightly CEO-level project \
+status update for a medical device software engineering project.</role>
 
-Metrics are pre-computed and accurate — reference them but do not alter numbers. \
-Be extremely concise. The entire update must fit in ~10 lines when rendered.
+<context>Focus on what changed in the last 2 weeks. Metrics are pre-computed and \
+accurate — reference them but do not alter numbers. Be extremely concise. The \
+entire update must fit in ~10 lines when rendered.</context>
 
-RULES:
+<rules>
 1. health_indicator must be exactly "On Track", "At Risk", or "Off Track".
 2. summary is 1-2 sentences covering the most important change or theme.
 3. Each bullet should be ONE short sentence — no more.
@@ -133,10 +134,11 @@ update. Instead, add it to deep_dive_topics so the PM can raise it separately in
 a dedicated forum.
 6. Escalations should only be raised for issues needing CEO/leadership attention.
 7. Next milestones: at most 2, concrete, time-bound where possible.
-8. Respond with valid JSON only — no markdown, no explanation.
-9. If the PM notes reference people with @Name syntax (e.g. @Alice Smith), \
+8. If the PM notes reference people with @Name syntax (e.g. @Alice Smith), \
 preserve the @ prefix exactly in your output. You may also use @Name when \
 referencing specific individuals.
+9. """ + CONTEXT_REQUESTS_RULE + """
+</rules>
 """
 
 CEO_REVIEW_SCHEMA: dict[str, Any] = {
@@ -215,6 +217,7 @@ CEO_REVIEW_SCHEMA: dict[str, Any] = {
         "deep_dive_topics",
     ],
 }
+add_context_requests(CEO_REVIEW_SCHEMA)
 
 
 def build_review_prompt(
@@ -225,8 +228,13 @@ def build_review_prompt(
     """Build the user prompt for the review step."""
     parts: list[str] = []
 
-    parts.append(f"# CEO Status Update Data: {metrics.get('project_name', 'Unknown')}")
-    parts.append(f"Phase: {metrics.get('phase', 'N/A')} | Due: {metrics.get('due_date', 'N/A')}")
+    parts.append(f"<project_context>")
+    parts.append(f"Project: {metrics.get('project_name', 'Unknown')}")
+    parts.append(f"Phase: {metrics.get('phase', 'N/A')}")
+    parts.append(f"Due: {metrics.get('due_date', 'N/A')}")
+    parts.append(f"</project_context>")
+    parts.append("")
+    parts.append(f"<time_window>Last 2 weeks</time_window>")
     parts.append("")
 
     _append_new_decisions(parts, metrics)
@@ -234,25 +242,30 @@ def build_review_prompt(
     _append_dev_progress(parts, metrics)
     _append_doc_progress(parts, metrics)
     _append_releases(parts, metrics)
+    _append_past_ceo_review(parts, metrics)
+    _append_action_items(parts, metrics)
+    _append_knowledge_entries(parts, metrics)
 
     if pm_notes and pm_notes.strip():
-        parts.append("## PM Notes")
+        parts.append("<pm_notes>")
         parts.append(pm_notes.strip())
+        parts.append("</pm_notes>")
         parts.append("")
 
     if qa_pairs:
-        parts.append("## PM's Answers to Clarifying Questions")
+        parts.append("<pm_answers>")
         for i, qa in enumerate(qa_pairs, 1):
-            parts.append(f"**Q{i}:** {qa['question']}")
-            parts.append(f"**A{i}:** {qa['answer']}")
-            parts.append("")
+            parts.append(f"<qa_pair>")
+            parts.append(f"Q{i}: {qa['question']}")
+            parts.append(f"A{i}: {qa['answer']}")
+            parts.append(f"</qa_pair>")
+        parts.append("</pm_answers>")
+        parts.append("")
 
-    parts.append("---")
     parts.append(
-        "Produce a concise CEO-level status update (~10 lines max). Return a JSON "
-        "object with health_indicator, summary, bullets (max 6 one-sentence items), "
-        "escalations, next_milestones (max 2), and deep_dive_topics (anything too "
-        "complex for a single bullet)."
+        "<instructions>Produce a concise CEO-level status update (~10 lines max). "
+        "At most 6 one-sentence bullets, max 2 milestones. Move anything too complex "
+        "for a single bullet into deep_dive_topics.</instructions>"
     )
 
     return "\n".join(parts)
@@ -265,12 +278,13 @@ def build_review_prompt(
 
 def _append_new_decisions(parts: list[str], metrics: dict[str, Any]) -> None:
     decisions = metrics.get("new_decisions", [])
-    parts.append(f"## New Decisions (Last 2 Weeks): {len(decisions)}")
+    parts.append(f"<new_decisions count=\"{len(decisions)}\">")
     if decisions:
         for d in decisions:
             parts.append(f"- [{d.get('key', '?')}] {d.get('summary', '?')} (status: {d.get('status', '?')})")
     else:
-        parts.append("- No new decisions in this period.")
+        parts.append("No new decisions in this period.")
+    parts.append("</new_decisions>")
     parts.append("")
 
 
@@ -278,51 +292,53 @@ def _append_new_risks(parts: list[str], metrics: dict[str, Any]) -> None:
     new_risks = metrics.get("new_risks", [])
     total = metrics.get("total_risk_count", 0)
     open_count = metrics.get("open_risk_count", 0)
-    parts.append(f"## New Risks (Last 2 Weeks): {len(new_risks)}")
-    parts.append(f"Overall: {open_count} open / {total} total")
+    parts.append(f"<new_risks count=\"{len(new_risks)}\" open=\"{open_count}\" total=\"{total}\">")
     if new_risks:
         for r in new_risks:
             components = r.get("components", "")
             comp_str = f" [{components}]" if components else ""
             parts.append(f"- [{r.get('key', '?')}] {r.get('summary', '?')} (status: {r.get('status', '?')}){comp_str}")
     else:
-        parts.append("- No new risks in this period.")
+        parts.append("No new risks in this period.")
+    parts.append("</new_risks>")
     parts.append("")
 
 
 def _append_dev_progress(parts: list[str], metrics: dict[str, Any]) -> None:
-    parts.append("## Development Progress (Last 2 Weeks)")
     sp_burned = metrics.get("sp_burned_2w", 0)
     scope_change = metrics.get("scope_change_2w", 0)
-    parts.append(f"- Story points burned: {sp_burned}")
-    parts.append(f"- Scope change: {scope_change:+} SP")
+    parts.append("<development_progress>")
+    parts.append(f"Story points burned: {sp_burned}")
+    parts.append(f"Scope change: {scope_change:+} SP")
 
     team_progress = metrics.get("team_progress", [])
     if team_progress:
-        parts.append("### Per-Team Progress")
+        parts.append("Per-team:")
         for t in team_progress:
             blockers = f" | Blockers: {t['blockers']}" if t.get("blockers") else ""
             parts.append(
                 f"- {t.get('team', '?')}: {t.get('pct_done', 0)}% "
                 f"({t.get('sp_done', 0)}/{t.get('sp_total', 0)} SP){blockers}"
             )
+    parts.append("</development_progress>")
     parts.append("")
 
 
 def _append_doc_progress(parts: list[str], metrics: dict[str, Any]) -> None:
-    parts.append("## Documentation Progress")
     dhf_total = metrics.get("dhf_total", 0)
     dhf_released = metrics.get("dhf_released", 0)
     dhf_pct = metrics.get("dhf_completion_pct", 0)
-    parts.append(f"- DHF Completion: {dhf_released}/{dhf_total} ({dhf_pct:.0f}%)")
+    parts.append("<documentation_progress>")
+    parts.append(f"DHF Completion: {dhf_released}/{dhf_total} ({dhf_pct:.0f}%)")
 
     recently_updated = metrics.get("dhf_recently_updated", [])
     if recently_updated:
-        parts.append("### Recently Updated Documents (Last 2 Weeks)")
+        parts.append("Recently updated (last 2 weeks):")
         for doc in recently_updated:
             parts.append(f"- {doc.get('title', '?')} ({doc.get('status', '?')}) — {doc.get('last_modified', '?')}")
     else:
-        parts.append("- No documents updated in last 2 weeks.")
+        parts.append("No documents updated in last 2 weeks.")
+    parts.append("</documentation_progress>")
     parts.append("")
 
 
@@ -330,8 +346,45 @@ def _append_releases(parts: list[str], metrics: dict[str, Any]) -> None:
     releases = metrics.get("releases", [])
     if not releases:
         return
-    parts.append(f"## Releases ({len(releases)})")
+    parts.append("<releases>")
     for rel in releases:
         locked = "LOCKED" if rel.get("locked") else "unlocked"
         parts.append(f"- {rel.get('name', '?')} ({locked})")
+    parts.append("</releases>")
+    parts.append("")
+
+
+def _append_past_ceo_review(parts: list[str], metrics: dict[str, Any]) -> None:
+    reviews = metrics.get("past_ceo_reviews", [])
+    if not reviews:
+        return
+    parts.append("<previous_ceo_review>")
+    for r in reviews:
+        parts.append(f"Status: {r.get('health_indicator', 'N/A')}")
+        parts.append(f"Summary: {r.get('summary', 'N/A')}")
+        parts.append(f"Date: {r.get('created_at', 'N/A')}")
+    parts.append("</previous_ceo_review>")
+    parts.append("")
+
+
+def _append_action_items(parts: list[str], metrics: dict[str, Any]) -> None:
+    items = metrics.get("open_action_items", [])
+    if not items:
+        return
+    parts.append("<open_action_items>")
+    for a in items:
+        owner = a.get("owner", "unassigned")
+        parts.append(f"- {a.get('title', '?')} (owner: {owner}, status: {a.get('status', '?')})")
+    parts.append("</open_action_items>")
+    parts.append("")
+
+
+def _append_knowledge_entries(parts: list[str], metrics: dict[str, Any]) -> None:
+    entries = metrics.get("knowledge_entries", [])
+    if not entries:
+        return
+    parts.append("<knowledge_base>")
+    for e in entries:
+        parts.append(f"- [{e.get('type', '?')}] {e.get('title', '?')}")
+    parts.append("</knowledge_base>")
     parts.append("")

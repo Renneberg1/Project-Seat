@@ -158,7 +158,7 @@ class TestRiskRefineAgent:
         prompt = provider.generate_calls[0]["user_prompt"]
         assert "How bad?" in prompt
         assert "Pretty bad" in prompt
-        assert "Round 2/" in prompt
+        assert "Round 2 of 5" in prompt
 
     async def test_refine_final_round_instruction(self):
         provider = MockProvider(SATISFIED_RESPONSE)
@@ -190,7 +190,7 @@ class TestRiskRefineAgent:
         )
 
         prompt = provider.generate_calls[0]["user_prompt"]
-        assert "Decision" in prompt
+        assert "decision" in prompt.lower()
 
     async def test_refine_retries_on_invalid_json(self):
         """Agent should retry once if first response is invalid JSON."""

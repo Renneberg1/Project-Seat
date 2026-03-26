@@ -56,6 +56,7 @@ class TranscriptRecord:
 class SuggestionType(str, enum.Enum):
     RISK = "risk"
     DECISION = "decision"
+    UPDATE_EXISTING = "update_existing"
     XFT_UPDATE = "xft_update"
     CHARTER_UPDATE = "charter_update"
     ACTION_ITEM = "action_item"
@@ -119,3 +120,5 @@ class ProjectContext:
     xft_content: str | None = None
     default_component: str | None = None
     default_label: str | None = None
+    open_action_items: list[dict[str, str]] = field(default_factory=list)
+    knowledge_entries: list[dict[str, str]] = field(default_factory=list)

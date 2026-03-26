@@ -59,6 +59,8 @@ class CeoReviewService:
             decisions_raw=True, decisions_created_since="-2w",
             meeting_summaries=True, meeting_summary_limit=5,
             meeting_summary_since=_two_weeks_ago(),
+            action_items=True, knowledge=True,
+            past_ceo_reviews=True, past_ceo_review_limit=1,
             cache_key=f"ctx:ceo_review:{project.id}",
             cache_ttl=_CONTEXT_CACHE_TTL,
         )
@@ -74,6 +76,9 @@ class CeoReviewService:
             "new_risks_raw": data.new_risks_raw,
             "new_decisions_raw": data.new_decisions_raw,
             "meeting_summaries": data.meeting_summaries,
+            "action_items": data.action_items,
+            "knowledge_entries": data.knowledge_entries,
+            "past_ceo_reviews": data.past_ceo_reviews,
         }
 
     # ------------------------------------------------------------------
@@ -177,6 +182,23 @@ class CeoReviewService:
         # Releases
         metrics["releases"] = context.get("releases", [])
 
+        # Past CEO review (for comparison baseline)
+        metrics["past_ceo_reviews"] = context.get("past_ceo_reviews", [])
+
+        # Action items and knowledge (for follow-up tracking)
+        action_items = context.get("action_items", [])
+        if action_items:
+            metrics["open_action_items"] = [
+                {"title": a.title, "owner": a.owner_name, "status": a.status}
+                for a in action_items
+            ]
+        knowledge_entries = context.get("knowledge_entries", [])
+        if knowledge_entries:
+            metrics["knowledge_entries"] = [
+                {"title": e.title, "type": e.entry_type}
+                for e in knowledge_entries[:10]
+            ]
+
         return metrics
 
     # ------------------------------------------------------------------
@@ -199,6 +221,10 @@ class CeoReviewService:
         agent = CeoReviewAgent(provider)
         try:
             result = await agent.ask_questions(metrics, pm_notes)
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="CEO questions",
+            )
         finally:
             await provider.close()
 
@@ -227,6 +253,10 @@ class CeoReviewService:
         agent = CeoReviewAgent(provider)
         try:
             result = await agent.generate_review(metrics, pm_notes, qa_pairs)
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="CEO review",
+            )
         finally:
             await provider.close()
 

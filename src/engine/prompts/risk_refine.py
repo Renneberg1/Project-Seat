@@ -8,28 +8,31 @@ from __future__ import annotations
 
 from typing import Any
 
+from src.engine.prompts import CONTEXT_REQUESTS_RULE, add_context_requests
+
 SYSTEM_PROMPT = """\
-You are a senior risk management specialist for a medical device software engineering \
+<role>You are a senior risk management specialist for a medical device software engineering \
 programme. Your job is to iteratively refine risk and decision records so they meet \
-the quality standards required by ISO 14971 and IEC 62304 traceability expectations.
+the quality standards required by ISO 14971 and IEC 62304 traceability expectations.</role>
 
-Quality criteria for a well-written risk/decision record:
-
-1. **Clear title** — concise, specific, actionable (under 80 chars). \
-States *what* could go wrong (risks) or *what was decided* (decisions).
-2. **Detailed background** — sufficient context for someone unfamiliar with the \
+<quality_criteria>
+1. Clear title — concise, specific, actionable (under 80 chars). \
+States what could go wrong (risks) or what was decided (decisions).
+2. Detailed background — sufficient context for someone unfamiliar with the \
 meeting to understand the situation. Includes relevant technical details, \
 affected components/systems, and stakeholders involved.
-3. **Specific impact analysis** — describes severity (patient safety, regulatory, \
+3. Specific impact analysis — describes severity (patient safety, regulatory, \
 timeline, cost) and probability. Quantifies where possible.
-4. **Concrete mitigation steps** — actionable, assignable steps to reduce the risk. \
+4. Concrete mitigation steps — actionable, assignable steps to reduce the risk. \
 Not vague platitudes like "monitor the situation".
-5. **Justified priority** — High/Medium/Low with reasoning tied to impact and probability.
-6. **Timeline impact** — realistic estimate of schedule impact in days. \
+5. Justified priority — High/Medium/Low with reasoning tied to impact and probability.
+6. Timeline impact — realistic estimate of schedule impact in days. \
 0 only when genuinely no schedule effect.
-7. **Transcript evidence** — direct quote or close paraphrase anchoring the item \
+7. Transcript evidence — direct quote or close paraphrase anchoring the item \
 to what was actually discussed.
+</quality_criteria>
 
+<rules>
 When evaluating, be strict: a risk that says "this could be a problem" without \
 specifics is NOT satisfactory. Each field should stand on its own as professional \
 documentation that a regulatory auditor would find adequate.
@@ -37,7 +40,8 @@ documentation that a regulatory auditor would find adequate.
 When refining, preserve the user's intent and any information from previous answers. \
 Build incrementally — don't discard good content from earlier rounds.
 
-Respond with valid JSON only — no markdown, no explanation.\
+""" + CONTEXT_REQUESTS_RULE + """
+</rules>
 """
 
 RISK_REFINE_SCHEMA: dict[str, Any] = {
@@ -131,6 +135,7 @@ RISK_REFINE_SCHEMA: dict[str, Any] = {
     },
     "required": ["satisfied", "quality_assessment", "questions", "refined_risk"],
 }
+add_context_requests(RISK_REFINE_SCHEMA)
 
 
 def build_refine_prompt(
@@ -141,6 +146,7 @@ def build_refine_prompt(
     qa_history: list[dict[str, str]],
     round_number: int,
     max_rounds: int,
+    project_context: dict[str, str] | None = None,
 ) -> str:
     """Assemble the user prompt for a refinement round.
 
@@ -151,57 +157,76 @@ def build_refine_prompt(
         qa_history: List of {question, answer} dicts from prior rounds.
         round_number: Current round (1-based).
         max_rounds: Maximum allowed rounds.
+        project_context: Optional project state summary for richer context.
     """
     parts: list[str] = []
 
     item_label = "Decision" if suggestion_type == "decision" else "Risk"
-    parts.append(f"## {item_label} Refinement — Round {round_number}/{max_rounds}")
+    parts.append(f"<refinement_round>Round {round_number} of {max_rounds}</refinement_round>")
     parts.append("")
 
+    # Project context (helps the LLM understand the broader project state)
+    if project_context:
+        parts.append("<project_context>")
+        for key in ["project_name", "charter_excerpt", "recent_meetings"]:
+            val = project_context.get(key)
+            if val:
+                parts.append(val)
+        parts.append("</project_context>")
+        parts.append("")
+
     # Current draft
-    parts.append(f"### Current {item_label} Draft")
+    parts.append(f"<current_draft type=\"{item_label.lower()}\">")
     for field_name in [
         "title", "background", "impact_analysis", "mitigation",
         "priority", "timeline_impact_days", "evidence",
     ]:
         value = current_draft.get(field_name, "")
         label = field_name.replace("_", " ").title()
-        parts.append(f"**{label}:** {value}")
+        parts.append(f"{label}: {value}")
+    parts.append("</current_draft>")
     parts.append("")
 
-    # Existing items for dedup
+    # Existing items for dedup (with descriptions for semantic matching)
     if existing_items:
-        parts.append(f"### Existing {item_label}s (avoid duplication)")
+        parts.append(f"<existing_{item_label.lower()}s>")
         for item in existing_items:
-            parts.append(
-                f"- [{item.get('key', '?')}] {item.get('summary', '')} "
-                f"({item.get('status', '')})"
-            )
+            parts.append(f"<{item_label.lower()} key=\"{item.get('key', '?')}\" status=\"{item.get('status', '')}\">")
+            parts.append(f"  Summary: {item.get('summary', '')}")
+            if item.get("description"):
+                parts.append(f"  Description: {item['description'][:200]}")
+            if item.get("impact_analysis"):
+                parts.append(f"  Impact: {item['impact_analysis'][:200]}")
+            parts.append(f"</{item_label.lower()}>")
+        parts.append(f"</existing_{item_label.lower()}s>")
         parts.append("")
 
     # Q&A history
     if qa_history:
-        parts.append("### Previous Q&A")
+        parts.append("<qa_history>")
         for i, qa in enumerate(qa_history, 1):
-            parts.append(f"**Q{i}:** {qa.get('question', '')}")
-            parts.append(f"**A{i}:** {qa.get('answer', '')}")
-            parts.append("")
+            parts.append(f"<qa_pair>")
+            parts.append(f"Q{i}: {qa.get('question', '')}")
+            parts.append(f"A{i}: {qa.get('answer', '')}")
+            parts.append(f"</qa_pair>")
+        parts.append("</qa_history>")
+        parts.append("")
 
     # Final round instruction
     if round_number >= max_rounds:
         parts.append(
-            "**IMPORTANT:** This is the final round. You MUST set satisfied=true and "
+            "<final_round>This is the final round. You MUST set satisfied=true and "
             "return the best possible refined_risk with all available information. "
-            "Do not ask further questions."
+            "Do not ask further questions.</final_round>"
         )
         parts.append("")
 
     parts.append(
-        f"Evaluate this {item_label.lower()} draft against the quality criteria. "
+        f"<instructions>Evaluate this {item_label.lower()} draft against the quality criteria. "
         "If it meets all criteria, set satisfied=true and return the final version. "
         "If not, ask targeted questions (max 3-4) to fill the most important gaps, "
         "and return an improved refined_risk incorporating any information you can "
-        "already infer or improve."
+        "already infer or improve.</instructions>"
     )
 
     return "\n".join(parts)

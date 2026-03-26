@@ -55,6 +55,7 @@ class ClosureService:
             decisions_raw=True,
             charter=True, xft=True,
             meeting_summaries=True, meeting_summary_limit=20,
+            action_items=True, knowledge=True,
             cache_key=f"ctx:closure:{project.id}",
             cache_ttl=_CONTEXT_CACHE_TTL,
         )
@@ -72,6 +73,8 @@ class ClosureService:
             "charter_content": data.charter_content,
             "xft_content": data.xft_content,
             "meeting_summaries": data.meeting_summaries,
+            "action_items": data.action_items,
+            "knowledge_entries": data.knowledge_entries,
         }
 
     # ------------------------------------------------------------------
@@ -178,6 +181,26 @@ class ClosureService:
         # Releases
         metrics["releases"] = context.get("releases", [])
 
+        # Action items and knowledge (for lessons learned context)
+        action_items = context.get("action_items", [])
+        if action_items:
+            metrics["action_items"] = [
+                {"title": a.title, "owner": a.owner_name, "status": a.status}
+                for a in action_items
+            ]
+        knowledge_entries = context.get("knowledge_entries", [])
+        if knowledge_entries:
+            metrics["knowledge_entries"] = [
+                {"title": e.title, "type": e.entry_type}
+                for e in knowledge_entries[:15]
+            ]
+
+        # Meeting summaries (already available, pass through for narrative context)
+        metrics["meeting_summaries"] = [
+            {"filename": ms.get("filename", ""), "summary": ms.get("summary", "")[:300]}
+            for ms in context.get("meeting_summaries", [])[:10]
+        ]
+
         return metrics
 
     # ------------------------------------------------------------------
@@ -200,6 +223,10 @@ class ClosureService:
         agent = ClosureAgent(provider)
         try:
             result = await agent.ask_questions(metrics, pm_notes)
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Closure questions",
+            )
         finally:
             await provider.close()
 
@@ -228,6 +255,10 @@ class ClosureService:
         agent = ClosureAgent(provider)
         try:
             result = await agent.generate_report(metrics, pm_notes, qa_pairs)
+            from src.services.context_resolver import resolve_if_needed
+            result = await resolve_if_needed(
+                result, agent, self._settings, label="Closure report",
+            )
         finally:
             await provider.close()
 

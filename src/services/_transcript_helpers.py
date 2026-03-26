@@ -18,6 +18,9 @@ def build_preview(suggestion: dict[str, Any], stype: SuggestionType) -> str:
     """Build a human-readable preview string for a suggestion."""
     lines: list[str] = []
     lines.append(f"Type: {stype.value}")
+    if stype == SuggestionType.UPDATE_EXISTING:
+        existing_key = suggestion.get("existing_key", "?")
+        lines.append(f"Updates: {existing_key}")
     lines.append(f"Title: {suggestion.get('title', 'Untitled')}")
     if suggestion.get("priority"):
         lines.append(f"Priority: {suggestion['priority']}")
