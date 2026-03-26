@@ -9,7 +9,7 @@ An AI-assisted project management cockpit for medical device software engineerin
 - **Frontend:** HTMX + Jinja2 templates + Chart.js (dashboard doughnuts, stacked bars, burnup charts)
 - **Database:** SQLite (via sqlite3 stdlib, no ORM)
 - **HTTP client:** httpx (async)
-- **LLM:** Gemini 2.5 Flash (default) or Ollama — provider-agnostic via `src/engine/agent.py`
+- **LLM:** Claude Sonnet (default), Gemini 2.5 Flash, or Ollama — provider-agnostic via `src/engine/agent.py`
 - **Package management:** uv (preferred) or pip + venv
 
 ## Architecture
@@ -88,6 +88,7 @@ project-seat/
 │   │   ├── orchestrator.py      # Task queue and scheduling (daily team progress snapshots)
 │   │   ├── providers/
 │   │   │   ├── __init__.py
+│   │   │   ├── claude.py        # Claude provider (Anthropic SDK, structured output via tool_use)
 │   │   │   ├── gemini.py        # Gemini provider (httpx, structured output via responseSchema)
 │   │   │   └── ollama.py        # Ollama provider (httpx, local inference)
 │   │   └── prompts/
@@ -131,6 +132,7 @@ project-seat/
 │   │   ├── team_snapshot.py     # Daily team progress snapshots for burnup charts
 │   │   ├── zoom_ingestion.py    # Zoom recording fetch, transcript-only discovery, transcript download, full sync pipeline
 │   │   ├── zoom_matching.py     # Hybrid title match + LLM fallback for Zoom-to-project matching
+│   │   ├── context_resolver.py   # Resolve LLM context requests (Jira/Confluence lookups)
 │   │   └── knowledge.py         # Knowledge service: action items, notes, insights from analysis
 │   ├── web/
 │   │   ├── __init__.py
@@ -243,6 +245,7 @@ project-seat/
     │   ├── test_orchestrator.py
     │   └── test_providers/
     │       ├── __init__.py
+    │       ├── test_claude.py       # Claude provider unit tests
     │       ├── test_gemini.py       # Gemini provider unit tests
     │       └── test_ollama.py       # Ollama provider unit tests
     ├── test_repositories/
@@ -280,6 +283,7 @@ project-seat/
     │   ├── test_team_snapshot.py    # Snapshot service tests
     │   ├── test_zoom_ingestion.py   # Zoom ingestion: dedup, status, polling, sync tests
     │   ├── test_zoom_matching.py    # Zoom matching: title, fuzzy, alias, LLM fallback tests
+    │   ├── test_context_resolver.py  # Context request resolver tests
     │   ├── test_knowledge.py        # Knowledge service: action items, entries, search tests
     │   └── test_risk_refinement.py  # Risk refinement service: start, continue, apply tests
     └── test_web/
@@ -331,9 +335,10 @@ pytest
 ### LLM Agent Layer
 - All LLM interactions go through `src/engine/agent.py` — never call the LLM API directly from other modules
 - `LLMProvider` is a `Protocol`: `generate(system_prompt, user_prompt, *, response_schema, temperature, max_tokens) -> str`
-- Provider implementations live in `src/engine/providers/` — currently Gemini (`gemini.py`) and Ollama (`ollama.py`)
+- Provider implementations live in `src/engine/providers/` — Claude (`claude.py`), Gemini (`gemini.py`), and Ollama (`ollama.py`)
 - `get_provider(settings)` factory reads `LLM_PROVIDER` env var to instantiate the right backend
-- Prompt templates live in `src/engine/prompts/` as Python files that build the prompt string
+- Claude provider uses `tool_use` for guaranteed schema-compliant structured JSON output; Anthropic SDK handles auth and retries
+- Prompt templates live in `src/engine/prompts/` as Python files that build the prompt string; all prompts use XML tags (`<role>`, `<rules>`, `<risk_register>`, etc.) for clear section boundaries
 - `TranscriptAgent` orchestrates transcript analysis: builds prompt, calls provider with JSON schema, retries on parse failure
 - `CharterAgent` orchestrates Charter updates via two-step LLM interaction: `ask_questions()` identifies gaps, `propose_edits()` returns section replacements — both retry on JSON parse failure
 - `HealthReviewAgent` orchestrates project health reviews via two-step LLM interaction: `ask_questions()` identifies data gaps, `generate_review()` returns structured assessment — read-only, no approval queue needed
@@ -342,10 +347,14 @@ pytest
 - `RiskRefineAgent` iteratively refines transcript-extracted risks/decisions via a single `refine()` method: evaluates against ISO 14971 quality criteria, asks targeted questions, incorporates answers, repeats until satisfied (max 5 rounds)
 - `ZoomMatchAgent` classifies Zoom meetings into projects via a single `classify_meeting()` method: given topic, host email, transcript excerpt, and active projects list, returns confidence-scored matches
 - All LLM responses that result in write actions must pass through the Approval Engine first
+- **Claude** uses `tool_use` with forced `tool_choice` for structured output — no JSON fence-stripping needed, schema compliance guaranteed by the API
+- **Claude** provider passes a custom `httpx.AsyncClient(verify=False)` when `VERIFY_SSL=false` (corporate proxy support)
 - Gemini limitation: does not support JSON Schema union types (`["string", "null"]`) — use plain types with descriptive defaults
 - Gemini limitation: 2.5 Flash uses "thinking" tokens that count against `maxOutputTokens` — use 16384+ for structured output to avoid truncation
 - Gemini uses `responseMimeType: application/json` + `responseSchema` for structured output; Ollama uses `format` parameter
 - Gemini provider logs `finishReason` warnings when response is truncated (`MAX_TOKENS`, `SAFETY`, etc.)
+- **Two-pass context requests**: All LLM schemas include a `context_requests` field. If the LLM returns requests for additional Jira/Confluence data, `ContextRequestResolver` fetches them in parallel (max 5, 3000 char limit each) and `BaseAgent.resolve_context_requests()` re-runs the LLM with the enriched prompt. `resolve_if_needed()` helper wired into all 6 analysis services.
+- **Semantic dedup**: Existing risks/decisions are fetched with full descriptions, impact analysis, mitigation, and components. The `update_existing` suggestion type links transcript findings to existing Jira items instead of creating duplicates.
 
 ### Approval Engine
 - Every write action (creating Jira tickets, updating Confluence pages, etc.) requires user approval
@@ -458,9 +467,9 @@ The Charter template page and XFT template page are regular Confluence pages (no
 ATLASSIAN_DOMAIN=yourcompany
 ATLASSIAN_EMAIL=your.email@company.com
 ATLASSIAN_API_TOKEN=your-token
-LLM_PROVIDER=gemini               # or: ollama
-LLM_API_KEY=your-llm-key          # Gemini API key (not needed for Ollama)
-LLM_MODEL=gemini-2.5-flash        # or: llama3.3:70b for Ollama
+LLM_PROVIDER=claude               # or: gemini, ollama
+LLM_API_KEY=your-llm-key          # Anthropic or Gemini API key (not needed for Ollama)
+LLM_MODEL=claude-sonnet-4-20250514  # or: gemini-2.5-flash, llama3.3:70b
 LLM_BASE_URL=http://localhost:11434  # Only needed for Ollama
 EQMS_DRAFT_SPACE_ID=...           # Confluence space ID for draft DHF documents
 EQMS_RELEASED_SPACE_ID=...        # Confluence space ID for released DHF documents
@@ -488,6 +497,9 @@ All six LLM-powered features follow a common pattern: gather project context in 
 | **Closure Report** | `ClosureAgent` | Two-step Q&A → hybrid tables + narrative | New Confluence page (child of Charter) |
 
 **Shared patterns across all workflows:**
+- **Two-pass context requests** — all schemas include `context_requests` (jira_issue, jira_search, confluence_search). If the LLM returns requests, `ContextRequestResolver` fetches them in parallel and `BaseAgent.resolve_context_requests()` re-runs with enriched prompt. `resolve_if_needed()` wired into all 6 services.
+- **Semantic dedup** — existing risks/decisions fetched with full descriptions, impact analysis, mitigation, components. `update_existing` suggestion type links findings to existing Jira items instead of creating duplicates.
+- **Rich project context** — all workflows receive comprehensive project state via `ProjectContextService` (risks, decisions, initiatives, team progress, action items, knowledge entries, past reviews, meeting summaries)
 - **Payload refresh at accept time** — payloads patched with live project data to prevent stale references
 - **Stateless Q&A** — intermediate state carried in hidden form fields, not persisted in DB
 - **Confluence append/replace modes** — current page body fetched at execution time to prevent overwrites
@@ -497,6 +509,6 @@ All six LLM-powered features follow a common pattern: gather project context in 
 
 - This is a single-user application running locally
 - All write actions to Jira/Confluence require explicit user approval
-- The LLM provider is abstracted — the codebase should not have provider-specific code outside of `src/engine/agent.py` and `src/config.py`
+- The LLM provider is abstracted — the codebase should not have provider-specific code outside of `src/engine/agent.py`, `src/engine/providers/`, and `src/config.py`
 - Sample data in `samples/` contains real Jira field structures — reference these when building connectors
 - The `field-name-to-id.json` mapping is essential for working with Jira custom fields

@@ -29,7 +29,7 @@ Scan a project's Jira hierarchy and flag epics/tasks missing story points or tim
 - Prompt template: `src/engine/prompts/estimate_check.py` (stub exists in CLAUDE.md, file missing)
 
 ### LLM Rate Limit Tracking **(NEW)**
-Track daily Gemini API calls and surface the remaining quota in the UI. Warn when approaching the 250 RPD free-tier limit; block with a clear message when exhausted, rather than surfacing a raw API error.
+Track daily LLM API calls and surface the remaining quota in the UI. Warn when approaching provider limits; block with a clear message when exhausted, rather than surfacing a raw API error.
 
 - Counter in `config` table or in-memory, reset daily
 - Badge/indicator in the nav bar or on LLM-powered pages
@@ -188,3 +188,8 @@ The `projects` table could further benefit from:
 - [x] Risk Refinement Service Tests (27 tests covering `start_risk_refinement`, `continue_risk_refinement`, `apply_refinement` with mocked agent/repos)
 - [x] Transcript-Only Zoom Meeting Ingestion (second discovery path for meetings with live transcripts but no cloud recording; `list_past_meetings()` + `get_meeting_transcript()` + `download_meeting_transcript()` on connector; `discovery_source` column on `zoom_recordings`; rate-limited transcript probing; integrated into full sync pipeline)
 - [x] Stacked Fix Version Burnup Charts (multi-version stacked scope bands with per-version colors, combined done line overlay, optional per-version done breakdown toggle with dashed lines, per-version projections, single-version fallback identical to previous behavior)
+- [x] Claude (Anthropic) LLM Provider (new `ClaudeProvider` using Anthropic SDK with `tool_use` for guaranteed structured JSON, SSL proxy support, provider factory supports gemini/claude/ollama switching via env var)
+- [x] XML-Tagged Prompts (all 7 prompt files restructured with `<role>`, `<rules>`, semantic XML tags for data sections, removed JSON boilerplate instructions)
+- [x] LLM Context Enrichment (all workflows now receive rich project state via `ProjectContextService` — risks with descriptions, decisions, initiatives, team progress, action items, knowledge entries, past reviews, meeting summaries)
+- [x] Two-Pass Context Requests (all 10 LLM schemas include `context_requests` field; `ContextRequestResolver` fetches Jira/Confluence data in parallel; `BaseAgent.resolve_context_requests()` re-runs LLM with enriched prompt; `resolve_if_needed()` wired into all 6 analysis services)
+- [x] Semantic Dedup for Transcript Analysis (existing risks/decisions fetched with full descriptions + impact analysis + mitigation + components; `update_existing` suggestion type links transcript findings to existing Jira items instead of creating duplicates)
