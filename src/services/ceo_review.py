@@ -189,7 +189,7 @@ class CeoReviewService:
         action_items = context.get("action_items", [])
         if action_items:
             metrics["open_action_items"] = [
-                {"title": a.title, "owner": a.owner_name, "status": a.status}
+                {"title": a.title, "owner": a.owner, "status": a.status}
                 for a in action_items
             ]
         knowledge_entries = context.get("knowledge_entries", [])

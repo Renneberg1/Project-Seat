@@ -142,7 +142,7 @@ class HealthReviewService:
 
         if data.action_items:
             ctx["open_action_items"] = [
-                {"title": a.title, "owner": a.owner_name, "status": a.status}
+                {"title": a.title, "owner": a.owner, "status": a.status}
                 for a in data.action_items
             ]
 

@@ -28,6 +28,14 @@
     <td class="actions-cell">
         {% if t.project_id and t.meeting_summary %}
         <a href="/project/{{ t.project_id }}/transcript/{{ t.id }}/suggestions" class="btn-sm">View</a>
+        {% elif t.project_id and not t.meeting_summary %}
+        <button class="btn-sm btn-primary"
+                hx-post="/meetings/{{ t.id }}/reanalyse"
+                hx-target="#meeting-row-t{{ t.id }}"
+                hx-swap="outerHTML"
+                hx-disabled-elt="this"
+                hx-indicator="#reanalyse-spinner-t{{ t.id }}">Re-analyse</button>
+        <span id="reanalyse-spinner-t{{ t.id }}" class="htmx-indicator spinner-sm"></span>
         {% endif %}
         {% if not t.project_id %}
         <form style="display:inline;" hx-post="/meetings/{{ t.id }}/assign-and-analyze" hx-target="#meeting-row-t{{ t.id }}" hx-swap="outerHTML">

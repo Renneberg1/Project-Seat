@@ -115,7 +115,7 @@ class CharterService:
         if data.action_items:
             parts.append("Open action items:")
             for a in data.action_items[:5]:
-                parts.append(f"  - {a.title} (owner: {a.owner_name})")
+                parts.append(f"  - {a.title} (owner: {a.owner})")
 
         if data.meeting_summaries:
             parts.append("Recent meetings:")

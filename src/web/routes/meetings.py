@@ -52,6 +52,8 @@ def _merge_meeting_rows(
     """Merge transcript_cache rows and pending Zoom recordings into a unified list.
 
     Each row is a dict with a ``kind`` key ("transcript" or "zoom") plus the data.
+    Zoom recordings that already have transcript_cache rows (via project_meeting_map)
+    are excluded to avoid duplicate display.
     Sorted by date descending.
     """
     rows: list[dict] = []
@@ -63,11 +65,12 @@ def _merge_meeting_rows(
             "date": t.created_at,
         })
 
-    # Zoom recordings that don't yet have a transcript in transcript_cache
-    # (i.e. still in the Zoom processing pipeline)
-    transcript_zoom_uuids: set[int] = set()  # recording IDs that already have transcript rows
+    # Only show Zoom recordings that don't yet have transcript_cache rows
     for item in zoom_recordings:
         mappings = zoom_repo.get_mappings_for_recording(item.id)
+        has_transcript = any(m.transcript_id for m in mappings)
+        if has_transcript:
+            continue  # Already represented by transcript rows above
         rows.append({
             "kind": "zoom",
             "recording": item,
@@ -299,6 +302,45 @@ async def assign_and_analyze(
     response = HTMLResponse("")
     response.headers["HX-Redirect"] = "/meetings/"
     return response
+
+
+# ------------------------------------------------------------------
+# POST /meetings/{tid}/reanalyse — re-run LLM analysis on a transcript
+# ------------------------------------------------------------------
+
+@router.post("/meetings/{tid}/reanalyse", response_class=HTMLResponse)
+async def reanalyse_transcript(
+    request: Request,
+    tid: int,
+    service: TranscriptService = Depends(get_transcript_service),
+    dash: DashboardService = Depends(get_dashboard_service),
+) -> HTMLResponse:
+    """Re-run LLM analysis on an assigned transcript."""
+    record = service.get_transcript(tid)
+    if record is None:
+        return HTMLResponse("Transcript not found", status_code=404)
+    if not record.project_id:
+        return error_banner("Transcript is not assigned to a project.", status_code=400)
+
+    project = dash.get_project_by_id(record.project_id)
+    if project is None:
+        return error_banner("Project not found.", status_code=404)
+
+    try:
+        await service.analyze_transcript(tid, project)
+    except Exception as exc:
+        logger.error("Re-analysis failed for transcript %d: %s", tid, exc)
+        return error_banner(f"Analysis failed: {str(exc)[:200]}", status_code=500)
+
+    # Re-fetch and return updated row
+    updated = service.get_transcript(tid)
+    project_names = _build_project_names(dash, {record.project_id})
+    all_projects = dash.list_projects()
+    return templates.TemplateResponse(request, "partials/meeting_row.html", {
+        "row": {"kind": "transcript", "transcript": updated, "date": updated.created_at},
+        "project_names": project_names,
+        "all_projects": all_projects,
+    })
 
 
 # ------------------------------------------------------------------
