@@ -22,7 +22,10 @@ class DHFDocument:
     last_modified: str
     author: str
     page_url: str
+    released_page_url: str | None = None
     release_status: str | None = None
+    area_order: int = 0
+    doc_order: int = 0
 
 
 @dataclass

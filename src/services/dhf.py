@@ -95,8 +95,13 @@ class DHFService:
                 self._collect_documents(connector, project.dhf_released_root_id, user_cache),
             )
             rows = self._match_documents(draft_docs, released_docs)
-            rows.sort(key=lambda d: (d.area, d.title))
-            areas = sorted({d.area for d in rows})
+            rows.sort(key=lambda d: (d.area_order, d.doc_order))
+            # Preserve SoftComply folder order for the area filter dropdown
+            seen_areas: dict[str, int] = {}
+            for d in rows:
+                if d.area not in seen_areas:
+                    seen_areas[d.area] = d.area_order
+            areas = sorted(seen_areas, key=lambda a: seen_areas[a])
             result = (rows, areas)
             cache.set(cache_key, result, ttl=120)
             return result
@@ -129,12 +134,13 @@ class DHFService:
             *(connector.get_child_pages_v2(area.get("id", "")) for area in areas)
         )
 
-        # Build flat list of (area_title, child_id, child_title)
-        all_items: list[tuple[str, str, str]] = []
-        for area, children in zip(areas, area_children_lists):
+        # Build flat list of (area_title, child_id, child_title, area_order, doc_order)
+        # Preserves Confluence page-tree order (matches SoftComply folder order).
+        all_items: list[tuple[str, str, str, int, int]] = []
+        for area_idx, (area, children) in enumerate(zip(areas, area_children_lists)):
             area_title = area.get("title", "")
-            for child in children:
-                all_items.append((area_title, child.get("id", ""), child.get("title", "")))
+            for doc_idx, child in enumerate(children):
+                all_items.append((area_title, child.get("id", ""), child.get("title", ""), area_idx, doc_idx))
 
         if not all_items:
             return []
@@ -148,7 +154,7 @@ class DHFService:
                 )
 
         page_results = await asyncio.gather(
-            *(_fetch_page_data(cid) for _, cid, _ in all_items)
+            *(_fetch_page_data(cid) for _, cid, _, _, _ in all_items)
         )
 
         # Phase 3: Collect unique author IDs and batch-resolve display names
@@ -217,7 +223,7 @@ class DHFService:
         # Phase 5: Assemble results
         base_url = f"https://{connector._domain}.atlassian.net/wiki"
         docs: list[dict] = []
-        for i, (area_title, child_id, child_title) in enumerate(all_items):
+        for i, (area_title, child_id, child_title, area_order, doc_order) in enumerate(all_items):
             doc_id, full_page = page_data_list[i]
             ver = full_page.get("version", {})
             aid = ver.get("authorId", "")
@@ -238,6 +244,8 @@ class DHFService:
                 "last_modified": ver.get("createdAt", ""),
                 "author": author_name,
                 "page_url": f"{base_url}{webui}" if webui else "",
+                "area_order": area_order,
+                "doc_order": doc_order,
             })
 
         return docs
@@ -291,6 +299,9 @@ class DHFService:
                 status = DocumentStatus.IN_DRAFT
                 source = draft
 
+            # Prefer draft ordering (SoftComply working tree); fall back to
+            # released ordering for released-only docs.
+            order_source = draft or released
             rows.append(DHFDocument(
                 title=source["title"],
                 area=source["area"],
@@ -300,6 +311,9 @@ class DHFService:
                 last_modified=source["last_modified"],
                 author=source["author"],
                 page_url=(draft or released)["page_url"],
+                released_page_url=released["page_url"] if released else None,
+                area_order=order_source.get("area_order", 0),
+                doc_order=order_source.get("doc_order", 0),
             ))
 
         # Include draft docs that have no SoftComply document_id
@@ -313,6 +327,8 @@ class DHFService:
                 last_modified=doc["last_modified"],
                 author=doc["author"],
                 page_url=doc["page_url"],
+                area_order=doc.get("area_order", 0),
+                doc_order=doc.get("doc_order", 0),
             ))
 
         return rows
