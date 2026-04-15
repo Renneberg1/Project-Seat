@@ -19,9 +19,36 @@ import re
 from html import escape as _html_escape
 
 
+# Matches Confluence user-mention markup:
+#   <ac:link><ri:user ri:account-id="abc"/></ac:link>
+#   <ac:link><ri:user ri:userkey="abc"/></ac:link>
+# Preserve as a placeholder so downstream code (and the LLM) can see the mention.
+_MENTION_RE = re.compile(
+    r'<ac:link\b[^>]*>\s*<ri:user\b[^/]*?ri:(?:account-id|userkey)="([^"]+)"\s*/>\s*</ac:link>',
+    re.IGNORECASE,
+)
+
+# Matches Confluence page links:
+#   <ac:link><ri:page ri:content-title="Some Title" ... /></ac:link>
+_PAGE_LINK_RE = re.compile(
+    r'<ac:link\b[^>]*>\s*<ri:page\b[^/]*?ri:content-title="([^"]+)"[^/]*/>\s*</ac:link>',
+    re.IGNORECASE,
+)
+
+
 def _strip_html(html: str) -> str:
-    """Remove HTML tags and collapse whitespace to produce plain text."""
-    text = re.sub(r"<br\s*/?>", "\n", html)
+    """Remove HTML tags and collapse whitespace to produce plain text.
+
+    Preserves Confluence user mentions as ``{{USER:<id>}}`` placeholders and
+    page links as ``[page: Title]``, so downstream consumers (e.g. the LLM
+    charter analysis) don't lose information when all tags are stripped.
+    """
+    text = html
+    # Preserve mentions and page links BEFORE the blanket tag strip
+    text = _MENTION_RE.sub(lambda m: f"{{{{USER:{m.group(1)}}}}}", text)
+    text = _PAGE_LINK_RE.sub(lambda m: f"[page: {m.group(1)}]", text)
+
+    text = re.sub(r"<br\s*/?>", "\n", text)
     text = re.sub(r"<[^>]+>", "", text)
     # Unescape common HTML entities
     text = text.replace("&amp;", "&")
@@ -33,6 +60,39 @@ def _strip_html(html: str) -> str:
     lines = text.split("\n")
     lines = [re.sub(r"[ \t]+", " ", line).strip() for line in lines]
     return "\n".join(line for line in lines if line)
+
+
+# Matches the {{USER:<id>}} placeholder emitted by _strip_html
+USER_PLACEHOLDER_RE = re.compile(r"\{\{USER:([^}]+)\}\}")
+
+
+def extract_user_placeholders(sections: list[dict[str, str]]) -> set[str]:
+    """Return the set of unique account IDs referenced by ``{{USER:X}}`` placeholders."""
+    ids: set[str] = set()
+    for sec in sections:
+        for m in USER_PLACEHOLDER_RE.finditer(sec.get("content", "")):
+            ids.add(m.group(1))
+    return ids
+
+
+def replace_user_placeholders(
+    sections: list[dict[str, str]], id_to_name: dict[str, str]
+) -> list[dict[str, str]]:
+    """Replace ``{{USER:<id>}}`` placeholders with ``@DisplayName`` in-place.
+
+    Unknown IDs are left as ``@user:<id>`` so the LLM still sees *something*
+    and knows the field is populated.
+    """
+    for sec in sections:
+        content = sec.get("content", "")
+
+        def _sub(match: re.Match) -> str:
+            acc_id = match.group(1)
+            name = id_to_name.get(acc_id)
+            return f"@{name}" if name else f"@user:{acc_id[:12]}"
+
+        sec["content"] = USER_PLACEHOLDER_RE.sub(_sub, content)
+    return sections
 
 
 def _escape_html(text: str) -> str:

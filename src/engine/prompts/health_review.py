@@ -29,13 +29,28 @@ like team morale, budget status, stakeholder sentiment, external dependency \
 risks, regulatory timeline pressures, or organisational changes.</context>
 
 <rules>
-1. Only ask questions about information genuinely absent from the provided data.
-2. Each question must include a category (e.g. "Team", "Budget", "Stakeholders", \
+1. **Proactive discovery first** — before asking the PM anything, consider what \
+relevant supporting material likely exists in Confluence or Jira. Issue \
+context_requests (prefer confluence_text_search for content discovery) for things \
+like:
+   - retrospective / retro / team-health notes (e.g. confluence_text_search "retro <project>")
+   - stakeholder / steering-committee pages
+   - budget or resourcing pages
+   - vendor or third-party dependency status pages
+   - regulatory timeline / submission / FDA / CE pages
+   - any specific Confluence page, Jira ticket, or document referenced by the \
+data that you don't have full details for
+   Prefer context_requests over asking the user. Each one should explain its reason.
+2. Only ask the PM for information you cannot possibly find via Jira/Confluence \
+search (e.g. their personal read on team morale, unrecorded verbal commitments, \
+sponsor mood in the last 1:1).
+3. Each question must include a category (e.g. "Team", "Budget", "Stakeholders", \
 "External Dependencies", "Regulatory", "Timeline").
-3. Explain briefly why the information is needed for an accurate health assessment.
-4. Ask at most 6 questions — focus on the most impactful gaps.
-5. If the data is comprehensive enough for a full review, return an empty list.
-6. """ + CONTEXT_REQUESTS_RULE + """
+4. Explain briefly why the information is needed for an accurate health assessment.
+5. Ask at most 6 questions — focus on the most impactful gaps.
+6. If the data + your context_requests will be comprehensive enough for a full \
+review, return an empty questions list.
+7. """ + CONTEXT_REQUESTS_RULE + """
 </rules>
 """
 
@@ -458,13 +473,46 @@ def _append_knowledge_entries(parts: list[str], ctx: dict[str, Any]) -> None:
 
 
 def _append_past_health_reviews(parts: list[str], ctx: dict[str, Any]) -> None:
+    """Format prior health reviews with full narrative so the LLM has continuity.
+
+    Concerns, observations, questions, and recommended actions are included so
+    the LLM can evaluate "did the previously-flagged concerns improve?" rather
+    than treating every review as a fresh assessment.
+    """
     reviews = ctx.get("past_health_reviews", [])
     if not reviews:
         return
     parts.append("<previous_health_review>")
     for r in reviews:
+        parts.append(f"Date: {r.get('created_at', 'N/A')}")
         parts.append(f"Rating: {r.get('health_rating', 'N/A')}")
         parts.append(f"Rationale: {r.get('health_rationale', 'N/A')}")
-        parts.append(f"Date: {r.get('created_at', 'N/A')}")
+
+        concerns = r.get("top_concerns") or []
+        if concerns:
+            parts.append("Top concerns raised previously:")
+            for c in concerns:
+                parts.append(
+                    f"  - [{c.get('severity', '?')}] {c.get('area', '?')}: "
+                    f"{c.get('evidence', '?')} | rec: {c.get('recommendation', '?')}"
+                )
+
+        positives = r.get("positive_observations") or []
+        if positives:
+            parts.append("Positive observations previously noted:")
+            for p in positives:
+                parts.append(f"  - {p}")
+
+        questions = r.get("questions_for_pm") or []
+        if questions:
+            parts.append("Questions previously raised for the PM:")
+            for q in questions:
+                parts.append(f"  - {q}")
+
+        actions = r.get("suggested_next_actions") or []
+        if actions:
+            parts.append("Actions previously suggested:")
+            for a in actions:
+                parts.append(f"  - {a}")
     parts.append("</previous_health_review>")
     parts.append("")

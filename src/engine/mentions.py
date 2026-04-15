@@ -16,9 +16,38 @@ from src.connectors.base import ConnectorError
 
 logger = logging.getLogger(__name__)
 
-# Matches 2+ capitalized words after @
-# e.g. @Tom Renneberg, @Alice Smith-Jones
-MENTION_RE = re.compile(r"@([A-Z][a-zA-Z'-]+(?: [A-Z][a-zA-Z'-]+)+)")
+# Lowercase surname particles allowed between/before capitalised name words.
+# e.g. "van", "der", "de", "la"  →  "@John van der Berg", "@María de la Cruz"
+_PARTICLES = (
+    "van", "der", "den", "de", "la", "le", "du", "del", "dela", "von",
+    "bin", "al", "el", "da", "do", "dos", "das", "di", "ten", "ter",
+    "of", "auf", "zu",
+)
+_PARTICLE_ALT = "|".join(_PARTICLES)
+
+# Matches ``@Name`` patterns. Supports:
+#   - single capitalised word       (e.g. @Madonna)
+#   - two or more capitalised words  (e.g. @Tom Renneberg, @Alice Smith-Jones)
+#   - lowercase surname particles between capitalised words (e.g. @John van der Berg)
+# Particles only match when followed by further name content, so prose like
+# "@Today is Monday" will at most match "Today" (single word).
+# ``_L`` = any Unicode letter (via "non-word OR digit OR underscore" negation).
+# Names can include apostrophes and hyphens. First letter must be a capital.
+_L = r"[^\W\d_]"
+_UPPER = r"[A-Z\u00C0-\u00DE]"  # Latin-1 uppercase incl. accented À-Þ
+MENTION_RE = re.compile(
+    r"""
+    @(                                              # group 1: the display name (no @)
+      """ + _UPPER + _L + r"""*['\-]?""" + _L + r"""*   #   first word, starts capital
+      (?:
+        \s+
+        (?:(?:""" + _PARTICLE_ALT + r""")\s+)*      #   optional lowercase particles
+        """ + _UPPER + _L + r"""*['\-]?""" + _L + r"""* #   another capital word
+      )*                                            #   zero or more continuations
+    )
+    """,
+    re.VERBOSE | re.UNICODE,
+)
 
 _CACHE_PREFIX = "user_mention:"
 _HIT_TTL = 3600   # 1 hour for found users
@@ -52,6 +81,64 @@ async def search_user(name: str, jira: Any) -> str | None:
     # Cache miss so we don't re-query immediately
     cache.set(cache_key, "", ttl=_MISS_TTL)
     return None
+
+
+# Matches ``[page: Page Title]`` placeholders produced by charter section
+# extraction. The LLM may echo these back when referencing other Confluence pages.
+PAGE_LINK_RE = re.compile(r"\[page:\s*([^\]\n]+?)\s*\]")
+
+# Simple HTML-attribute escaper (we build attributes, not HTML text).
+def _attr_escape(value: str) -> str:
+    return (
+        value.replace("&", "&amp;")
+        .replace('"', "&quot;")
+        .replace("<", "&lt;")
+        .replace(">", "&gt;")
+    )
+
+
+async def resolve_confluence_page_links(text: str, confluence: Any) -> str:
+    """Replace ``[page: Title]`` placeholders with Confluence XHTML page links.
+
+    For each placeholder, searches Confluence for a page with a matching title
+    (case-insensitive exact match on the top result). If found, replaces with:
+
+        <ac:link><ri:page ri:content-title="Title"/></ac:link>
+
+    Unresolved titles are left as-is so the user can see the broken reference.
+    """
+    matches = list(PAGE_LINK_RE.finditer(text))
+    if not matches:
+        return text
+
+    unique_titles = {m.group(1).strip() for m in matches}
+    resolved: dict[str, str] = {}
+    for title in unique_titles:
+        try:
+            results = await confluence.search_pages_by_title(title, max_results=3)
+        except Exception as exc:
+            logger.warning("Page link search failed for %r: %s", title, exc)
+            continue
+        for r in results:
+            if r.get("title", "").lower() == title.lower():
+                resolved[title] = r["title"]
+                break
+
+    if not resolved:
+        return text
+
+    # Replace right-to-left to preserve offsets
+    result = text
+    for m in reversed(matches):
+        title = m.group(1).strip()
+        if title in resolved:
+            markup = (
+                f'<ac:link><ri:page ri:content-title="{_attr_escape(resolved[title])}"/>'
+                f'</ac:link>'
+            )
+            result = result[:m.start()] + markup + result[m.end():]
+
+    return result
 
 
 async def resolve_confluence_mentions(text: str, jira: Any) -> str:

@@ -44,10 +44,23 @@ who is responsible (owner_name) and any mentioned deadline (due_date_hint).
 12. Notes: important observations, status updates, factual statements worth preserving.
 13. Insights: analytical observations, lessons learned, strategic points.
 14. Prioritize: risks and decisions first (regulatory), then action items, then notes/insights.
-15. If the transcript references specific Jira tickets, Confluence pages, documents, or \
-technical details that you do not have in the provided context, add them to context_requests. \
-Each request should specify what to look up and why it would improve your analysis. \
-Only request information that is genuinely needed — do not request speculatively.
+15. **Feature overlap check** — before creating a new scope/feature suggestion, compare \
+against the <product_backlog> items. If the transcript discusses a feature that is \
+already on the board, use type "update_existing" or treat it as a note on the existing \
+feature rather than creating a duplicate.
+16. **Timeline impact grounded in capacity** — when estimating timeline_impact_days for a \
+risk, use the <team_capacity> block (velocity, blockers, % done) to produce realistic \
+numbers. Do not invent days; if capacity data says a team has 2 blockers and 40% done \
+with 2 weeks to go, reflect that when estimating impact.
+17. **Proactive context_requests** — the provided context is rich but not exhaustive. If \
+the transcript references material not shown, or you would benefit from related \
+material (architecture docs, PRDs, regulatory plans, prior incident tickets, vendor \
+status pages), issue context_requests rather than guessing. Prefer:
+    - jira_issue for a specific ticket key mentioned in the transcript
+    - confluence_text_search for topic/content discovery (e.g. "data migration plan")
+    - confluence_search when you know the approximate page title
+    - jira_search to find related tickets by keyword
+    Only request information that is genuinely needed — do not request speculatively.
 </rules>
 """
 
@@ -154,12 +167,72 @@ def build_user_prompt(transcript_text: str, project_context: dict[str, Any]) -> 
     """
     parts: list[str] = []
 
-    # Project context
+    # Project context (rich — goal intent, release, team capacity, features)
     parts.append(f"<project_context>")
     parts.append(f"Project: {project_context.get('project_name', 'Unknown')}")
     parts.append(f"Jira Goal: {project_context.get('jira_goal_key', 'Unknown')}")
+    if project_context.get("goal_summary"):
+        parts.append(f"Goal summary: {project_context['goal_summary']}")
+    if project_context.get("goal_status"):
+        parts.append(f"Goal status: {project_context['goal_status']}")
+    if project_context.get("goal_due_date"):
+        parts.append(f"Goal due date: {project_context['goal_due_date']}")
+    if project_context.get("goal_description"):
+        parts.append(f"Goal description: {project_context['goal_description'][:1500]}")
+    if project_context.get("pi_version"):
+        parts.append(
+            f"Release / version: {project_context['pi_version']} "
+            f"(ideas board: {project_context.get('pi_project_key') or 'PI'})"
+        )
     parts.append("</project_context>")
     parts.append("")
+
+    # Team velocity & capacity — used for realistic timeline_impact_days estimates
+    team_reports = project_context.get("team_reports") or []
+    if team_reports:
+        parts.append("<team_capacity>")
+        for t in team_reports:
+            parts.append(
+                f"- {t.get('team_key', '?')}: "
+                f"{t.get('pct_done_issues', 0)}% issues done, "
+                f"{t.get('sp_done', 0)}/{t.get('sp_total', 0)} SP, "
+                f"{t.get('blocker_count', 0)} blockers"
+            )
+        parts.append("</team_capacity>")
+        parts.append("")
+
+    # Product backlog — for feature-overlap detection (avoid duplicate feature suggestions)
+    product_ideas = project_context.get("product_ideas") or []
+    if product_ideas:
+        parts.append("<product_backlog>")
+        parts.append(
+            f"{len(product_ideas)} items on the release board — a new 'feature' "
+            f"suggestion that overlaps one of these is a duplicate, not a new item."
+        )
+        # Cap to top 40 for prompt size
+        for idea in product_ideas[:40]:
+            prio = idea.get("release_priority") or "—"
+            state = f", state: {idea['pi_state']}" if idea.get("pi_state") else ""
+            parts.append(
+                f"- [{idea.get('key', '?')}] {idea.get('summary', '?')} "
+                f"({idea.get('issue_type', '?')}, prio: {prio}{state})"
+            )
+        if len(product_ideas) > 40:
+            parts.append(f"  … and {len(product_ideas) - 40} more not shown")
+        parts.append("</product_backlog>")
+        parts.append("")
+
+    # Recent meeting summaries — for continuity ("we already discussed this")
+    recent_meetings = project_context.get("recent_meetings") or []
+    if recent_meetings:
+        parts.append("<prior_meetings>")
+        for m in recent_meetings[:5]:
+            parts.append(
+                f"- {m.get('filename', '?')} ({m.get('created_at', '')[:10]}): "
+                f"{m.get('summary', '')}"
+            )
+        parts.append("</prior_meetings>")
+        parts.append("")
 
     # Existing risks (with descriptions for semantic matching)
     risks = project_context.get("existing_risks", [])

@@ -30,14 +30,28 @@ like reasons for delays, context behind new risks, stakeholder feedback, \
 external dependency changes, or qualitative team dynamics.</context>
 
 <rules>
-1. Only ask questions about information genuinely absent from the provided data.
-2. Each question must include a category (e.g. "Decisions", "Risks", \
+1. **Proactive discovery first** — before asking the PM anything, consider what \
+relevant supporting material probably exists in Confluence or Jira. Issue \
+context_requests (prefer confluence_text_search for content discovery). Useful \
+searches for a CEO update include:
+   - steering-committee / governance / sponsor-update pages
+   - escalation log / decisions-register pages
+   - release-readiness / go-live / launch-plan pages
+   - market update / competitor / customer-feedback pages
+   - specific Jira tickets referenced in new risks/decisions (use jira_issue for \
+the ticket key)
+   - any prior cross-project dependency pages that may have changed
+   Prefer context_requests over asking the user.
+2. Only ask the PM for information you cannot possibly find via search (e.g. \
+qualitative reads on team or sponsor sentiment, unrecorded verbal commitments, \
+their own read of why a risk emerged).
+3. Each question must include a category (e.g. "Decisions", "Risks", \
 "Development", "Documentation", "Stakeholders", "Timeline").
-3. Explain briefly why the information is needed for an accurate CEO update.
-4. Ask at most 6 questions — focus on the most impactful gaps.
-5. If the data is comprehensive enough and PM notes cover the gaps, return an \
-empty list.
-6. """ + CONTEXT_REQUESTS_RULE + """
+4. Explain briefly why the information is needed for an accurate CEO update.
+5. Ask at most 6 questions — focus on the most impactful gaps.
+6. If the data + your context_requests + PM notes cover the gaps, return an \
+empty questions list.
+7. """ + CONTEXT_REQUESTS_RULE + """
 </rules>
 """
 
@@ -134,9 +148,13 @@ update. Instead, add it to deep_dive_topics so the PM can raise it separately in
 a dedicated forum.
 6. Escalations should only be raised for issues needing CEO/leadership attention.
 7. Next milestones: at most 2, concrete, time-bound where possible.
-8. If the PM notes reference people with @Name syntax (e.g. @Alice Smith), \
-preserve the @ prefix exactly in your output. You may also use @Name when \
-referencing specific individuals.
+8. **People references — ALWAYS use @FirstName LastName syntax** whenever you write \
+a person's name in your output. This applies both when (a) preserving names already \
+mentioned in the PM notes or context (e.g. keep "@Alice Smith" intact — do not drop \
+the prefix), and (b) introducing a new person the PM referenced in plain prose \
+(e.g. notes say "John Smith raised this" → write "@John Smith", not "John Smith"). \
+The `@` prefix is what triggers Confluence to render an interactive user mention; \
+plain-text names will publish as dead text with no link.
 9. """ + CONTEXT_REQUESTS_RULE + """
 </rules>
 """
@@ -355,14 +373,46 @@ def _append_releases(parts: list[str], metrics: dict[str, Any]) -> None:
 
 
 def _append_past_ceo_review(parts: list[str], metrics: dict[str, Any]) -> None:
+    """Format prior CEO reviews with full narrative so the LLM has continuity.
+
+    This lets the LLM write deltas like "Previously reported At Risk due to X;
+    that has since been resolved, and the current concern is Y."
+    """
     reviews = metrics.get("past_ceo_reviews", [])
     if not reviews:
         return
     parts.append("<previous_ceo_review>")
     for r in reviews:
-        parts.append(f"Status: {r.get('health_indicator', 'N/A')}")
-        parts.append(f"Summary: {r.get('summary', 'N/A')}")
         parts.append(f"Date: {r.get('created_at', 'N/A')}")
+        parts.append(f"Status: {r.get('health_indicator', 'N/A')}")
+        parts.append(f"Headline: {r.get('summary', 'N/A')}")
+
+        bullets = r.get("bullets") or []
+        if bullets:
+            parts.append("Bullets:")
+            for b in bullets:
+                parts.append(f"  - {b}")
+
+        escalations = r.get("escalations") or []
+        if escalations:
+            parts.append("Escalations raised:")
+            for esc in escalations:
+                parts.append(
+                    f"  - {esc.get('issue', '?')} — impact: {esc.get('impact', '?')} "
+                    f"— ask: {esc.get('ask', '?')}"
+                )
+
+        milestones = r.get("next_milestones") or []
+        if milestones:
+            parts.append("Next milestones called out previously:")
+            for m in milestones:
+                parts.append(f"  - {m}")
+
+        deep_dives = r.get("deep_dive_topics") or []
+        if deep_dives:
+            parts.append("Deep-dive topics flagged:")
+            for d in deep_dives:
+                parts.append(f"  - {d.get('topic', '?')}: {d.get('reason', '?')}")
     parts.append("</previous_ceo_review>")
     parts.append("")
 

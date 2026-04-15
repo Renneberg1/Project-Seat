@@ -8,7 +8,7 @@ from typing import Any
 
 from src.config import Settings, settings as default_settings
 from src.connectors.jira import JiraConnector
-from src.engine.mentions import resolve_confluence_mentions
+from src.engine.mentions import resolve_confluence_mentions, resolve_confluence_page_links
 from src.models.charter import CharterSuggestion, CharterSuggestionStatus
 
 logger = logging.getLogger(__name__)
@@ -38,10 +38,18 @@ class CharterService:
     ) -> list[dict[str, str]]:
         """Fetch the Charter page from Confluence and extract sections.
 
-        Returns a list of ``{name, content}`` dicts.
+        Returns a list of ``{name, content}`` dicts. Confluence user mentions
+        are resolved to ``@DisplayName`` so the LLM can see who is assigned to
+        fields like Project Manager / Executive Sponsor instead of an empty
+        string.
         """
+        import asyncio
         from src.connectors.confluence import ConfluenceConnector
-        from src.engine.charter_storage_utils import extract_sections
+        from src.engine.charter_storage_utils import (
+            extract_sections,
+            extract_user_placeholders,
+            replace_user_placeholders,
+        )
 
         if not project.confluence_charter_id:
             return []
@@ -51,11 +59,26 @@ class CharterService:
             page = await confluence.get_page(
                 project.confluence_charter_id, expand=["body.storage"]
             )
+            body = page.get("body", {}).get("storage", {}).get("value", "")
+            sections = extract_sections(body)
+
+            # Resolve {{USER:<account-id>}} placeholders to @DisplayName
+            account_ids = extract_user_placeholders(sections)
+            if account_ids:
+                names = await asyncio.gather(
+                    *(confluence.get_user_display_name(aid) for aid in account_ids),
+                    return_exceptions=True,
+                )
+                id_to_name = {
+                    aid: name
+                    for aid, name in zip(account_ids, names)
+                    if isinstance(name, str) and name and name != aid
+                }
+                sections = replace_user_placeholders(sections, id_to_name)
+
+            return sections
         finally:
             await confluence.close()
-
-        body = page.get("body", {}).get("storage", {}).get("value", "")
-        return extract_sections(body)
 
     # ------------------------------------------------------------------
     # LLM Step 1: Generate questions
@@ -71,7 +94,8 @@ class CharterService:
         data = await ctx_service.gather(
             project,
             risks=True, decisions=True,
-            summary=True, initiatives=True,
+            summary=True, initiatives=True, pi=True,
+            goal_metadata=True, xft=True,
             team_reports=True,
             meeting_summaries=True, meeting_summary_limit=5,
             action_items=True, knowledge=True,
@@ -83,11 +107,67 @@ class CharterService:
 
         # Build a concise project state summary for the LLM
         parts: list[str] = []
+
+        # --- Project identifiers + release info ---
+        parts.append(f"Project ID (local): {project.id}")
+        parts.append(f"Jira Goal key: {project.jira_goal_key}")
+        if project.pi_version:
+            parts.append(
+                f"Release / version: {project.pi_version} "
+                f"(ideas board: {project.pi_project_key or 'PI'})"
+            )
+        if project.confluence_charter_id:
+            parts.append(f"Confluence Charter page ID: {project.confluence_charter_id}")
+        if project.confluence_xft_id:
+            parts.append(f"Confluence XFT page ID: {project.confluence_xft_id}")
+
+        # --- Goal (full info including description) ---
         if data.summary and data.summary.goal:
             g = data.summary.goal
             parts.append(f"Goal: {g.key} — {g.summary} (status: {g.status}, due: {g.due_date})")
+            if g.fix_versions:
+                parts.append(f"  Fix versions: {', '.join(g.fix_versions)}")
+            if g.description_adf:
+                desc = ProjectContextService._extract_adf_text(g.description_adf).strip()
+                if desc:
+                    parts.append(f"  Goal description: {desc[:1500]}")
             parts.append(f"Risks: {data.summary.open_risk_count} open / {data.summary.risk_count} total")
             parts.append(f"Decisions: {data.summary.decision_count} total")
+
+        if data.goal_labels:
+            parts.append(f"Goal labels: {', '.join(data.goal_labels)}")
+        if data.goal_components:
+            parts.append(f"Goal components: {', '.join(data.goal_components)}")
+
+        # --- Product ideas / features list (the "feature backlog") ---
+        if data.product_ideas:
+            parts.append(
+                f"Product ideas / features ({len(data.product_ideas)} items "
+                f"on board {project.pi_project_key or 'PI'}, version {project.pi_version}):"
+            )
+            # Group by priority for readability
+            by_priority: dict[str, list] = {}
+            for idea in data.product_ideas:
+                key = idea.release_priority or "Unprioritised"
+                by_priority.setdefault(key, []).append(idea)
+            # Order: Must Have / Now first, then others
+            priority_order = ["Must Have", "Now", "Should Have", "Next",
+                              "Could Have", "Later", "Nice to Have", "Unprioritised"]
+            ordered_keys = sorted(
+                by_priority.keys(),
+                key=lambda k: priority_order.index(k) if k in priority_order else 99,
+            )
+            for prio in ordered_keys:
+                ideas = by_priority[prio]
+                parts.append(f"  [{prio}] ({len(ideas)} items):")
+                for idea in ideas[:15]:  # cap per group
+                    state = f" — {idea.pi_state}" if idea.pi_state else ""
+                    parts.append(
+                        f"    - [{idea.key}] {idea.summary} "
+                        f"({idea.issue_type}, status: {idea.status}{state})"
+                    )
+                if len(ideas) > 15:
+                    parts.append(f"    … and {len(ideas) - 15} more")
 
         if data.existing_risks:
             parts.append("Open risks:")
@@ -121,6 +201,15 @@ class CharterService:
             parts.append("Recent meetings:")
             for ms in data.meeting_summaries[:3]:
                 parts.append(f"  - {ms.get('filename', '?')}: {ms.get('summary', '')[:150]}")
+
+        # --- XFT page excerpt (cross-functional team, roles, dates often live here) ---
+        if data.xft_content:
+            # Strip HTML tags crudely for the LLM context
+            import re
+            xft_text = re.sub(r"<[^>]+>", " ", data.xft_content)
+            xft_text = re.sub(r"\s+", " ", xft_text).strip()
+            if xft_text:
+                parts.append(f"XFT page excerpt: {xft_text[:1500]}")
 
         if parts:
             ctx["project_state"] = "\n".join(parts)
@@ -274,17 +363,22 @@ class CharterService:
             )
         payload["page_id"] = project.confluence_charter_id
 
-        # Resolve @mentions in the proposed content
+        # Resolve @mentions + [page: Title] placeholders in the proposed content.
+        # Both transform plain text into embedded XHTML, so if either fires we
+        # flag raw_xhtml=True and do the <p>-wrapping ourselves.
         new_content = payload.get("new_content", "")
-        jira = JiraConnector()
+        jira = JiraConnector(settings=self._settings)
+        from src.connectors.confluence import ConfluenceConnector
+        confluence = ConfluenceConnector(settings=self._settings)
         try:
             resolved = await resolve_confluence_mentions(new_content, jira)
+            resolved = await resolve_confluence_page_links(resolved, confluence)
         finally:
             await jira.close()
+            await confluence.close()
 
         if resolved != new_content:
-            # Content now contains XHTML mention markup — wrap in <p> tags
-            from html import escape as _html_escape
+            # Content now contains XHTML markup — wrap lines in <p> tags
             paragraphs = [line.strip() for line in resolved.split("\n") if line.strip()]
             body_html = "".join(f"<p>{p}</p>" for p in paragraphs) if paragraphs else f"<p>{resolved}</p>"
             payload["new_content"] = body_html

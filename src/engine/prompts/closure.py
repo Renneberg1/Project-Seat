@@ -31,14 +31,29 @@ delivery assessment quality, success criteria outcomes, stakeholder satisfaction
 vendor performance, reasons for timeline deviations, and team retrospective insights.</context>
 
 <rules>
-1. Only ask questions about information genuinely absent from the provided data.
-2. Each question must include a category (e.g. "Lessons Learned", "Delivery", \
+1. **Proactive discovery first** — before asking the PM anything, consider what \
+closure-relevant supporting material likely exists in Confluence or Jira. Issue \
+context_requests (prefer confluence_text_search for content discovery). Useful \
+searches for a closure report include:
+   - retrospective / lessons-learned / post-mortem / retro pages
+   - launch / go-live / release-readiness review pages
+   - post-release support / incidents / known-issues pages
+   - vendor performance / third-party delivery pages
+   - test-summary / validation / qualification / UAT pages
+   - stakeholder satisfaction / customer-feedback / sponsor-sign-off pages
+   - specific Jira tickets referenced by risks/decisions you need more detail on
+   Prefer context_requests over asking the user. Remember past Health and CEO \
+Reviews are already provided — use them for health-trend narrative.
+2. Only ask the PM for information that cannot be found via search (e.g. their \
+retrospective take on what worked/didn't, qualitative judgement on sponsor \
+satisfaction, unrecorded verbal commitments).
+3. Each question must include a category (e.g. "Lessons Learned", "Delivery", \
 "Success Criteria", "Stakeholders", "Timeline", "Team", "Vendor", "Testing").
-3. Explain briefly why the information is needed for a complete closure report.
-4. Ask at most 8 questions — focus on the most impactful gaps.
-5. If the data is comprehensive enough and PM notes cover the gaps, return an \
-empty list.
-6. """ + CONTEXT_REQUESTS_RULE + """
+4. Explain briefly why the information is needed for a complete closure report.
+5. Ask at most 8 questions — focus on the most impactful gaps.
+6. If the data + your context_requests + PM notes cover the gaps, return an \
+empty questions list.
+7. """ + CONTEXT_REQUESTS_RULE + """
 </rules>
 """
 
@@ -88,6 +103,7 @@ def build_questions_prompt(
     parts.append("")
 
     _append_timeline(parts, metrics)
+    _append_charter_sections(parts, metrics)
     _append_scope(parts, metrics)
     _append_risks(parts, metrics)
     _append_decisions(parts, metrics)
@@ -97,6 +113,8 @@ def build_questions_prompt(
     _append_action_items(parts, metrics)
     _append_knowledge_entries(parts, metrics)
     _append_meeting_summaries(parts, metrics)
+    _append_past_health_reviews(parts, metrics)
+    _append_past_ceo_reviews(parts, metrics)
 
     if pm_notes and pm_notes.strip():
         parts.append("<pm_notes>")
@@ -249,6 +267,7 @@ def build_report_prompt(
     parts.append("")
 
     _append_timeline(parts, metrics)
+    _append_charter_sections(parts, metrics)
     _append_scope(parts, metrics)
     _append_risks(parts, metrics)
     _append_decisions(parts, metrics)
@@ -258,6 +277,8 @@ def build_report_prompt(
     _append_action_items(parts, metrics)
     _append_knowledge_entries(parts, metrics)
     _append_meeting_summaries(parts, metrics)
+    _append_past_health_reviews(parts, metrics)
+    _append_past_ceo_reviews(parts, metrics)
 
     if pm_notes and pm_notes.strip():
         parts.append("<pm_notes>")
@@ -430,4 +451,93 @@ def _append_meeting_summaries(parts: list[str], metrics: dict[str, Any]) -> None
     for ms in summaries:
         parts.append(f"- {ms.get('filename', '?')}: {ms.get('summary', 'No summary')}")
     parts.append("</meeting_history>")
+    parts.append("")
+
+
+def _append_charter_sections(parts: list[str], metrics: dict[str, Any]) -> None:
+    """Expose the Charter as structured sections so the LLM can read success
+    criteria, scope, objectives, etc. without parsing XHTML.
+    """
+    sections = metrics.get("charter_sections") or {}
+    if not sections:
+        return
+    # Emphasise fields most relevant to closure: Success Criteria, Scope, Objectives.
+    priority = [
+        "Success Criteria", "Project Scope — In Scope", "Project Scope — Out of Scope",
+        "Commercial Objective", "Commercial Driver",
+        "OKR alignment", "Stakeholders",
+    ]
+    parts.append("<charter_sections>")
+    seen: set[str] = set()
+    for name in priority:
+        if name in sections:
+            parts.append(f"<section name=\"{name}\">")
+            parts.append(sections[name])
+            parts.append("</section>")
+            seen.add(name)
+    # Include any remaining sections (in case names vary by template)
+    for name, content in sections.items():
+        if name in seen:
+            continue
+        parts.append(f"<section name=\"{name}\">")
+        parts.append(content)
+        parts.append("</section>")
+    parts.append("</charter_sections>")
+    parts.append("")
+
+
+def _append_past_health_reviews(parts: list[str], metrics: dict[str, Any]) -> None:
+    """Full-narrative past Health Reviews so the closure can describe the
+    health-trend over the project lifecycle (Green → Amber → resolved, etc.)."""
+    reviews = metrics.get("past_health_reviews") or []
+    if not reviews:
+        return
+    parts.append("<past_health_reviews>")
+    for r in reviews:
+        parts.append(f"Date: {r.get('created_at', 'N/A')}")
+        parts.append(f"Rating: {r.get('health_rating', 'N/A')}")
+        parts.append(f"Rationale: {r.get('health_rationale', 'N/A')}")
+        concerns = r.get("top_concerns") or []
+        if concerns:
+            parts.append("Concerns:")
+            for c in concerns:
+                parts.append(
+                    f"  - [{c.get('severity', '?')}] {c.get('area', '?')}: "
+                    f"{c.get('evidence', '?')}"
+                )
+        positives = r.get("positive_observations") or []
+        if positives:
+            parts.append("Positives:")
+            for p in positives:
+                parts.append(f"  - {p}")
+        parts.append("---")
+    parts.append("</past_health_reviews>")
+    parts.append("")
+
+
+def _append_past_ceo_reviews(parts: list[str], metrics: dict[str, Any]) -> None:
+    """Full-narrative past CEO Reviews so the closure can reference what
+    leadership was told at each checkpoint."""
+    reviews = metrics.get("past_ceo_reviews") or []
+    if not reviews:
+        return
+    parts.append("<past_ceo_reviews>")
+    for r in reviews:
+        parts.append(f"Date: {r.get('created_at', 'N/A')}")
+        parts.append(f"Status: {r.get('health_indicator', 'N/A')}")
+        parts.append(f"Headline: {r.get('summary', 'N/A')}")
+        bullets = r.get("bullets") or []
+        if bullets:
+            parts.append("Bullets:")
+            for b in bullets:
+                parts.append(f"  - {b}")
+        escalations = r.get("escalations") or []
+        if escalations:
+            parts.append("Escalations:")
+            for esc in escalations:
+                parts.append(
+                    f"  - {esc.get('issue', '?')} — {esc.get('impact', '?')}"
+                )
+        parts.append("---")
+    parts.append("</past_ceo_reviews>")
     parts.append("")

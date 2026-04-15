@@ -168,7 +168,7 @@ def build_refine_prompt(
     # Project context (helps the LLM understand the broader project state)
     if project_context:
         parts.append("<project_context>")
-        for key in ["project_name", "charter_excerpt", "recent_meetings"]:
+        for key in ["project_name", "goal", "charter_excerpt", "recent_meetings"]:
             val = project_context.get(key)
             if val:
                 parts.append(val)

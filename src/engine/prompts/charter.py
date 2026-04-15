@@ -30,13 +30,23 @@ is to identify any gaps or ambiguities in their description that would prevent y
 from writing precise, complete section updates.</context>
 
 <rules>
-1. Only ask questions about information that is genuinely missing or unclear.
-2. Each question must reference a specific Charter section.
-3. If the user's input is already clear and complete for the sections it touches, \
+1. Before asking any question, carefully read the <project_context> block. It already \
+contains the Goal (with description), product ideas/features list, release/version, \
+risks, decisions, initiatives, team progress, and XFT page content. Do NOT ask about \
+anything that is already answered there (e.g. do not ask "what features?" when the \
+features list is provided; do not ask about the project date when the Goal due date \
+is given).
+2. If you need data that isn't in <project_context> (e.g. stakeholder list on another \
+Confluence page, a specific Jira ticket's details), issue a context_request instead of \
+asking the user.
+3. Only ask questions about information that is genuinely missing or unclear after \
+considering the provided context AND any context_requests you would issue.
+4. Each question must reference a specific Charter section.
+5. If the user's input is already clear and complete for the sections it touches, \
 return an empty questions list.
-4. Ask at most 5 questions — focus on the most important gaps.
-5. Do NOT ask about sections the user clearly did not intend to change.
-6. """ + CONTEXT_REQUESTS_RULE + """
+6. Ask at most 5 questions — focus on the most important gaps.
+7. Do NOT ask about sections the user clearly did not intend to change.
+8. """ + CONTEXT_REQUESTS_RULE + """
 </rules>
 """
 
@@ -107,8 +117,23 @@ def build_questions_prompt(
     parts.append("")
 
     parts.append(
-        "<instructions>Identify any gaps or ambiguities in the user's description. "
-        "If the input is already clear and complete, return an empty questions list.</instructions>"
+        "<instructions>\n"
+        "Step A — Proactive discovery: before deciding what to ask, consider what "
+        "additional Confluence/Jira content would help you update the Charter. Useful "
+        "searches often include:\n"
+        "  • confluence_search for the parent Program page (governance, stakeholders)\n"
+        "  • confluence_search for '<project name> stakeholders' or '<project name> scope'\n"
+        "  • confluence_search for related architecture, PRD, or strategy docs\n"
+        "  • jira_issue for the Goal ticket if you need its full description\n"
+        "  • jira_search for related Epics/Initiatives under this Goal\n"
+        "If any such lookup would genuinely reduce the need to bother the user, add it "
+        "to context_requests. Prefer context_requests over questions.\n"
+        "\n"
+        "Step B — Identify any gaps or ambiguities in the user's description that are "
+        "not already answered by <project_context> and will not be answered by your "
+        "context_requests. Ask only those as questions. If the input is clear and "
+        "complete after context, return an empty questions list.\n"
+        "</instructions>"
     )
 
     return "\n".join(parts)
@@ -141,9 +166,25 @@ stakeholders, leadership, and the project team. Write with clarity, precision, a
 professional tone appropriate for a formal project document. Structure content into clear \
 paragraphs (separated by newlines). Avoid jargon unless it is standard medical device or \
 project management terminology.
-8. If the user's input references people with @Name syntax (e.g. @Alice Smith), \
-preserve the @ prefix in your proposed text.
-9. """ + CONTEXT_REQUESTS_RULE + """
+8. **People references — ALWAYS use @FirstName LastName syntax** whenever you write \
+a person's name in proposed_text. This applies both when (a) preserving a name that \
+already appears in the current section (e.g. you see "@Alicia Miller" — keep it as \
+"@Alicia Miller"), and (b) introducing a new person the user mentioned in plain \
+prose (e.g. user says "Add John Smith as PM" — write "@John Smith", not "John \
+Smith"). The `@` prefix is what triggers Confluence to render an interactive user \
+mention; plain-text names will publish as dead text with no link.
+9. If the current section content already contains user mentions in the form \
+"@FirstName LastName" (resolved from Confluence storage format), those are real \
+Atlassian accounts — never drop or paraphrase them away unless the user explicitly \
+asks you to remove or replace that person.
+10. **Page references — use [page: Exact Title] syntax** when referring to another \
+Confluence page (e.g. a stakeholder roster, architecture doc, program page). Use \
+the exact page title you have seen in <project_context> or a successful \
+confluence_search result. These placeholders are auto-converted to real Confluence \
+page links on publish. Do NOT invent titles — if you are not sure a page exists, \
+issue a confluence_search first or just refer to it in prose without the [page:...] \
+syntax.
+11. """ + CONTEXT_REQUESTS_RULE + """
 </rules>
 """
 
@@ -234,8 +275,17 @@ def build_edits_prompt(
         parts.append("")
 
     parts.append(
-        "<instructions>Based on the user's description and Q&A answers above, propose precise "
-        "section edits. Each edit must use the exact section name from the Charter.</instructions>"
+        "<instructions>\n"
+        "Before proposing edits, if you still need factual data that is not in "
+        "<project_context> or the Q&A (e.g. a stakeholder list on another Confluence "
+        "page, details of a referenced Jira ticket), issue context_requests — they "
+        "will be resolved and the analysis re-run with the extra data. Prefer searching "
+        "over guessing.\n"
+        "\n"
+        "Then, based on the user's description, Q&A answers, and all available "
+        "context, propose precise section edits. Each edit must use the exact section "
+        "name from the Charter.\n"
+        "</instructions>"
     )
 
     return "\n".join(parts)

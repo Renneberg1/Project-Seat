@@ -106,7 +106,13 @@ class TranscriptService:
     # ------------------------------------------------------------------
 
     async def gather_project_context(self, project: Any) -> ProjectContext:
-        """Fetch existing risks, decisions, and Confluence page content in parallel."""
+        """Fetch all context a transcript/risk analysis benefits from, in parallel.
+
+        Now also includes: Goal summary+description, product ideas (feature
+        backlog), team velocity/progress, and recent meeting summaries — so the
+        LLM can do overlap detection, realistic timeline estimates, and ground
+        refinement in what was actually discussed.
+        """
         from src.services.project_context import ProjectContextService
 
         ctx_service = ProjectContextService(
@@ -118,10 +124,63 @@ class TranscriptService:
             charter=True, xft=True,
             goal_metadata=True,
             action_items=True, knowledge=True,
+            # Newly added for transcript analysis + risk refinement:
+            summary=True, pi=True, team_reports=True,
+            meeting_summaries=True, meeting_summary_limit=8,
         )
 
         default_label = data.goal_labels[0] if data.goal_labels else None
         default_component = data.goal_components[0] if data.goal_components else None
+
+        # Goal metadata from summary.goal (JiraIssue)
+        goal_summary: str | None = None
+        goal_status: str | None = None
+        goal_due_date: str | None = None
+        goal_description: str | None = None
+        if data.summary and data.summary.goal:
+            g = data.summary.goal
+            goal_summary = g.summary
+            goal_status = g.status
+            goal_due_date = g.due_date
+            if g.description_adf:
+                goal_description = ProjectContextService._extract_adf_text(
+                    g.description_adf
+                ).strip() or None
+
+        # Product ideas → lightweight dicts (feature backlog for overlap checks)
+        product_ideas: list[dict[str, Any]] = [
+            {
+                "key": idea.key,
+                "summary": idea.summary,
+                "issue_type": idea.issue_type,
+                "status": idea.status,
+                "release_priority": idea.release_priority,
+                "pi_state": idea.pi_state,
+            }
+            for idea in data.product_ideas
+        ]
+
+        # Team reports → dicts
+        team_reports: list[dict[str, Any]] = [
+            {
+                "team_key": r.team_key,
+                "pct_done_issues": r.pct_done_issues,
+                "sp_done": r.sp_done,
+                "sp_total": r.sp_total,
+                "blocker_count": getattr(r, "blocker_count", 0),
+            }
+            for r in data.team_reports
+        ]
+
+        # Meeting summaries (already dicts from TranscriptRepository)
+        recent_meetings: list[dict[str, str]] = [
+            {
+                "filename": ms.get("filename", ""),
+                "summary": (ms.get("summary") or "")[:400],
+                "created_at": ms.get("created_at", ""),
+            }
+            for ms in data.meeting_summaries
+        ]
 
         return ProjectContext(
             project_name=project.name,
@@ -140,6 +199,15 @@ class TranscriptService:
                 {"title": e.title, "type": e.entry_type, "tags": ",".join(e.tags) if e.tags else ""}
                 for e in data.knowledge_entries[:20]
             ],
+            goal_summary=goal_summary,
+            goal_status=goal_status,
+            goal_due_date=goal_due_date,
+            goal_description=goal_description,
+            pi_version=getattr(project, "pi_version", None),
+            pi_project_key=getattr(project, "pi_project_key", None),
+            product_ideas=product_ideas,
+            team_reports=team_reports,
+            recent_meetings=recent_meetings,
         )
 
     # ------------------------------------------------------------------
@@ -170,6 +238,18 @@ class TranscriptService:
                 "xft_content": context.xft_content,
                 "open_action_items": context.open_action_items,
                 "knowledge_entries": context.knowledge_entries,
+                # Expanded context so the LLM can do overlap detection (features),
+                # realistic timeline-impact estimates (team velocity), and ground
+                # findings in the actual Goal + prior meetings.
+                "goal_summary": context.goal_summary,
+                "goal_status": context.goal_status,
+                "goal_due_date": context.goal_due_date,
+                "goal_description": context.goal_description,
+                "pi_version": context.pi_version,
+                "pi_project_key": context.pi_project_key,
+                "product_ideas": context.product_ideas,
+                "team_reports": context.team_reports,
+                "recent_meetings": context.recent_meetings,
             }
             result = await agent.analyze_transcript(
                 transcript_text=record.raw_text,

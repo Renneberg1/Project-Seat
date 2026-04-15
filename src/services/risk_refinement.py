@@ -156,14 +156,40 @@ class RiskRefinementService:
 
     @staticmethod
     def _build_refine_context(context: ProjectContext) -> dict[str, str]:
-        """Build a concise project context dict for the refine agent."""
+        """Build a rich project context dict for the refine agent.
+
+        Passes goal intent (summary/description/due date), Charter excerpt, and
+        recent meeting summaries so the LLM can ground refinement in concrete
+        project state instead of asking generic "what's the impact" questions.
+        """
         ctx: dict[str, str] = {}
         ctx["project_name"] = f"Project: {context.project_name} ({context.jira_goal_key})"
 
+        # Goal intent + timeline (so "timeline impact" is relative to the real plan)
+        goal_bits: list[str] = []
+        if context.goal_summary:
+            goal_bits.append(f"Goal: {context.goal_summary}")
+        if context.goal_status:
+            goal_bits.append(f"Goal status: {context.goal_status}")
+        if context.goal_due_date:
+            goal_bits.append(f"Goal due date: {context.goal_due_date}")
+        if context.goal_description:
+            goal_bits.append(f"Goal description: {context.goal_description[:1500]}")
+        if goal_bits:
+            ctx["goal"] = "\n".join(goal_bits)
+
         if context.charter_content:
-            # Give the LLM the charter scope to understand project boundaries
             excerpt = context.charter_content[:2000]
             ctx["charter_excerpt"] = f"Charter excerpt:\n{excerpt}"
+
+        # Recent meeting summaries — populate the previously-dead prompt slot
+        # (risk_refine.py references 'recent_meetings' but the service never set it).
+        if context.recent_meetings:
+            lines = ["Recent meeting summaries (for grounding evidence):"]
+            for m in context.recent_meetings[:5]:
+                snippet = (m.get("summary") or "")[:250]
+                lines.append(f"- {m.get('filename', '?')}: {snippet}")
+            ctx["recent_meetings"] = "\n".join(lines)
 
         return ctx
 

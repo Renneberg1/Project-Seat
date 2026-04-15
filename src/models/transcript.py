@@ -122,3 +122,13 @@ class ProjectContext:
     default_label: str | None = None
     open_action_items: list[dict[str, str]] = field(default_factory=list)
     knowledge_entries: list[dict[str, str]] = field(default_factory=list)
+    # Richer context (populated opportunistically; empty/None if not fetched).
+    goal_summary: str | None = None
+    goal_status: str | None = None
+    goal_due_date: str | None = None
+    goal_description: str | None = None  # plain-text extracted from ADF
+    pi_version: str | None = None
+    pi_project_key: str | None = None
+    product_ideas: list[dict[str, Any]] = field(default_factory=list)
+    team_reports: list[dict[str, Any]] = field(default_factory=list)
+    recent_meetings: list[dict[str, str]] = field(default_factory=list)

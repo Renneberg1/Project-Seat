@@ -8,9 +8,11 @@ import pytest
 
 from src.engine.mentions import (
     MENTION_RE,
+    PAGE_LINK_RE,
     resolve_adf_doc_mentions,
     resolve_adf_mentions,
     resolve_confluence_mentions,
+    resolve_confluence_page_links,
     search_user,
 )
 
@@ -27,10 +29,15 @@ class TestMentionRegex:
         ("@Alice Smith-Jones", ["Alice Smith-Jones"]),
         ("@Tom Renneberg should review", ["Tom Renneberg"]),
         ("Ask @Alice Smith and @Bob Jones", ["Alice Smith", "Bob Jones"]),
-        ("@lowercase name", []),  # lowercase first word
-        ("@Tom", []),  # single word
+        ("@lowercase name", []),  # lowercase first word — no match
+        ("@Tom", ["Tom"]),  # single capitalised word is now allowed
+        ("@Tom is tall", ["Tom"]),  # stops at lowercase word
         ("tom@example.com", []),  # email address
         ("@Tom O'Brien", ["Tom O'Brien"]),  # apostrophe
+        # Lowercase surname particles are preserved between capital words
+        ("@John van der Berg", ["John van der Berg"]),
+        ("@María de la Cruz", ["María de la Cruz"]),
+        ("@Jean-Claude Van Damme", ["Jean-Claude Van Damme"]),
     ])
     def test_mention_regex_matches(self, text, expected):
         matches = [m.group(1) for m in MENTION_RE.finditer(text)]
@@ -324,3 +331,94 @@ class TestResolveAdfDocMentions:
         assert result["content"][0]["content"][0]["text"] == "No mentions here."
         assert result["content"][0]["content"][1]["type"] == "hardBreak"
         assert result["content"][1]["type"] == "rule"
+
+
+# ---------------------------------------------------------------------------
+# resolve_confluence_page_links
+# ---------------------------------------------------------------------------
+
+
+class TestPageLinkRegex:
+
+    @pytest.mark.parametrize("text,expected", [
+        ("See [page: Stakeholder Roster] for details", ["Stakeholder Roster"]),
+        ("Refer to [page:Scope Doc] and [page: Architecture]", ["Scope Doc", "Architecture"]),
+        ("[page:   Trimmed  ]", ["Trimmed"]),
+        ("no placeholders here", []),
+        ("[Page: wrong case]", []),  # case-sensitive prefix
+        ("[page: spans\nnewline]", []),  # single-line only
+    ])
+    def test_page_link_regex_matches(self, text, expected):
+        matches = [m.group(1).strip() for m in PAGE_LINK_RE.finditer(text)]
+        assert matches == expected
+
+
+class TestResolveConfluencePageLinks:
+
+    async def test_replaces_placeholder_with_page_link_xhtml(self):
+        confluence = AsyncMock()
+        confluence.search_pages_by_title = AsyncMock(return_value=[
+            {"id": "123", "title": "Stakeholder Roster"},
+        ])
+
+        result = await resolve_confluence_page_links(
+            "See [page: Stakeholder Roster] for details", confluence,
+        )
+
+        assert (
+            '<ac:link><ri:page ri:content-title="Stakeholder Roster"/></ac:link>'
+            in result
+        )
+        assert "[page:" not in result
+        assert "See " in result
+        assert " for details" in result
+
+    async def test_leaves_unresolved_placeholders_as_is(self):
+        confluence = AsyncMock()
+        confluence.search_pages_by_title = AsyncMock(return_value=[])
+
+        original = "See [page: Nonexistent Page] for details"
+        result = await resolve_confluence_page_links(original, confluence)
+
+        assert result == original
+
+    async def test_case_insensitive_exact_title_match_only(self):
+        """Partial matches should be rejected — only exact (case-insensitive) titles resolve."""
+        confluence = AsyncMock()
+        confluence.search_pages_by_title = AsyncMock(return_value=[
+            {"id": "123", "title": "Stakeholder Roster and Governance"},  # partial
+        ])
+
+        result = await resolve_confluence_page_links(
+            "[page: Stakeholder Roster]", confluence,
+        )
+        # Not an exact match → left unresolved
+        assert result == "[page: Stakeholder Roster]"
+
+    async def test_escapes_attribute_special_chars_in_title(self):
+        confluence = AsyncMock()
+        confluence.search_pages_by_title = AsyncMock(return_value=[
+            {"id": "123", "title": 'Ideas "v2" & Roadmap'},
+        ])
+
+        result = await resolve_confluence_page_links(
+            '[page: Ideas "v2" & Roadmap]', confluence,
+        )
+
+        # Quotes and ampersands must be XML-attribute-escaped
+        assert 'ri:content-title="Ideas &quot;v2&quot; &amp; Roadmap"' in result
+
+    async def test_graceful_on_search_error(self):
+        confluence = AsyncMock()
+        confluence.search_pages_by_title = AsyncMock(side_effect=Exception("boom"))
+
+        original = "See [page: Some Page] for details"
+        result = await resolve_confluence_page_links(original, confluence)
+
+        assert result == original
+
+    async def test_no_placeholders_returns_unchanged(self):
+        confluence = AsyncMock()
+        result = await resolve_confluence_page_links("plain text only", confluence)
+        assert result == "plain text only"
+        confluence.search_pages_by_title.assert_not_called()

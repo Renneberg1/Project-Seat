@@ -102,6 +102,36 @@ class ConfluenceConnector(BaseConnector):
         )
         return data.get("results", [])
 
+    async def search_pages_by_text(
+        self, query: str, space_key: str = "", max_results: int = 10
+    ) -> list[dict[str, Any]]:
+        """Full-text search across page titles AND body content via CQL ``text ~``.
+
+        This is broader than :meth:`search_pages_by_title` — it finds pages
+        whose body mentions the query even if the title does not. Useful for
+        LLM-issued ``confluence_text_search`` context requests hunting for
+        architecture docs, retros, stakeholder lists, etc. that may not be
+        titled obviously.
+
+        Requests an excerpt so the caller/LLM can assess relevance without
+        fetching the full page body.
+        """
+        escaped = query.replace("\\", "\\\\").replace('"', '\\"')
+        cql_parts = [f'text ~ "{escaped}"', "type=page"]
+        if space_key:
+            cql_parts.append(f'space="{space_key}"')
+        cql = " AND ".join(cql_parts)
+        data = await self.get(
+            "/content/search",
+            params={
+                "cql": cql,
+                "limit": max_results,
+                "expand": "space,version",
+                "excerpt": "highlight",
+            },
+        )
+        return data.get("results", [])
+
     # ------------------------------------------------------------------
     # v2 API helpers
     # ------------------------------------------------------------------

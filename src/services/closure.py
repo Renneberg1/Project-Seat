@@ -56,6 +56,9 @@ class ClosureService:
             charter=True, xft=True,
             meeting_summaries=True, meeting_summary_limit=20,
             action_items=True, knowledge=True,
+            # Closure needs the full lifecycle arc, including health/CEO review trends.
+            past_health_reviews=True, past_health_review_limit=5,
+            past_ceo_reviews=True, past_ceo_review_limit=5,
             cache_key=f"ctx:closure:{project.id}",
             cache_ttl=_CONTEXT_CACHE_TTL,
         )
@@ -75,6 +78,8 @@ class ClosureService:
             "meeting_summaries": data.meeting_summaries,
             "action_items": data.action_items,
             "knowledge_entries": data.knowledge_entries,
+            "past_health_reviews": data.past_health_reviews,
+            "past_ceo_reviews": data.past_ceo_reviews,
         }
 
     # ------------------------------------------------------------------
@@ -200,6 +205,26 @@ class ClosureService:
             {"filename": ms.get("filename", ""), "summary": ms.get("summary", "")[:300]}
             for ms in context.get("meeting_summaries", [])[:10]
         ]
+
+        # Past Health + CEO reviews (for health-trend narrative in the closure)
+        metrics["past_health_reviews"] = context.get("past_health_reviews", [])
+        metrics["past_ceo_reviews"] = context.get("past_ceo_reviews", [])
+
+        # Extracted Charter sections (success criteria, scope, etc. —
+        # structured instead of buried in XHTML for the LLM).
+        from src.engine.charter_storage_utils import extract_sections
+        charter_html = context.get("charter_content")
+        if charter_html:
+            try:
+                sections = extract_sections(charter_html)
+                metrics["charter_sections"] = {
+                    s["name"]: s["content"] for s in sections if s.get("content")
+                }
+            except Exception as exc:
+                logger.warning("Closure: failed to extract Charter sections: %s", exc)
+                metrics["charter_sections"] = {}
+        else:
+            metrics["charter_sections"] = {}
 
         return metrics
 

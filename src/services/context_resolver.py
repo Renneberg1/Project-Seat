@@ -57,10 +57,11 @@ _MAX_RESULT_CHARS = 3000
 class ContextRequestResolver:
     """Resolve context_requests from the LLM's first-pass analysis.
 
-    Supports three request types:
+    Supports four request types:
     - jira_issue: Fetch a specific Jira issue by key
     - jira_search: Text search across Jira (returns top results)
-    - confluence_search: Search Confluence pages by title/content
+    - confluence_search: Search Confluence pages by TITLE
+    - confluence_text_search: Full-text search Confluence pages (title + body)
     """
 
     def __init__(self, settings: Settings | None = None) -> None:
@@ -107,6 +108,8 @@ class ContextRequestResolver:
                 result = await self._search_jira(query)
             elif req_type == "confluence_search":
                 result = await self._search_confluence(query)
+            elif req_type == "confluence_text_search":
+                result = await self._search_confluence_text(query)
             else:
                 logger.warning("Unknown context request type: %s", req_type)
                 return None
@@ -214,11 +217,10 @@ class ContextRequestResolver:
             if not results:
                 return "No matching Confluence pages found."
 
-            lines = [f"Found {len(results)} results for '{query}':"]
+            lines = [f"Found {len(results)} title results for '{query}':"]
             for r in results:
                 title = r.get("title", "?")
                 page_id = r.get("id", "?")
-                space = r.get("_expandable", {}).get("space", "")
                 excerpt = r.get("excerpt", "")[:200] if r.get("excerpt") else ""
                 lines.append(f"- [{page_id}] {title}")
                 if excerpt:
@@ -227,6 +229,38 @@ class ContextRequestResolver:
 
         except ConnectorError as exc:
             return f"Confluence search failed: {exc}"
+        finally:
+            await confluence.close()
+
+    async def _search_confluence_text(self, query: str) -> str:
+        """Full-text Confluence search (title + body) returning results with excerpts."""
+        from src.connectors.confluence import ConfluenceConnector
+
+        confluence = ConfluenceConnector(settings=self._settings)
+        try:
+            results = await confluence.search_pages_by_text(
+                query, max_results=5,
+            )
+
+            if not results:
+                return "No matching Confluence pages found (full-text search)."
+
+            lines = [f"Found {len(results)} full-text results for '{query}':"]
+            for r in results:
+                title = r.get("title", "?")
+                page_id = r.get("id", "?")
+                # Confluence returns excerpts with <b>...</b> highlight tags — strip for LLM
+                raw_excerpt = r.get("excerpt", "") or ""
+                excerpt = (
+                    raw_excerpt.replace("<b>", "").replace("</b>", "").strip()
+                )[:400]
+                lines.append(f"- [{page_id}] {title}")
+                if excerpt:
+                    lines.append(f"  ...{excerpt}...")
+            return "\n".join(lines)
+
+        except ConnectorError as exc:
+            return f"Confluence text search failed: {exc}"
         finally:
             await confluence.close()
 

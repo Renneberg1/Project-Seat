@@ -42,6 +42,7 @@ class ProjectContextData:
     summary: Any = None
     initiatives: list[Any] = field(default_factory=list)
     pi_summary: Any = None
+    product_ideas: list[Any] = field(default_factory=list)
     # Team data
     team_reports: list[Any] = field(default_factory=list)
     snapshots: list[dict] = field(default_factory=list)
@@ -232,7 +233,9 @@ class ProjectContextService:
         elif key == "initiatives":
             data.initiatives = result
         elif key == "pi":
-            data.pi_summary = result
+            ideas, summary = result
+            data.product_ideas = ideas
+            data.pi_summary = summary
         elif key == "team_reports":
             data.team_reports = result
         elif key == "snapshots":
@@ -434,15 +437,15 @@ class ProjectContextService:
             logger.warning("ProjectContext: failed to get initiatives: %s", exc)
             return []
 
-    async def _fetch_pi(self, project: Project) -> Any:
+    async def _fetch_pi(self, project: Project) -> tuple[list, Any]:
         from src.services.dashboard import DashboardService
         dashboard = DashboardService(db_path=self._db_path, settings=self._settings)
         try:
             ideas = await dashboard.get_product_ideas(project)
-            return dashboard.summarise_product_ideas(ideas)
+            return ideas, dashboard.summarise_product_ideas(ideas)
         except Exception as exc:
             logger.warning("ProjectContext: failed to get product ideas: %s", exc)
-            return None
+            return [], None
 
     async def _fetch_team_reports(self, project: Project) -> list:
         from src.services.team_progress import TeamProgressService
@@ -525,19 +528,29 @@ class ProjectContextService:
     async def _fetch_past_health_reviews(
         self, project: Project, limit: int,
     ) -> list[dict]:
+        """Return past health reviews with full narrative, not just metadata.
+
+        ``HealthReviewRepository.list_reviews`` already flattens the ``review_json``
+        payload into each row (rating, rationale, concerns, observations, etc.).
+        We pass those through so the LLM can write "Previously we rated Amber
+        because X; now it is Y" with real continuity.
+        """
         try:
             from src.repositories.review_repo import HealthReviewRepository
             repo = HealthReviewRepository(self._db_path)
             reviews = repo.list_reviews(project.id, limit=limit)
-            # Return lightweight summaries (rating + rationale + date)
-            result = []
+            # reviews is already a list[dict] with review_json fields merged in.
+            # Keep the useful narrative fields and drop internal ids.
+            result: list[dict] = []
             for r in reviews:
-                import json as _json
-                review_data = _json.loads(r.get("review_json", "{}"))
                 result.append({
-                    "health_rating": r.get("health_rating", ""),
-                    "health_rationale": review_data.get("health_rationale", ""),
                     "created_at": r.get("created_at", ""),
+                    "health_rating": r.get("health_rating", ""),
+                    "health_rationale": r.get("health_rationale", ""),
+                    "top_concerns": r.get("top_concerns", []),
+                    "positive_observations": r.get("positive_observations", []),
+                    "questions_for_pm": r.get("questions_for_pm", []),
+                    "suggested_next_actions": r.get("suggested_next_actions", []),
                 })
             return result
         except Exception as exc:
@@ -547,19 +560,29 @@ class ProjectContextService:
     async def _fetch_past_ceo_reviews(
         self, project: Project, limit: int,
     ) -> list[dict]:
+        """Return past CEO reviews with full narrative so the LLM has continuity.
+
+        Includes health_indicator, headline summary, bullets, escalations, next
+        milestones, deep-dive topics — everything the LLM needs to produce an
+        update that reads as a delta from the prior one.
+        """
         try:
             from src.repositories.review_repo import CeoReviewRepository
             repo = CeoReviewRepository(self._db_path)
             reviews = repo.list_reviews(project.id, limit=limit)
-            # Return lightweight summaries (health indicator + summary + date)
-            return [
-                {
-                    "health_indicator": r.health_indicator,
-                    "summary": r.summary,
+            result: list[dict] = []
+            for r in reviews:
+                rj = r.review_json or {}
+                result.append({
                     "created_at": r.created_at,
-                }
-                for r in reviews
-            ]
+                    "health_indicator": rj.get("health_indicator", ""),
+                    "summary": rj.get("summary", ""),
+                    "bullets": rj.get("bullets", []),
+                    "escalations": rj.get("escalations", []),
+                    "next_milestones": rj.get("next_milestones", []),
+                    "deep_dive_topics": rj.get("deep_dive_topics", []),
+                })
+            return result
         except Exception as exc:
             logger.warning("ProjectContext: failed to get past CEO reviews: %s", exc)
             return []
