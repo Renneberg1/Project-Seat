@@ -7,7 +7,7 @@ import logging
 from datetime import date
 
 from fastapi import APIRouter, Depends, Form, Request
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, StreamingResponse
 
 logger = logging.getLogger(__name__)
 
@@ -28,6 +28,7 @@ from src.services.spinup import SpinUpService
 from src.services.team_progress import TeamProgressService, TeamVersionReport
 from src.services.team_snapshot import TeamSnapshotService
 from src.services.transcript import TranscriptService
+from src.services.runsheet_export import RunsheetExportService
 from src.web.deps import (
     extract_plan_url,
     get_approval_engine,
@@ -37,6 +38,7 @@ from src.web.deps import (
     get_import_service,
     get_jira_connector,
     get_release_service,
+    get_runsheet_export_service,
     get_spinup_service,
     get_team_progress_service,
     get_team_snapshot_service,
@@ -219,7 +221,7 @@ async def refresh_project(
         cache.invalidate(f"summary:{project.jira_goal_key}")
         cache.invalidate(f"initiatives:{project.jira_goal_key}")
         if project.pi_version:
-            cache.invalidate(f"pi:{project.pi_version}")
+            cache.invalidate(f"pi:{project.pi_project_key}:{project.pi_version}")
         cache.invalidate(f"team_progress:{project.jira_goal_key}")
         if project.dhf_draft_root_id and project.dhf_released_root_id:
             cache.invalidate(f"dhf:{project.dhf_draft_root_id}:{project.dhf_released_root_id}")
@@ -354,10 +356,15 @@ async def save_pi_config(
     request: Request,
     id: int,
     pi_version: str = Form(""),
+    pi_project_key: str = Form("PI"),
     dashboard: DashboardService = Depends(get_dashboard_service),
 ) -> RedirectResponse:
     """Save PI version for a project."""
-    dashboard.update_project(id, pi_version=pi_version.strip() or None)
+    dashboard.update_project(
+        id,
+        pi_version=pi_version.strip() or None,
+        pi_project_key=(pi_project_key.strip() or "PI").upper(),
+    )
     return RedirectResponse(f"/project/{id}/dashboard", status_code=303)
 
 
@@ -486,6 +493,73 @@ async def unlock_release(
     """Unlock release scope (preserves snapshot)."""
     service.unlock_release(release_id)
     return RedirectResponse(f"/project/{id}/documents?release_id={release_id}", status_code=303)
+
+
+@router.get("/{id}/releases/{release_id}/export")
+async def export_runsheet(
+    request: Request,
+    id: int,
+    release_id: int,
+    dashboard: DashboardService = Depends(get_dashboard_service),
+    dhf_service: DHFService = Depends(get_dhf_service),
+    release_service: ReleaseService = Depends(get_release_service),
+    export_service: RunsheetExportService = Depends(get_runsheet_export_service),
+) -> StreamingResponse:
+    """Export Documentation Run Sheet as Excel (.xlsx)."""
+    project = dashboard.get_project_by_id(id)
+    if project is None:
+        return HTMLResponse("Project not found", status_code=404)
+
+    release = release_service.get_release(release_id)
+    if release is None or release.project_id != id:
+        return HTMLResponse("Release not found", status_code=404)
+
+    # Fetch DHF documents
+    documents: list = []
+    if project.dhf_draft_root_id and project.dhf_released_root_id:
+        try:
+            documents, _ = await dhf_service.get_dhf_table(project)
+        except ConnectorError:
+            return HTMLResponse("Failed to fetch documents from Confluence", status_code=502)
+
+    selected_docs = release_service.get_selected_documents(release_id)
+
+    # Build status map
+    status_map: dict[str, str] = {}
+    if release.locked and selected_docs:
+        snapshot = release.version_snapshot or {}
+        current_versions = {d.title: d.released_version for d in documents}
+        statuses = release_service.compute_release_status(
+            snapshot, current_versions, selected_docs,
+        )
+        for title, rs in statuses:
+            if rs == ReleaseStatus.PUBLISHED:
+                status_map[title] = "Published"
+            else:
+                status_map[title] = "Pending"
+    elif selected_docs:
+        # Unlocked release with saved selection — selected docs are "To Do"
+        for title in selected_docs:
+            status_map[title] = "To Do"
+
+    # All non-selected docs get "No Change"
+    for doc in documents:
+        if doc.title not in status_map:
+            status_map[doc.title] = "No Change"
+
+    buf = export_service.generate(
+        project_name=project.name,
+        documents=documents,
+        status_map=status_map,
+        release_name=release.name,
+    )
+
+    filename = f"{project.name} - Documentation Run Sheet - {release.name}.xlsx"
+    return StreamingResponse(
+        buf,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f'attachment; filename="{filename}"'},
+    )
 
 
 # ------------------------------------------------------------------

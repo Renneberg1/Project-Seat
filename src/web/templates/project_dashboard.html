@@ -139,6 +139,9 @@
             <form method="post" action="/project/{{ project.id }}/pi/config" style="margin-top: 0.5rem;">
                 <input type="text" name="pi_version" value="{{ project.pi_version or '' }}"
                        placeholder="e.g. D3: CTC comparison with prior" style="width: 100%; margin-bottom: 0.5rem;">
+                <label style="font-size: 0.85em; display: block; margin-bottom: 0.25rem;">Jira project key</label>
+                <input type="text" name="pi_project_key" value="{{ project.pi_project_key or 'PI' }}"
+                       placeholder="PI" style="width: 100%; margin-bottom: 0.5rem;">
                 <button type="submit" class="btn btn-sm">Save</button>
             </form>
         </details>

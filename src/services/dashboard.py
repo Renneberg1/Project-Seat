@@ -14,9 +14,11 @@ from src.jira_constants import (
     FIELD_RELEASE_PRIORITY_A,
     FIELD_RELEASE_PRIORITY_B,
     FIELD_PI_STATE,
+    FIELD_RELEASE_TEXT,
     FIELD_RISK_POINTS,
     FIELD_RISK_LEVEL,
     FIELD_RISK_THRESHOLD,
+    FIELD_ROADMAP,
     FIELD_TIMELINE_IMPACT,
     ISSUE_TYPE_DECISION,
     RISK_PROJECT_KEY,
@@ -167,31 +169,50 @@ class DashboardService:
     # ------------------------------------------------------------------
 
     async def get_product_ideas(self, project: Project) -> list[JiraIssue]:
-        """Fetch Product Ideas linked to this project via the PI version field.
+        """Fetch Product Ideas linked to this project via the PI version / Release field.
+
+        PI board (default): filters by versions[checkboxes] + excludes Market Access + archived ideas.
+        LM board: filters by the "Release" textfield + Roadmap != "Won't do".
 
         Results are cached for 60 seconds.
-        Excludes "Market Access" issue type.
         """
         if not project.pi_version:
             return []
 
-        cache_key = f"pi:{project.pi_version}"
+        project_key = (project.pi_project_key or "PI").upper()
+        cache_key = f"pi:{project_key}:{project.pi_version}"
         cached = cache.get(cache_key)
         if cached is not None:
             return cached
 
-        jira = JiraConnector(settings=self._settings)
-        try:
-            results = await jira.search(
-                f'project = PI AND "versions[checkboxes]" = "{project.pi_version}"'
+        if project_key == "LM":
+            jql = (
+                f'project = {project_key} AND "Release" = "{project.pi_version}"'
+                f' AND statusCategory != Done'
+                f' AND (Roadmap is EMPTY OR Roadmap != "Won\'t do")'
+            )
+            fields = [
+                "summary", "status", "issuetype", "project", "labels",
+                "fixVersions", "duedate", "parent", "description",
+                FIELD_RELEASE_TEXT, FIELD_ROADMAP,
+            ]
+        else:
+            jql = (
+                f'project = {project_key} AND "versions[checkboxes]" = "{project.pi_version}"'
                 f' AND issuetype != "Market Access"'
                 f' AND statusCategory != Done'
                 f' AND resolution = Unresolved'
-                f' AND "Idea archived" is EMPTY',
-                fields=["summary", "status", "issuetype", "project", "labels",
-                        "fixVersions", "duedate", "parent", "description",
-                        FIELD_RELEASE_PRIORITY_A, FIELD_RELEASE_PRIORITY_B, FIELD_PI_STATE],
+                f' AND "Idea archived" is EMPTY'
             )
+            fields = [
+                "summary", "status", "issuetype", "project", "labels",
+                "fixVersions", "duedate", "parent", "description",
+                FIELD_RELEASE_PRIORITY_A, FIELD_RELEASE_PRIORITY_B, FIELD_PI_STATE,
+            ]
+
+        jira = JiraConnector(settings=self._settings)
+        try:
+            results = await jira.search(jql, fields=fields)
             ideas = [JiraIssue.from_api(r) for r in results]
             cache.set(cache_key, ideas, ttl=60)
             return ideas
@@ -201,8 +222,13 @@ class DashboardService:
             await jira.close()
 
     def summarise_product_ideas(self, ideas: list[JiraIssue]) -> ProductIdeaSummary:
-        """Compute summary counts from a list of Product Ideas."""
+        """Compute summary counts from a list of Product Ideas.
+
+        "Must Have" count includes both PI board ``Must Have`` priority and
+        LM board ``Now`` roadmap state (both represent top-priority work).
+        """
         done_statuses = {"Done", "Closed"}
+        must_have_values = {"Must Have", "Now"}
         type_counts = {"Feature": 0, "Minor Feature": 0, "Idea": 0, "Defect": 0}
         done_count = 0
         must_have_count = 0
@@ -210,7 +236,7 @@ class DashboardService:
             type_counts[idea.issue_type] = type_counts.get(idea.issue_type, 0) + 1
             if idea.status in done_statuses:
                 done_count += 1
-            if idea.release_priority == "Must Have":
+            if idea.release_priority in must_have_values:
                 must_have_count += 1
         return ProductIdeaSummary(
             total_count=len(ideas),

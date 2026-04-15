@@ -14,6 +14,7 @@ from src.jira_constants import (
     FIELD_RISK_LEVEL,
     FIELD_RISK_POINTS,
     FIELD_RISK_THRESHOLD,
+    FIELD_ROADMAP,
     FIELD_TIMELINE_IMPACT,
 )
 
@@ -85,8 +86,13 @@ class JiraIssue:
         parent_obj = fields.get("parent")
         versions = fields.get("fixVersions", [])
 
-        # Release priority — try both known custom field IDs
-        rp_raw = fields.get(FIELD_RELEASE_PRIORITY_A) or fields.get(FIELD_RELEASE_PRIORITY_B)
+        # Release priority — PI board uses RELEASE_PRIORITY_A/B (Must Have / Nice to Have / …),
+        # LM board uses the Roadmap field (Now / Next / Later / Won't do).
+        rp_raw = (
+            fields.get(FIELD_RELEASE_PRIORITY_A)
+            or fields.get(FIELD_RELEASE_PRIORITY_B)
+            or fields.get(FIELD_ROADMAP)
+        )
         release_priority = rp_raw.get("value") if isinstance(rp_raw, dict) else None
 
         # PI State

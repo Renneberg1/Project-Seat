@@ -22,6 +22,7 @@ CREATE TABLE IF NOT EXISTS projects (
     dhf_draft_root_id     TEXT,
     dhf_released_root_id  TEXT,
     pi_version            TEXT,
+    pi_project_key        TEXT NOT NULL DEFAULT 'PI',
     default_component     TEXT,
     default_label         TEXT,
     team_projects         TEXT,
@@ -644,6 +645,16 @@ def _migrate_14_add_discovery_source(conn: sqlite3.Connection) -> None:
         pass  # Column already exists (new databases)
 
 
+def _migrate_15_add_pi_project_key(conn: sqlite3.Connection) -> None:
+    """Add pi_project_key column so projects can point at alternate ideas boards (e.g. LM)."""
+    try:
+        conn.execute(
+            "ALTER TABLE projects ADD COLUMN pi_project_key TEXT NOT NULL DEFAULT 'PI'"
+        )
+    except sqlite3.OperationalError:
+        pass  # Column already exists (new databases)
+
+
 _MIGRATIONS: list[tuple[int, callable]] = [
     (1, _migrate_1_add_phase),
     (2, _migrate_2_add_dhf_columns),
@@ -659,6 +670,7 @@ _MIGRATIONS: list[tuple[int, callable]] = [
     (12, _migrate_12_add_zoom_and_knowledge),
     (13, _migrate_13_add_transcript_source),
     (14, _migrate_14_add_discovery_source),
+    (15, _migrate_15_add_pi_project_key),
 ]
 
 

@@ -289,6 +289,7 @@ class SpinUpService:
             name=req.project_name,
             status="spinning_up",
             pi_version=req.pi_version or None,
+            pi_project_key=(req.pi_project_key or "PI").upper(),
             team_projects=req.team_projects or None,
             jira_plan_url=req.jira_plan_url or None,
         )

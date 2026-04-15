@@ -33,6 +33,7 @@ async def spinup_submit(
     labels: str = Form(""),
     goal_summary: str = Form(""),
     pi_version: str = Form(""),
+    pi_project_key: str = Form("PI"),
     jira_plan_url: str = Form(""),
     service: SpinUpService = Depends(get_spinup_service),
 ) -> HTMLResponse:
@@ -50,6 +51,7 @@ async def spinup_submit(
         goal_summary=goal_summary,
         confluence_space_key=app_settings.atlassian.confluence_space_key,
         pi_version=pi_version.strip(),
+        pi_project_key=(pi_project_key.strip() or "PI").upper(),
         jira_plan_url=jira_plan_url.strip(),
     )
 

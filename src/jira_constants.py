@@ -42,6 +42,11 @@ FIELD_RELEASE_PRIORITY_A = "customfield_12812"
 FIELD_RELEASE_PRIORITY_B = "customfield_11054"
 FIELD_PI_STATE = "customfield_13530"
 
+# LM board uses a different schema: "Release" is a plain textfield (e.g. "Drop 1")
+# and priority is a "Roadmap" select field with values Now / Next / Later / Won't do.
+FIELD_RELEASE_TEXT = "customfield_11101"  # "Release"
+FIELD_ROADMAP = "customfield_13367"       # "Roadmap" (Now / Next / Later / Won't do)
+
 # ---------------------------------------------------------------------------
 # Custom field IDs — Story points
 # ---------------------------------------------------------------------------

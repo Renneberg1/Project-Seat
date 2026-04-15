@@ -32,6 +32,8 @@
 
     {% if active_release %}
     <div class="release-actions">
+        <a href="/project/{{ project.id }}/releases/{{ active_release.id }}/export"
+           class="btn btn-sm" download>Export Run Sheet</a>
         {% if active_release.locked %}
         <form method="post" action="/project/{{ project.id }}/releases/{{ active_release.id }}/unlock" style="display: inline;">
             <button type="submit" class="btn btn-sm">Unlock</button>

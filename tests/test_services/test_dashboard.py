@@ -298,3 +298,98 @@ async def test_get_initiative_detail_connector_error_returns_none(tmp_db, test_s
         result = await service.get_initiative_detail("FAKE-999")
 
     assert result is None
+
+
+# ---------------------------------------------------------------------------
+# get_product_ideas: PI vs LM board JQL branching
+# ---------------------------------------------------------------------------
+
+
+def _make_project_with_board(tmp_db, pi_version: str, pi_project_key: str):
+    with get_db(tmp_db) as conn:
+        conn.execute(
+            "INSERT INTO projects (jira_goal_key, name, status, phase, pi_version, pi_project_key)"
+            " VALUES (?, ?, ?, ?, ?, ?)",
+            ("PROG-1", "P", "active", "planning", pi_version, pi_project_key),
+        )
+        conn.commit()
+    from src.services.dashboard import DashboardService as _DS
+    return _DS(db_path=tmp_db).list_projects()[0]
+
+
+async def test_get_product_ideas_pi_board_uses_versions_checkboxes(tmp_db, test_settings):
+    cache.clear()
+    project = _make_project_with_board(tmp_db, "HOP 2.5", "PI")
+    service = DashboardService(db_path=tmp_db, settings=test_settings)
+
+    mock_jira = MagicMock()
+    mock_jira.search = AsyncMock(return_value=[])
+    mock_jira.close = AsyncMock()
+
+    with patch("src.services.dashboard.JiraConnector", return_value=mock_jira):
+        await service.get_product_ideas(project)
+
+    jql = mock_jira.search.call_args.args[0]
+    assert "project = PI" in jql
+    assert 'versions[checkboxes]' in jql
+    assert "HOP 2.5" in jql
+    assert "Idea archived" in jql
+
+
+async def test_get_product_ideas_lm_board_uses_release_textfield(tmp_db, test_settings):
+    cache.clear()
+    project = _make_project_with_board(tmp_db, "Drop 1", "LM")
+    service = DashboardService(db_path=tmp_db, settings=test_settings)
+
+    mock_jira = MagicMock()
+    mock_jira.search = AsyncMock(return_value=[])
+    mock_jira.close = AsyncMock()
+
+    with patch("src.services.dashboard.JiraConnector", return_value=mock_jira):
+        await service.get_product_ideas(project)
+
+    jql = mock_jira.search.call_args.args[0]
+    assert "project = LM" in jql
+    assert '"Release" = "Drop 1"' in jql
+    assert "Roadmap" in jql
+    assert "Won't do" in jql
+    # LM board does not use the PI-specific archived/market-access filters
+    assert "Idea archived" not in jql
+    assert "Market Access" not in jql
+
+
+async def test_get_product_ideas_cache_keyed_by_project_and_version(tmp_db, test_settings):
+    """Same pi_version string on PI and LM boards must not share cache entries."""
+    cache.clear()
+    pi_project = _make_project_with_board(tmp_db, "Drop 1", "PI")
+    service = DashboardService(db_path=tmp_db, settings=test_settings)
+
+    mock_jira = MagicMock()
+    mock_jira.search = AsyncMock(return_value=[])
+    mock_jira.close = AsyncMock()
+
+    with patch("src.services.dashboard.JiraConnector", return_value=mock_jira):
+        await service.get_product_ideas(pi_project)
+        # Second identical call should hit cache → no additional search
+        await service.get_product_ideas(pi_project)
+
+    assert mock_jira.search.call_count == 1
+    assert cache.get("pi:PI:Drop 1") is not None
+    assert cache.get("pi:LM:Drop 1") is None
+
+
+def test_summarise_product_ideas_counts_now_as_must_have():
+    from src.models.jira import JiraIssue
+    service = DashboardService(db_path=":memory:")
+
+    def _idea(priority: str, issue_type: str = "Feature", status: str = "Open") -> JiraIssue:
+        return JiraIssue(
+            id="1", key="LM-1", summary="", status=status, issue_type=issue_type,
+            project_key="LM", labels=[], parent_key=None, fix_versions=[],
+            due_date=None, description_adf=None, release_priority=priority,
+        )
+
+    summary = service.summarise_product_ideas([
+        _idea("Now"), _idea("Must Have"), _idea("Next"), _idea("Later"),
+    ])
+    assert summary.must_have_count == 2

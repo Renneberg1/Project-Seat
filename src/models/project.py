@@ -20,6 +20,7 @@ class Project:
     dhf_draft_root_id: str | None = None
     dhf_released_root_id: str | None = None
     pi_version: str | None = None
+    pi_project_key: str = "PI"
     default_component: str | None = None
     default_label: str | None = None
     team_projects: list[list[str]] = field(default_factory=list)
@@ -55,6 +56,7 @@ class Project:
             dhf_draft_root_id=row["dhf_draft_root_id"] if "dhf_draft_root_id" in row.keys() else None,
             dhf_released_root_id=row["dhf_released_root_id"] if "dhf_released_root_id" in row.keys() else None,
             pi_version=row["pi_version"] if "pi_version" in row.keys() else None,
+            pi_project_key=(row["pi_project_key"] if "pi_project_key" in row.keys() and row["pi_project_key"] else "PI"),
             default_component=row["default_component"] if "default_component" in row.keys() else None,
             default_label=row["default_label"] if "default_label" in row.keys() else None,
             team_projects=raw_teams,
@@ -73,4 +75,5 @@ class SpinUpRequest:
     goal_summary: str
     confluence_space_key: str = ""  # Filled from settings at creation time
     pi_version: str = ""
+    pi_project_key: str = "PI"
     jira_plan_url: str = ""

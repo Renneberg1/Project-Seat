@@ -11,8 +11,8 @@ PMO Project Portfolio
 ├── PMO Dashboards
 └── Product Development Projects
     └── [Product] Program (e.g. "HOP Program")
-        ├── CEO Review
-        └── Projects/Releases
+        ├── [Product] CEO Review              ← prefixed on all programs after the first
+        └── [Product] Projects/Releases       ← prefixed on all programs after the first
             ├── [Project Charter]        ← Created from template at spin-up
             │   ├── [Project] Software Readiness
             │   ├── [Project] XFT        ← Created from template at spin-up
@@ -20,6 +20,17 @@ PMO Project Portfolio
             └── [Other projects...]
     └── Completed Releases
 ```
+
+> **Title uniqueness constraint.** Confluence Cloud requires page titles to be
+> unique within a space. The original HOP Program has plain-titled children
+> (`CEO Review`, `Projects/Releases`), but every additional program must use
+> program-prefixed child titles (e.g. `HOP Reporting System Projects/Releases`,
+> `HOP Reporting System CEO Review`). The cockpit's discovery logic uses
+> substring matching (`"Projects" + "Releases" in title` / `"CEO Review" in title`)
+> so prefixed titles resolve correctly during spin-up and CEO review publishing.
+>
+> Use `scripts/create_program_pages.py "<Program Name>"` to create this
+> structure idempotently for new programs.
 
 ## Template Pages
 

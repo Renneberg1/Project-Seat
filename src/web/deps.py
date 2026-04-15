@@ -32,6 +32,7 @@ from src.services.transcript_parser import TranscriptParser
 from src.services.zoom_ingestion import ZoomIngestionService
 from src.services.zoom_matching import ZoomMatchingService
 from src.services.knowledge import KnowledgeService
+from src.services.runsheet_export import RunsheetExportService
 from src.repositories.zoom_repo import ZoomRepository
 from src.repositories.knowledge_repo import KnowledgeRepository
 
@@ -260,3 +261,7 @@ def get_knowledge_repo() -> KnowledgeRepository:
 
 def get_knowledge_service() -> KnowledgeService:
     return KnowledgeService()
+
+
+def get_runsheet_export_service() -> RunsheetExportService:
+    return RunsheetExportService()

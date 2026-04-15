@@ -22,6 +22,7 @@ The spin-up form (`POST /spinup/`) collects:
 | `labels` | comma-separated string | no | Applied to the Goal ticket |
 | `goal_summary` | string | no | Free text, becomes the Goal's ADF description |
 | `pi_version` | string | no | Stored in the local `projects` table only — not sent to Jira |
+| `pi_project_key` | string | no | Jira project key for the ideas board (default `"PI"`; use `"LM"` for LM board projects). Stored locally only. |
 
 **Hardcoded values:**
 - `confluence_space_key` defaults to `"HPP"` (set in `SpinUpRequest` model)
@@ -41,7 +42,9 @@ These happen before any approval item is created:
 
 3. **Fetch XFT template** — Same as above for `XFT_TEMPLATE_ID = "3559363934"`.
 
-4. **Find parent page** — `_find_projects_releases_page()` searches Confluence for `"{program} Program"` in the space, then iterates its children looking for one titled `"Projects/Releases"`. Falls back to the program page itself if the child isn't found.
+4. **Find parent page** — `_find_projects_releases_page()` searches Confluence for `"{program} Program"` in the space, then iterates its children looking for one whose title contains both `"Projects"` and `"Releases"` (substring match, so program-prefixed titles like `"HOP Reporting System Projects/Releases"` resolve correctly — required because Confluence Cloud enforces space-level title uniqueness). Falls back to the program page itself if the child isn't found.
+
+   **Prerequisite for new programs:** the `"{program} Program"` page and its `Projects/Releases` child must exist in Confluence before spin-up. Run `python scripts/create_program_pages.py "<Program Name>"` to create them idempotently.
 
 5. **Replace placeholders** — Both template bodies go through `_replace_placeholders()`:
    - `[Insert project name & release]` → `project_name`
@@ -163,6 +166,8 @@ Items are executed **sequentially in ID order** when using approve-all. This is 
 2. **Description overwrite.** Item N+3 replaces the Goal's entire `description` field with Confluence links. If `goal_summary` was provided in step 1, that text is lost — the update overwrites it with only the page links. The original summary is set on creation but then replaced.
 
 3. **`pi_version` is local-only.** The `pi_version` field is stored in the SQLite `projects` table but is never sent to Jira. It's used by the dashboard for grouping/filtering projects by PI.
+
+   Alongside `pi_version`, a project also stores `pi_project_key` (default `"PI"`). Set this to `"LM"` for LM board projects — the dashboard's `get_product_ideas()` then queries `project = LM` and uses the `"Release"` textfield + `Roadmap` select field (values `Now` / `Next` / `Later` / `Won't do`) instead of the PI board's `versions[checkboxes]` + `Release Priority` / `PI State` fields. Only the ideas-fetching JQL branches; spin-up itself never writes to the ideas board.
 
 4. **Space key is hardcoded.** `confluence_space_key` defaults to `"HPP"` in the `SpinUpRequest` model. The form doesn't expose this field — all projects are created in the same Confluence space.
 

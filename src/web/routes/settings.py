@@ -166,6 +166,7 @@ async def settings_save(
     dhf_draft_root_id = str(form.get("dhf_draft_root_id", "")).strip() or None
     dhf_released_root_id = str(form.get("dhf_released_root_id", "")).strip() or None
     pi_version = str(form.get("pi_version", "")).strip() or None
+    pi_project_key = (str(form.get("pi_project_key", "")).strip() or "PI").upper()
     from src.web.deps import extract_plan_url
     jira_plan_url = extract_plan_url(str(form.get("jira_plan_url", ""))) or None
 
@@ -189,7 +190,8 @@ async def settings_save(
         confluence_ceo_review_id=confluence_ceo_review_id,
         dhf_draft_root_id=dhf_draft_root_id,
         dhf_released_root_id=dhf_released_root_id,
-        pi_version=pi_version, jira_plan_url=jira_plan_url,
+        pi_version=pi_version, pi_project_key=pi_project_key,
+        jira_plan_url=jira_plan_url,
         team_projects=team_projects,
     )
 

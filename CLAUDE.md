@@ -21,7 +21,7 @@ The application has four layers:
 3. **API Connectors** — Thin wrappers around Jira, Confluence, and Zoom REST APIs. Each connector handles auth, pagination, rate limiting, error handling.
 4. **Local Data Layer** — SQLite for state/config/audit trail. `.env` for API keys.
 
-Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas (PI) board integration, unified Meetings page (manual transcript upload + Zoom recording ingestion + transcript-only meeting discovery in a single view with source/project/status filtering), LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, LLM-powered project closure report with full lifecycle data + lessons learned, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking, Zoom OAuth authorization code flow with project matching, per-project knowledge database (action items, notes, insights).
+Key capabilities: project spin-up, release scope-freeze tracking, DHF/EQMS document tracking (draft vs released), product ideas board integration (PI or LM board, selectable per-project via `pi_project_key`), unified Meetings page (manual transcript upload + Zoom recording ingestion + transcript-only meeting discovery in a single view with source/project/status filtering), LLM-powered transcript analysis with two-step approval gating, LLM-powered Charter update with two-step Q&A flow, LLM-powered project health review with two-step Q&A flow, LLM-powered CEO Review output with hybrid data tables + commentary, LLM-powered project closure report with full lifecycle data + lessons learned, iterative risk/decision refinement with multi-round Q&A, per-team version progress tracking with burnup charts, Jira Plans timeline embed, typeahead search for Atlassian resource linking, Zoom OAuth authorization code flow with project matching, per-project knowledge database (action items, notes, insights).
 
 See `docs/architecture.mmd` and `docs/workflow.mmd` for visual diagrams (Mermaid source, renderable in any Mermaid-compatible viewer).
 
@@ -383,6 +383,14 @@ pytest
 - All Jira custom field IDs, issue type IDs, and project keys are defined in `src/jira_constants.py`
 - Never hardcode field IDs like `"customfield_11166"` — import the named constant (e.g., `FIELD_IMPACT_ANALYSIS`)
 - When adding new Jira field references, add a constant to `jira_constants.py` first
+
+### Product Ideas Boards (PI vs LM)
+- Each project stores `pi_project_key` (default `"PI"`, override `"LM"`) alongside `pi_version`. The dashboard's `get_product_ideas()` branches JQL on this value:
+  - **PI board:** `project = PI AND "versions[checkboxes]" = <version>` + excludes `Market Access` issue type, `Idea archived` ideas, and uses `FIELD_RELEASE_PRIORITY_A/B` + `FIELD_PI_STATE` for priority/state
+  - **LM board:** `project = LM AND "Release" = <version>` + `Roadmap != "Won't do"`; priority comes from `FIELD_ROADMAP` (values `Now` / `Next` / `Later` / `Won't do`) mapped onto `JiraIssue.release_priority`
+- `summarise_product_ideas()` counts both `"Must Have"` (PI) and `"Now"` (LM) as must-have for the dashboard pill
+- Cache key is `f"pi:{pi_project_key}:{pi_version}"` so PI and LM versions with colliding names don't overwrite each other
+- All PI/LM field IDs (`FIELD_RELEASE_TEXT`, `FIELD_ROADMAP`, `FIELD_RELEASE_PRIORITY_A/B`, `FIELD_PI_STATE`) live in `jira_constants.py`. The cockpit never writes to either board — `pi_version` + `pi_project_key` are local-only fields used only for reading ideas.
 
 ### Repository Layer
 - All raw SQL lives in `src/repositories/` — services and routes never call `get_db()` directly
